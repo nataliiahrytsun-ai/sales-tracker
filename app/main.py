@@ -1,14 +1,29 @@
 """FastAPI application entry point."""
 
 from fastapi import FastAPI
+from starlette.middleware.sessions import SessionMiddleware
 
+from app.config import Settings, settings
+from app.routes.auth import router as auth_router
 from app.routes.health import router as health_router
+from app.routes.home import router as home_router
 
 
-def create_app() -> FastAPI:
+def create_app(application_settings: Settings | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
-    application = FastAPI(title="Sales Vibes")
+    selected_settings = application_settings or settings
+    application = FastAPI(title="Sales Tracker")
+    application.add_middleware(
+        SessionMiddleware,
+        secret_key=selected_settings.session_secret,
+        session_cookie="sales_tracker_session",
+        same_site="lax",
+        https_only=selected_settings.session_cookie_secure,
+        max_age=selected_settings.session_max_age_seconds,
+    )
     application.include_router(health_router)
+    application.include_router(auth_router)
+    application.include_router(home_router)
     return application
 
 

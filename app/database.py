@@ -13,7 +13,7 @@ from app.config import settings
 def create_db_engine(database_url: str) -> Engine:
     """Create an engine with the required SQLite connection settings."""
     if not database_url.startswith("sqlite"):
-        raise ValueError("Sales Vibes requires a SQLite database URL")
+        raise ValueError("Sales Tracker requires a SQLite database URL")
 
     connect_args: dict[str, Any] = {"check_same_thread": False}
     db_engine = create_engine(database_url, connect_args=connect_args)

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login - Sales Vibes</title>
+  </head>
+  <body>
+    <main>
+      <h1>Sales Vibes</h1>
+      <h2>Login</h2>
+      {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+      <form method="post" action="/login">
+        <label for="email">Email</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          value="{{ email }}"
+          autocomplete="username"
+          required
+        >
+        <label for="password">Password</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required
+        >
+        <button type="submit">Login</button>
+      </form>
+    </main>
+  </body>
+</html>

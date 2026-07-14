@@ -3,6 +3,7 @@
 from collections.abc import Generator
 from datetime import date
 from pathlib import Path
+from time import sleep
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -206,6 +207,7 @@ def test_updated_at_changes_when_records_are_updated(
         session.refresh(outreach)
 
         original_meeting_updated_at = meeting.updated_at
+        sleep(0.01)
         meeting.note = "Updated meeting"
         session.commit()
         session.refresh(meeting)
@@ -213,6 +215,7 @@ def test_updated_at_changes_when_records_are_updated(
 
         session.refresh(outreach)
         original_outreach_updated_at = outreach.updated_at
+        sleep(0.01)
         outreach.note = "Updated outreach"
         session.commit()
         session.refresh(outreach)
