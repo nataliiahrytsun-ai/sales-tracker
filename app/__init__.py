@@ -1,0 +1,1 @@
+"""Sales Vibes application package."""
