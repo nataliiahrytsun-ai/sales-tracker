@@ -39,6 +39,11 @@ Create or update the database to the latest migration:
 python -m alembic upgrade head
 ```
 
+The migration chain currently contains the initial Alembic setup followed by
+product-table revision `20260714_0002`. Running `upgrade head` applies both
+migrations to a new database and only pending migrations to an existing
+database.
+
 Create a migration after changing SQLModel metadata:
 
 ```powershell
