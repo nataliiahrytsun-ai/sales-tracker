@@ -1,13 +1,22 @@
 {% extends "base.html" %}
 
-{% block title %}Record meeting - Sales Tracker{% endblock %}
+{% block title %}{% if editing %}Edit meeting{% else %}Record meeting{% endif %} - Sales Tracker{% endblock %}
 
 {% block content %}
   <section class="form-card" aria-labelledby="meeting-heading">
     <div class="section-heading">
       <p class="eyebrow">Pipeline activity</p>
-      <h1 id="meeting-heading">Record meeting</h1>
-      <p>Record the structured outcome. Customer details and notes are optional.</p>
+      <h1 id="meeting-heading">{% if editing %}Edit meeting{% else %}Record meeting{% endif %}</h1>
+      <p>
+        {% if editing %}
+          Correct this recent meeting using the same structured fields.
+        {% else %}
+          Record the structured outcome. Customer details and notes are optional.
+        {% endif %}
+      </p>
+      {% if editing %}
+        <a class="back-link" href="{{ url_for('recent_meetings') }}">Back to recent meetings</a>
+      {% endif %}
     </div>
 
     {% if saved_meeting_id %}
@@ -36,7 +45,11 @@
       </div>
     {% endif %}
 
-    <form class="meeting-form" method="post" action="{{ url_for('create_meeting') }}">
+    <form
+      class="meeting-form"
+      method="post"
+      action="{% if editing %}{{ url_for('update_meeting', meeting_id=meeting_id) }}{% else %}{{ url_for('create_meeting') }}{% endif %}"
+    >
       <section class="field-section required-fields" aria-labelledby="required-fields-heading">
         <div class="field-section-heading">
           <div>
@@ -170,7 +183,7 @@
       </section>
 
       <button class="button button-primary button-full" type="submit">
-        Save meeting
+        {% if editing %}Update meeting{% else %}Save meeting{% endif %}
       </button>
     </form>
   </section>

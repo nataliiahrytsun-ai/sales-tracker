@@ -141,6 +141,11 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.back-link {
+  display: inline-block;
+  margin-bottom: 1.25rem;
+}
+
 .auth-card {
   width: min(100%, 28rem);
   margin-inline: auto;
@@ -208,6 +213,16 @@ textarea {
   border-color: var(--border);
   background: var(--surface);
   color: var(--text);
+}
+
+.button-danger {
+  border-color: var(--danger-border);
+  background: var(--danger-background);
+  color: var(--danger-text);
+}
+
+.button-danger:hover {
+  border-color: var(--danger-text);
 }
 
 .button-full {
@@ -519,6 +534,102 @@ textarea {
   color: var(--muted);
 }
 
+.records-page {
+  width: 100%;
+  max-width: 52rem;
+  min-width: 0;
+  margin-inline: auto;
+}
+
+.record-tabs,
+.record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 0.5rem;
+}
+
+.record-tabs {
+  margin-block: 1rem 1.5rem;
+}
+
+.record-tabs .button,
+.record-actions .button {
+  min-height: 2.75rem;
+  text-decoration: none;
+}
+
+.record-list {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  gap: 1rem;
+  list-style: none;
+}
+
+.record-card,
+.empty-state {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.record-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.record-summary,
+.record-summary > * {
+  min-width: 0;
+}
+
+.record-summary h2,
+.record-date {
+  overflow-wrap: anywhere;
+}
+
+.record-date {
+  margin-bottom: 0.25rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.record-details {
+  display: grid;
+  min-width: 0;
+  margin: 1rem 0 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.record-details div {
+  min-width: 0;
+}
+
+.record-details dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.record-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.record-actions form {
+  margin: 0;
+}
+
+.empty-state p {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 @media (hover: hover) {
   .choice-button:hover span {
     border-color: var(--primary);
@@ -564,6 +675,15 @@ textarea {
 
   .country-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .record-details {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .record-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
   }
 
   .field-group-full {

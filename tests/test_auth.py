@@ -173,10 +173,10 @@ def test_login_page_uses_shared_responsive_layout(
     asyncio.run(scenario())
 
 
-def test_authenticated_home_renders_only_expected_disabled_actions(
+def test_authenticated_home_renders_scoped_actions(
     auth_application: tuple[FastAPI, Engine],
 ) -> None:
-    """Home renders shared navigation and only the four scoped actions."""
+    """Home renders active data-entry and recent-record actions."""
     application, _ = auth_application
 
     async def scenario() -> None:
@@ -197,6 +197,7 @@ def test_authenticated_home_renders_only_expected_disabled_actions(
         for action in (
             "Record meeting",
             "Update today's outreach",
+            "Recent records",
             "View this week",
             "Open dashboard",
         ):
@@ -204,6 +205,7 @@ def test_authenticated_home_renders_only_expected_disabled_actions(
         assert response.text.count(" disabled") == 2
         assert 'href="http://testserver/meetings/new"' in response.text
         assert 'href="http://testserver/outreach/today"' in response.text
+        assert 'href="http://testserver/meetings/recent"' in response.text
         assert "/dashboard" not in response.text
 
     asyncio.run(scenario())

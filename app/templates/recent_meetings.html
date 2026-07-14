@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Recent meetings - Sales Tracker{% endblock %}
+
+{% block content %}
+  <section class="records-page" aria-labelledby="recent-meetings-heading">
+    <div class="section-heading">
+      <p class="eyebrow">Recent records</p>
+      <h1 id="recent-meetings-heading">Meetings</h1>
+      <p>{{ start_date.isoformat() }} to {{ end_date.isoformat() }} · Newest first.</p>
+      <nav class="record-tabs" aria-label="Recent record types">
+        <a class="button button-primary" href="{{ url_for('recent_meetings') }}" aria-current="page">Meetings</a>
+        <a class="button button-secondary" href="{{ url_for('recent_outreach') }}">Daily outreach</a>
+      </nav>
+    </div>
+
+    {% if updated %}<p class="success" role="status">Meeting updated successfully.</p>{% endif %}
+    {% if deleted %}<p class="success" role="status">Meeting deleted successfully.</p>{% endif %}
+
+    {% if meetings %}
+      <ul class="record-list">
+        {% for meeting in meetings %}
+          <li class="record-card">
+            <div class="record-summary">
+              <div>
+                <p class="record-date">{{ meeting.occurred_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                <h2>{{ meeting.company_name or 'Meeting' }}</h2>
+              </div>
+              <dl class="record-details">
+                <div><dt>Engagement</dt><dd>{{ meeting.customer_engagement.value }}</dd></div>
+                <div><dt>Need</dt><dd>{{ meeting.need_identified.value }}</dd></div>
+                <div><dt>Outcome</dt><dd>{{ meeting.outcome.value }}</dd></div>
+              </dl>
+            </div>
+            <div class="record-actions">
+              <a class="button button-secondary" href="{{ url_for('edit_meeting', meeting_id=meeting.id) }}">Edit</a>
+              <form
+                method="post"
+                action="{{ url_for('delete_meeting', meeting_id=meeting.id) }}"
+                onsubmit="return window.confirm('Are you sure you want to delete this meeting?')"
+              >
+                <button class="button button-danger" type="submit">Delete</button>
+              </form>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty-state">
+        <h2>No recent meetings</h2>
+        <p>Your meetings from the last 30 days will appear here.</p>
+        <a class="button button-primary" href="{{ url_for('new_meeting') }}">Record meeting</a>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

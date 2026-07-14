@@ -1,11 +1,14 @@
 """Validation and stable options for pipeline meeting entry."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime, time, timedelta
+
+from sqlmodel import Session, select
 
 from app.models import (
     CustomerEngagement,
     NeedIdentified,
+    PipelineMeeting,
     PipelineOutcome,
     UserMood,
 )
@@ -58,6 +61,87 @@ class ValidatedMeetingValues:
     company_name: str | None
     next_step_date: date | None
     note: str | None
+
+
+def recent_meeting_bounds(today: date) -> tuple[datetime, datetime]:
+    """Return UTC bounds for the 30 local calendar days ending today."""
+    start_date = today - timedelta(days=29)
+    start_local = datetime.combine(start_date, time.min)
+    end_local = datetime.combine(today + timedelta(days=1), time.min)
+    return start_local.astimezone(UTC), end_local.astimezone(UTC)
+
+
+def form_values_from_meeting(meeting: PipelineMeeting) -> MeetingFormValues:
+    """Convert a stored meeting into editable form strings."""
+    return MeetingFormValues(
+        customer_engagement=meeting.customer_engagement.value,
+        need_identified=meeting.need_identified.value,
+        outcome=meeting.outcome.value,
+        user_mood="" if meeting.user_mood is None else meeting.user_mood.value,
+        blocker_tag=meeting.blocker_tag or "",
+        country_code=meeting.country_code or "",
+        company_name=meeting.company_name or "",
+        next_step_date=(
+            "" if meeting.next_step_date is None else meeting.next_step_date.isoformat()
+        ),
+        note=meeting.note or "",
+    )
+
+
+def apply_meeting_values(
+    meeting: PipelineMeeting,
+    values: ValidatedMeetingValues,
+) -> None:
+    """Apply validated form values to a new or existing meeting."""
+    meeting.customer_engagement = values.customer_engagement
+    meeting.need_identified = values.need_identified
+    meeting.outcome = values.outcome
+    meeting.user_mood = values.user_mood
+    meeting.blocker_tag = values.blocker_tag
+    meeting.country_code = values.country_code
+    meeting.company_name = values.company_name
+    meeting.next_step_date = values.next_step_date
+    meeting.note = values.note
+
+
+def get_recent_meetings(
+    session: Session,
+    *,
+    user_id: int,
+    today: date,
+) -> list[PipelineMeeting]:
+    """Return the user's meetings from the last 30 local calendar days."""
+    start, end = recent_meeting_bounds(today)
+    return list(
+        session.exec(
+            select(PipelineMeeting)
+            .where(
+                PipelineMeeting.user_id == user_id,
+                PipelineMeeting.occurred_at >= start,
+                PipelineMeeting.occurred_at < end,
+            )
+            .order_by(PipelineMeeting.occurred_at.desc()),
+        ).all(),
+    )
+
+
+def get_owned_recent_meeting(
+    session: Session,
+    *,
+    meeting_id: int,
+    user_id: int,
+    today: date,
+) -> PipelineMeeting | None:
+    """Return one owned meeting only when it is inside the recent window."""
+    start, end = recent_meeting_bounds(today)
+    return session.exec(
+        select(PipelineMeeting).where(
+            PipelineMeeting.id == meeting_id,
+            PipelineMeeting.user_id == user_id,
+            PipelineMeeting.occurred_at >= start,
+            PipelineMeeting.occurred_at < end,
+        ),
+    ).one_or_none()
 
 
 def _optional_text(value: str) -> str | None:

@@ -1,7 +1,7 @@
 """Validation and persistence for today's daily outreach workflow."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from sqlmodel import Session, select
 
@@ -200,6 +200,27 @@ def get_daily_outreach(
     ).one_or_none()
 
 
+def get_recent_outreach(
+    session: Session,
+    *,
+    user_id: int,
+    today: date,
+) -> list[DailyOutreach]:
+    """Return the user's outreach summaries from the last 30 calendar days."""
+    start_date = today - timedelta(days=29)
+    return list(
+        session.exec(
+            select(DailyOutreach)
+            .where(
+                DailyOutreach.user_id == user_id,
+                DailyOutreach.activity_date >= start_date,
+                DailyOutreach.activity_date <= today,
+            )
+            .order_by(DailyOutreach.activity_date.desc()),
+        ).all(),
+    )
+
+
 def form_values_from_record(
     session: Session,
     record: DailyOutreach,
@@ -296,6 +317,7 @@ __all__ = [
     "current_local_date",
     "form_values_from_record",
     "get_daily_outreach",
+    "get_recent_outreach",
     "upsert_daily_outreach",
     "validate_outreach_form",
 ]

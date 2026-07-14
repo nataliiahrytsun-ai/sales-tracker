@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Recent outreach - Sales Tracker{% endblock %}
+
+{% block content %}
+  <section class="records-page" aria-labelledby="recent-outreach-heading">
+    <div class="section-heading">
+      <p class="eyebrow">Recent records</p>
+      <h1 id="recent-outreach-heading">Daily outreach</h1>
+      <p>{{ start_date.isoformat() }} to {{ end_date.isoformat() }} · Newest first.</p>
+      <nav class="record-tabs" aria-label="Recent record types">
+        <a class="button button-secondary" href="{{ url_for('recent_meetings') }}">Meetings</a>
+        <a class="button button-primary" href="{{ url_for('recent_outreach') }}" aria-current="page">Daily outreach</a>
+      </nav>
+    </div>
+
+    {% if saved %}<p class="success" role="status">Daily outreach updated successfully.</p>{% endif %}
+
+    {% if records %}
+      <ul class="record-list">
+        {% for record in records %}
+          <li class="record-card">
+            <div class="record-summary">
+              <div>
+                <p class="record-date">{{ record.activity_date.isoformat() }}</p>
+                <h2>Daily outreach</h2>
+              </div>
+              <dl class="record-details">
+                <div><dt>Activities</dt><dd>{{ record.total_activities }}</dd></div>
+                <div><dt>Companies</dt><dd>{{ record.unique_companies }}</dd></div>
+                <div><dt>Meetings booked</dt><dd>{{ record.meetings_booked if record.meetings_booked is not none else '—' }}</dd></div>
+              </dl>
+            </div>
+            <div class="record-actions">
+              <a class="button button-secondary" href="{{ url_for('dated_outreach', activity_date=record.activity_date.isoformat()) }}">Edit</a>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty-state">
+        <h2>No recent outreach</h2>
+        <p>Your daily summaries from the last 30 days will appear here.</p>
+        <a class="button button-primary" href="{{ url_for('today_outreach') }}">Update today's outreach</a>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}
