@@ -136,6 +136,70 @@ def test_anonymous_user_is_redirected_to_login(
     asyncio.run(scenario())
 
 
+def test_login_page_uses_shared_responsive_layout(
+    auth_application: tuple[FastAPI, Engine],
+) -> None:
+    """The public login page uses the shared layout and mobile metadata."""
+    application, _ = auth_application
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get("/login")
+            stylesheet = await client.get("/static/css/app.css")
+
+        assert response.status_code == 200
+        assert '<meta name="viewport"' in response.text
+        assert 'href="http://testserver/static/css/app.css"' in response.text
+        assert 'action="http://testserver/login"' in response.text
+        assert 'type="password"' in response.text
+        assert 'aria-label="User navigation"' not in response.text
+        assert stylesheet.status_code == 200
+        assert "@media (min-width: 48rem)" in stylesheet.text
+        assert "grid-template-columns" in stylesheet.text
+
+    asyncio.run(scenario())
+
+
+def test_authenticated_home_renders_only_expected_disabled_actions(
+    auth_application: tuple[FastAPI, Engine],
+) -> None:
+    """Home renders shared navigation and only the four scoped actions."""
+    application, _ = auth_application
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            await client.post(
+                "/login",
+                data={"email": ACTIVE_EMAIL, "password": TEST_PASSWORD},
+            )
+            response = await client.get("/")
+
+        assert response.status_code == 200
+        assert 'aria-label="User navigation"' in response.text
+        assert 'action="http://testserver/logout"' in response.text
+        for action in (
+            "Record meeting",
+            "Update today's outreach",
+            "View this week",
+            "Open dashboard",
+        ):
+            assert action in response.text
+        assert response.text.count(" disabled") == 4
+        assert "/meetings/new" not in response.text
+        assert "/outreach/today" not in response.text
+        assert "/dashboard" not in response.text
+
+    asyncio.run(scenario())
+
+
 def test_successful_login_sets_httponly_session_cookie(
     auth_application: tuple[FastAPI, Engine],
 ) -> None:

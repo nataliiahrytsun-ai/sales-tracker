@@ -57,7 +57,15 @@ or a committed configuration file.
 Open `http://127.0.0.1:8000/login` and sign in with the email address of an
 existing active user. Authentication uses a signed HttpOnly session cookie.
 There is no public registration or automatic seed data; account provisioning is
-outside this implementation step.
+performed locally with the interactive CLI after applying migrations:
+
+```powershell
+python -m app.cli create-user
+```
+
+The command prompts for email and name, then requests the password twice using
+hidden input. It refuses duplicate email addresses and prints no credentials in
+its success confirmation.
 
 ### Known session limitation
 

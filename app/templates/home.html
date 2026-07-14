@@ -1,17 +1,57 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Home - Sales Vibes</title>
-  </head>
-  <body>
-    <main>
-      <h1>Sales Vibes</h1>
-      <p>Signed in as {{ current_user.name }} ({{ current_user.email }}).</p>
-      <form method="post" action="/logout">
-        <button type="submit">Logout</button>
-      </form>
-    </main>
-  </body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Home - Sales Tracker{% endblock %}
+
+{% block content %}
+  <section class="welcome" aria-labelledby="home-heading">
+    <p class="eyebrow">Your workspace</p>
+    <h1 id="home-heading">Welcome, {{ current_user.name }}</h1>
+    <p>Choose what you want to do next.</p>
+  </section>
+
+  <section class="action-grid" aria-label="Sales activity actions">
+    <article class="action-card">
+      <div>
+        <h2>Record meeting</h2>
+        <p>Capture the outcome of a pipeline conversation.</p>
+      </div>
+      <button class="button button-primary" type="button" disabled>
+        Record meeting
+      </button>
+      <span class="status-label">Coming soon</span>
+    </article>
+
+    <article class="action-card">
+      <div>
+        <h2>Update today's outreach</h2>
+        <p>Record or adjust today's outbound activity.</p>
+      </div>
+      <button class="button button-primary" type="button" disabled>
+        Update today's outreach
+      </button>
+      <span class="status-label">Coming soon</span>
+    </article>
+
+    <article class="action-card">
+      <div>
+        <h2>View this week</h2>
+        <p>Review this week's activity when the weekly view is available.</p>
+      </div>
+      <button class="button button-secondary" type="button" disabled>
+        View this week
+      </button>
+      <span class="status-label">Coming soon</span>
+    </article>
+
+    <article class="action-card">
+      <div>
+        <h2>Open dashboard</h2>
+        <p>Open team reporting after dashboard delivery.</p>
+      </div>
+      <button class="button button-secondary" type="button" disabled>
+        Open dashboard
+      </button>
+      <span class="status-label">Coming soon</span>
+    </article>
+  </section>
+{% endblock %}

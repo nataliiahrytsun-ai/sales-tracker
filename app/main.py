@@ -1,6 +1,9 @@
 """FastAPI application entry point."""
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import Settings, settings
@@ -13,6 +16,11 @@ def create_app(application_settings: Settings | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
     selected_settings = application_settings or settings
     application = FastAPI(title="Sales Tracker")
+    application.mount(
+        "/static",
+        StaticFiles(directory=Path(__file__).resolve().parent / "static"),
+        name="static",
+    )
     application.add_middleware(
         SessionMiddleware,
         secret_key=selected_settings.session_secret,

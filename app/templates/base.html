@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Sales Tracker{% endblock %}</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', path='/css/app.css') }}"
+    >
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="shell header-content">
+        <a class="brand" href="{{ url_for('home') }}">Sales Tracker</a>
+        {% if current_user is defined and current_user %}
+          <nav class="user-nav" aria-label="User navigation">
+            <a href="{{ url_for('home') }}" aria-current="page">Home</a>
+            <span class="user-name">{{ current_user.name }}</span>
+            <form method="post" action="{{ url_for('logout') }}">
+              <button class="button button-secondary" type="submit">
+                Logout
+              </button>
+            </form>
+          </nav>
+        {% endif %}
+      </div>
+    </header>
+    <main class="shell page-content">
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

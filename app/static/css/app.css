@@ -1,0 +1,255 @@
+:root {
+  color-scheme: light;
+  --background: #f4f7fb;
+  --surface: #ffffff;
+  --text: #172033;
+  --muted: #5d687c;
+  --border: #d9e0eb;
+  --primary: #2856d8;
+  --primary-hover: #1f45b0;
+  --focus: #f0a22e;
+  --danger-background: #fff1f1;
+  --danger-border: #e8a2a2;
+  --danger-text: #8c2424;
+  --radius: 0.75rem;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 20rem;
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+}
+
+a {
+  color: var(--primary);
+  text-underline-offset: 0.2em;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 0.2rem solid var(--focus);
+  outline-offset: 0.15rem;
+}
+
+.shell {
+  width: min(100% - 2rem, 68rem);
+  margin-inline: auto;
+}
+
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-block: 1rem;
+}
+
+.brand {
+  color: var(--text);
+  font-size: 1.15rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.user-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-nav form {
+  margin: 0;
+}
+
+.user-name {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.page-content {
+  padding-block: 2rem 3rem;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0.5rem;
+  font-size: clamp(1.75rem, 7vw, 2.5rem);
+  line-height: 1.15;
+}
+
+h2 {
+  margin-bottom: 0.5rem;
+  font-size: 1.15rem;
+}
+
+.eyebrow {
+  margin-bottom: 0.35rem;
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.section-heading p,
+.welcome p,
+.action-card p {
+  color: var(--muted);
+}
+
+.auth-card {
+  width: min(100%, 28rem);
+  margin-inline: auto;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 0.75rem 2rem rgb(29 45 77 / 8%);
+}
+
+.form-stack,
+.field-group {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.form-stack {
+  gap: 1rem;
+}
+
+label {
+  font-weight: 650;
+}
+
+input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #aeb8c8;
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.button-primary {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.button-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.button-secondary {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.button-full {
+  width: 100%;
+}
+
+.button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.alert {
+  padding: 0.75rem;
+  border: 1px solid var(--danger-border);
+  border-radius: 0.5rem;
+  background: var(--danger-background);
+  color: var(--danger-text);
+}
+
+.welcome {
+  max-width: 42rem;
+  margin-bottom: 1.5rem;
+}
+
+.action-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.action-card {
+  position: relative;
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.action-card p {
+  margin-bottom: 0;
+}
+
+.status-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+@media (min-width: 48rem) {
+  .header-content {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .page-content {
+    padding-block: 3rem 4rem;
+  }
+
+  .auth-card {
+    padding: 2rem;
+  }
+
+  .action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
