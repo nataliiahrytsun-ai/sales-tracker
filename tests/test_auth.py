@@ -201,9 +201,9 @@ def test_authenticated_home_renders_only_expected_disabled_actions(
             "Open dashboard",
         ):
             assert action in response.text
-        assert response.text.count(" disabled") == 3
+        assert response.text.count(" disabled") == 2
         assert 'href="http://testserver/meetings/new"' in response.text
-        assert "/outreach/today" not in response.text
+        assert 'href="http://testserver/outreach/today"' in response.text
         assert "/dashboard" not in response.text
 
     asyncio.run(scenario())

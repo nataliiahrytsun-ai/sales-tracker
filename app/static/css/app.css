@@ -428,6 +428,13 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.counter-grid,
+.country-grid {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+
 .optional {
   color: var(--muted);
   font-size: 0.8rem;
@@ -438,6 +445,20 @@ textarea {
   margin: 0.35rem 0 0;
   color: var(--danger-text);
   font-size: 0.9rem;
+}
+
+.warning {
+  padding: 0.85rem;
+  border: 1px solid var(--focus);
+  border-radius: 0.5rem;
+  background: #fff8e8;
+  color: var(--text);
+}
+
+.warning p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .success {
@@ -535,6 +556,14 @@ textarea {
 
   .optional-fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .counter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .country-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .field-group-full {

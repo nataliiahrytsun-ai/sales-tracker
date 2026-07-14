@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}Update today's outreach - Sales Tracker{% endblock %}
+
+{% block content %}
+  <section class="form-card" aria-labelledby="outreach-heading">
+    <div class="section-heading">
+      <p class="eyebrow">Outbound activity</p>
+      <h1 id="outreach-heading">Update today's outreach</h1>
+      <p>{{ activity_date.isoformat() }} · Create or update your daily summary.</p>
+    </div>
+
+    {% if saved %}
+      <div class="success confirmation-panel" role="status">
+        <div class="confirmation-copy">
+          <strong>Today's outreach was saved.</strong>
+          <p>You can return throughout the day to update the same record.</p>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if country_mismatch %}
+      <div class="warning" role="status">
+        <strong>Country total does not match unique companies.</strong>
+        <p>
+          The country breakdown totals {{ country_total }}, while unique companies
+          is {{ values.unique_companies }}. The record was saved and can be corrected.
+        </p>
+      </div>
+    {% endif %}
+
+    {% if errors %}
+      <div class="alert" role="alert">
+        <strong>Check the form and try again.</strong>
+        {% if errors.form %}<p>{{ errors.form }}</p>{% endif %}
+      </div>
+    {% endif %}
+
+    <form
+      class="meeting-form outreach-form"
+      method="post"
+      action="{{ url_for('save_today_outreach') }}"
+    >
+      <section
+        class="field-section required-fields"
+        aria-labelledby="outreach-required-heading"
+      >
+        <div class="field-section-heading">
+          <div>
+            <p class="section-kicker">Required</p>
+            <h2 id="outreach-required-heading">Activity totals</h2>
+          </div>
+          <p>Enter non-negative whole-number totals for today.</p>
+        </div>
+
+        <div class="counter-grid">
+          <div class="field-group">
+            <label for="total_activities">Total outreach activities</label>
+            <input
+              id="total_activities"
+              name="total_activities"
+              type="number"
+              min="0"
+              step="1"
+              value="{{ values.total_activities }}"
+              required
+            >
+            {% if errors.total_activities %}
+              <p class="field-error">{{ errors.total_activities }}</p>
+            {% endif %}
+          </div>
+
+          <div class="field-group">
+            <label for="unique_companies">Unique companies contacted</label>
+            <input
+              id="unique_companies"
+              name="unique_companies"
+              type="number"
+              min="0"
+              step="1"
+              value="{{ values.unique_companies }}"
+              required
+            >
+            {% if errors.unique_companies %}
+              <p class="field-error">{{ errors.unique_companies }}</p>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="field-section required-fields"
+        aria-labelledby="country-breakdown-heading"
+      >
+        <div class="field-section-heading">
+          <div>
+            <p class="section-kicker">Required</p>
+            <h2 id="country-breakdown-heading">Country breakdown</h2>
+          </div>
+          <p>Companies contacted in Germany, Austria, and Switzerland.</p>
+        </div>
+
+        <div class="country-grid">
+          {% for code, label in country_options %}
+            {% set field_name = 'country_' ~ code|lower %}
+            <div class="field-group">
+              <label for="{{ field_name }}">{{ label }}</label>
+              <input
+                id="{{ field_name }}"
+                name="{{ field_name }}"
+                type="number"
+                min="0"
+                step="1"
+                value="{{ country_values[code] }}"
+                required
+              >
+              {% if errors[field_name] %}
+                <p class="field-error">{{ errors[field_name] }}</p>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section
+        class="field-section optional-fields"
+        aria-labelledby="outreach-optional-heading"
+      >
+        <div class="field-section-heading field-section-heading-full">
+          <div>
+            <p class="section-kicker">Optional</p>
+            <h2 id="outreach-optional-heading">Results and context</h2>
+          </div>
+          <p>Leave any unavailable result or sentiment value empty.</p>
+        </div>
+
+        <div class="field-group">
+          <label for="replies">Replies received <span class="optional">Optional</span></label>
+          <input id="replies" name="replies" type="number" min="0" step="1" value="{{ values.replies }}">
+          {% if errors.replies %}<p class="field-error">{{ errors.replies }}</p>{% endif %}
+        </div>
+
+        <div class="field-group">
+          <label for="positive_replies">Positive replies <span class="optional">Optional</span></label>
+          <input id="positive_replies" name="positive_replies" type="number" min="0" step="1" value="{{ values.positive_replies }}">
+          {% if errors.positive_replies %}<p class="field-error">{{ errors.positive_replies }}</p>{% endif %}
+        </div>
+
+        <div class="field-group">
+          <label for="meetings_booked">Meetings booked <span class="optional">Optional</span></label>
+          <input id="meetings_booked" name="meetings_booked" type="number" min="0" step="1" value="{{ values.meetings_booked }}">
+          {% if errors.meetings_booked %}<p class="field-error">{{ errors.meetings_booked }}</p>{% endif %}
+        </div>
+
+        <div class="field-group">
+          <label for="user_mood">User mood <span class="optional">Optional</span></label>
+          <select id="user_mood" name="user_mood">
+            <option value="">Not provided</option>
+            {% for option in mood_options %}
+              <option value="{{ option.value }}" {% if values.user_mood == option.value %}selected{% endif %}>{{ option.value }}</option>
+            {% endfor %}
+          </select>
+          {% if errors.user_mood %}<p class="field-error">{{ errors.user_mood }}</p>{% endif %}
+        </div>
+
+        <div class="field-group">
+          <label for="blocker_tag">Main blocker <span class="optional">Optional</span></label>
+          <select id="blocker_tag" name="blocker_tag">
+            <option value="">No blocker</option>
+            {% for value, label in blocker_options %}
+              <option value="{{ value }}" {% if values.blocker_tag == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          {% if errors.blocker_tag %}<p class="field-error">{{ errors.blocker_tag }}</p>{% endif %}
+        </div>
+
+        <div class="field-group field-group-full">
+          <label for="note">Note <span class="optional">Optional</span></label>
+          <textarea id="note" name="note" rows="4">{{ values.note }}</textarea>
+        </div>
+      </section>
+
+      <button class="button button-primary button-full" type="submit">
+        Save today's outreach
+      </button>
+    </form>
+  </section>
+{% endblock %}
