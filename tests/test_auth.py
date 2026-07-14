@@ -6,6 +6,7 @@ from collections.abc import Generator
 import json
 import logging
 from pathlib import Path
+import re
 
 from fastapi import FastAPI
 import httpx
@@ -30,6 +31,14 @@ TEST_PASSWORD = "correct-test-password"
 SESSION_COOKIE_NAME = "sales_tracker_session"
 TEST_SESSION_SECRET = "test-session-secret-with-at-least-32-characters"
 TEST_SESSION_MAX_AGE_SECONDS = 3_600
+STYLESHEET_PATH = Path("app/static/css/app.css")
+
+
+def css_rule(css: str, selector: str) -> str:
+    """Return declarations for one selector from a CSS source section."""
+    match = re.search(rf"{re.escape(selector)}\s*\{{(?P<body>[^}}]+)\}}", css)
+    assert match is not None
+    return match.group("body")
 
 
 def encode_session(payload: dict[str, object]) -> str:
@@ -192,12 +201,54 @@ def test_authenticated_home_renders_only_expected_disabled_actions(
             "Open dashboard",
         ):
             assert action in response.text
-        assert response.text.count(" disabled") == 4
-        assert "/meetings/new" not in response.text
+        assert response.text.count(" disabled") == 3
+        assert 'href="http://testserver/meetings/new"' in response.text
         assert "/outreach/today" not in response.text
         assert "/dashboard" not in response.text
 
     asyncio.run(scenario())
+
+
+def test_home_layout_and_actions_are_structurally_responsive() -> None:
+    """Home shares centered gutters and uses equal responsive actions."""
+    css = STYLESHEET_PATH.read_text(encoding="utf-8")
+    mobile_css, desktop_css = css.split("@media (min-width: 48rem)", 1)
+
+    shell = css_rule(mobile_css, ".shell")
+    page_content = css_rule(mobile_css, ".page-content")
+    action_grid = css_rule(mobile_css, ".action-grid")
+    action_card = css_rule(mobile_css, ".action-card")
+    action_children = css_rule(mobile_css, ".action-card > *")
+    action_text = css_rule(mobile_css, ".action-card p")
+    action_button = css_rule(mobile_css, ".action-card .button")
+    shared_button = css_rule(mobile_css, ".button")
+
+    assert "width: calc(100% - 2rem)" in shell
+    assert "max-width: 68rem" in shell
+    assert "margin-inline: auto" in shell
+    assert "width: 100%" not in page_content
+
+    assert "display: grid" in action_grid
+    assert "display: grid" in action_card
+    assert "max-width: 100%" in action_children
+    assert "min-width: 0" in action_children
+    assert "overflow-wrap: anywhere" in action_text
+
+    assert "width: 100%" in action_button
+    assert "max-width: 100%" in action_button
+    assert "min-height: 2.75rem" in action_button
+    assert "justify-self: stretch" in action_button
+    assert "padding: 0.45rem 0.875rem" in action_button
+    assert "font-size: 0.92rem" in action_button
+    assert "line-height: 1.2" in action_button
+    assert "min-height: 2.75rem" in shared_button
+
+    assert re.search(
+        r"\.action-grid\s*\{[^}]*grid-template-columns:\s*"
+        r"repeat\(2,\s*minmax\(0,\s*1fr\)\)",
+        desktop_css,
+    )
+    assert "width: 18rem" not in desktop_css
 
 
 def test_successful_login_sets_httponly_session_cookie(

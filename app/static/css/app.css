@@ -23,7 +23,7 @@
 }
 
 body {
-  min-width: 20rem;
+  min-width: 0;
   margin: 0;
   background: var(--background);
   color: var(--text);
@@ -35,7 +35,9 @@ a {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -50,7 +52,9 @@ a {
 }
 
 .shell {
-  width: min(100% - 2rem, 68rem);
+  width: calc(100% - 2rem);
+  max-width: 68rem;
+  min-width: 0;
   margin-inline: auto;
 }
 
@@ -90,6 +94,7 @@ a {
 }
 
 .page-content {
+  min-width: 0;
   padding-block: 2rem 3rem;
 }
 
@@ -123,6 +128,17 @@ h2 {
 .welcome p,
 .action-card p {
   color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.section-heading,
+.section-heading > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.section-heading p {
+  overflow-wrap: anywhere;
 }
 
 .auth-card {
@@ -138,6 +154,7 @@ h2 {
 .form-stack,
 .field-group {
   display: grid;
+  min-width: 0;
   gap: 0.5rem;
 }
 
@@ -149,7 +166,9 @@ label {
   font-weight: 650;
 }
 
-input {
+input,
+select,
+textarea {
   width: 100%;
   min-height: 2.75rem;
   padding: 0.65rem 0.75rem;
@@ -157,6 +176,11 @@ input {
   border-radius: 0.5rem;
   background: var(--surface);
   color: var(--text);
+}
+
+textarea {
+  min-height: 7rem;
+  resize: vertical;
 }
 
 .button {
@@ -204,7 +228,8 @@ input {
 }
 
 .welcome {
-  max-width: 42rem;
+  max-width: min(100%, 42rem);
+  min-width: 0;
   margin-bottom: 1.5rem;
 }
 
@@ -224,14 +249,264 @@ input {
   background: var(--surface);
 }
 
+.action-card > * {
+  max-width: 100%;
+  min-width: 0;
+}
+
 .action-card p {
   margin-bottom: 0;
+}
+
+.action-card .button {
+  width: 100%;
+  max-width: 100%;
+  min-height: 2.75rem;
+  justify-self: stretch;
+  padding: 0.45rem 0.875rem;
+  font-size: 0.92rem;
+  line-height: 1.2;
+  text-decoration: none;
 }
 
 .status-label {
   color: var(--muted);
   font-size: 0.8rem;
   font-weight: 650;
+}
+
+.form-card {
+  width: 100%;
+  max-width: 52rem;
+  min-width: 0;
+  margin-inline: auto;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.meeting-form {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 1.25rem;
+}
+
+.meeting-form > * {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.field-section {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.required-fields {
+  display: grid;
+  gap: 1rem;
+  background: var(--background);
+}
+
+.field-section-heading {
+  display: grid;
+  max-width: 100%;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.field-section-heading > * {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.field-section-heading h2,
+.field-section-heading p {
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+}
+
+.field-section-heading h2 {
+  font-size: 1.05rem;
+}
+
+.field-section-heading > p {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.section-kicker {
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.choice-section {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choice-section legend {
+  margin-bottom: 0.5rem;
+  font-weight: 750;
+}
+
+.choice-grid {
+  display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.choice-button {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+.choice-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.choice-button span {
+  display: flex;
+  width: 100%;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #aeb8c8;
+  border-radius: 0.5rem;
+  background: var(--surface);
+  font-size: 0.92rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-align: center;
+  white-space: normal;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.choice-button input:checked + span {
+  border: 2px solid var(--primary);
+  background: #edf2ff;
+  color: #183d9b;
+  box-shadow: 0 0 0 0.15rem rgb(40 86 216 / 18%);
+  font-weight: 750;
+}
+
+.choice-button input:focus-visible + span {
+  outline: 0.2rem solid var(--focus);
+  outline-offset: 0.15rem;
+}
+
+.optional-fields {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+  background: var(--surface);
+}
+
+.field-section-heading-full {
+  grid-column: 1 / -1;
+}
+
+.optional {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.field-error {
+  margin: 0.35rem 0 0;
+  color: var(--danger-text);
+  font-size: 0.9rem;
+}
+
+.success {
+  padding: 0.75rem;
+  border: 1px solid #8bc8a3;
+  border-radius: 0.5rem;
+  background: #edf9f1;
+  color: #176039;
+}
+
+.success p {
+  margin-bottom: 0.75rem;
+}
+
+.confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 0.5rem;
+}
+
+.confirmation-actions > * {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.confirmation-actions form {
+  margin: 0;
+}
+
+.confirmation-actions .button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-decoration: none;
+  white-space: normal;
+}
+
+.confirmation-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border-color: var(--primary);
+  border-left-width: 0.35rem;
+  background: #edf2ff;
+  color: var(--text);
+  box-shadow: 0 0.5rem 1.25rem rgb(29 45 77 / 8%);
+}
+
+.confirmation-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.confirmation-copy p {
+  margin: 0;
+  color: var(--muted);
+}
+
+@media (hover: hover) {
+  .choice-button:hover span {
+    border-color: var(--primary);
+    background: var(--background);
+  }
+
+  .choice-button:hover input:checked + span {
+    background: #edf2ff;
+  }
 }
 
 @media (min-width: 48rem) {
@@ -247,6 +522,23 @@ input {
 
   .auth-card {
     padding: 2rem;
+  }
+
+  .form-card {
+    padding: 2rem;
+  }
+
+  .choice-grid,
+  .choice-grid-wide {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .optional-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .field-group-full {
+    grid-column: 1 / -1;
   }
 
   .action-grid {
