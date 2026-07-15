@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Weekly targets - Sales Tracker{% endblock %}
+
+{% block content %}
+  <section class="form-card targets-card" aria-labelledby="targets-heading">
+    <div class="section-heading">
+      <p class="eyebrow">Personal goals</p>
+      <h1 id="targets-heading">Weekly targets</h1>
+      <p>{{ week_start.isoformat() }} to {{ week_end.isoformat() }} &middot; Monday to Sunday.</p>
+      <a class="back-link" href="{{ url_for('home') }}">Back to Home</a>
+    </div>
+
+    {% if saved %}
+      <p class="success" role="status">Weekly targets saved successfully.</p>
+    {% endif %}
+
+    {% if errors.form %}
+      <div class="alert" role="alert">{{ errors.form }}</div>
+    {% endif %}
+
+    <form class="targets-form" method="post" action="{{ url_for('save_targets') }}">
+      <div class="targets-grid">
+        {% for field_name, field_label in target_fields %}
+          {% set field_error = errors.get(field_name) %}
+          <div class="field-group">
+            <label for="{{ field_name }}">{{ field_label }}</label>
+            <input
+              id="{{ field_name }}"
+              name="{{ field_name }}"
+              type="number"
+              min="0"
+              step="1"
+              inputmode="numeric"
+              value="{{ values|attr(field_name) }}"
+              required
+              {% if field_error %}aria-invalid="true" aria-describedby="{{ field_name }}_error"{% endif %}
+            >
+            {% if field_error %}
+              <p class="field-error" id="{{ field_name }}_error">{{ field_error }}</p>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <button class="button button-primary" type="submit">Save weekly targets</button>
+    </form>
+  </section>
+{% endblock %}

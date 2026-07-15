@@ -838,15 +838,15 @@ def test_recent_records_layout_is_structurally_responsive() -> None:
     assert "recent_meetings" not in recent_outreach_template
     assert "Back to Home" in recent_meetings_template
     assert "Back to Home" in recent_outreach_template
+    for template in (recent_meetings_template, recent_outreach_template):
+        assert 'class="records-page history-records-page"' in template
+        assert 'class="record-details history-record-details"' in template
+        assert 'class="record-actions history-record-actions"' in template
     assert "data-filter-apply" in recent_meetings_template
     assert "data-filter-reset" in recent_meetings_template
     assert "applyButton.disabled = !isValid || !hasChanged" in filter_javascript
     assert "resetButton.disabled = isDefault" in filter_javascript
     assert 'addEventListener("input", updateButtons)' in filter_javascript
-    assert 'class="record-details meeting-record-details"' in (
-        recent_meetings_template
-    )
-    assert ".meeting-record-details" in mobile_css
     assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in mobile_css
     assert "min-width: 0" in mobile_css
     assert "flex-wrap: wrap" in mobile_css
@@ -854,3 +854,19 @@ def test_recent_records_layout_is_structurally_responsive() -> None:
     assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in desktop_css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in desktop_css
     assert "grid-template-columns: minmax(0, 1fr) auto" in desktop_css
+    history_mobile = css.split("@media (max-width: 30rem)", 1)[1].split(
+        "@media (hover: hover)",
+        1,
+    )[0]
+    assert ".history-records-page .record-filter" in history_mobile
+    assert ".history-record-details" in history_mobile
+    assert ".history-record-actions" in history_mobile
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in (
+        history_mobile
+    )
+    assert "display: contents" in history_mobile
+    assert "width: 5rem" in history_mobile
+    assert "justify-content: flex-start" in history_mobile
+    assert "overflow-wrap: anywhere" in history_mobile
+    assert ".outreach-records-page" not in css
+    assert ".meeting-record-details" not in css

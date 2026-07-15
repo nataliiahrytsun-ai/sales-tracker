@@ -219,6 +219,7 @@ def test_authenticated_home_renders_scoped_actions(
             "Update today’s outreach",
             "View / edit meetings",
             "View / edit outreach",
+            "Set weekly targets",
         ):
             assert action in response.text
         assert response.text.count('class="action-card"') == 4
@@ -228,6 +229,7 @@ def test_authenticated_home_renders_scoped_actions(
         assert 'href="http://testserver/outreach/today"' in response.text
         assert 'href="http://testserver/meetings/recent"' in response.text
         assert 'href="http://testserver/outreach/recent"' in response.text
+        assert 'href="http://testserver/targets"' in response.text
         assert response.text.count('href="http://testserver/meetings/recent"') == 1
         assert response.text.count('href="http://testserver/outreach/recent"') == 1
         assert 'href="http://testserver/change-password"' in response.text
@@ -359,7 +361,7 @@ def test_home_layout_and_actions_are_structurally_responsive() -> None:
     assert "line-height: 1.2" in action_button
     assert "min-height: 2.75rem" in shared_button
     assert home_template.count('class="action-card"') == 4
-    assert home_template.count("home-action-button") == 4
+    assert home_template.count("home-action-button") == 5
     assert "min-height: 2.75rem" in home_action_button
     assert "align-self: end" in home_action_button
     assert "padding: 0.45rem 0.875rem" in home_action_button

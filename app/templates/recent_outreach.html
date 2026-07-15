@@ -3,7 +3,7 @@
 {% block title %}Recent outreach - Sales Tracker{% endblock %}
 
 {% block content %}
-  <section class="records-page" aria-labelledby="recent-outreach-heading">
+  <section class="records-page history-records-page" aria-labelledby="recent-outreach-heading">
     <div class="section-heading">
       <p class="eyebrow">Outreach history</p>
       <h1 id="recent-outreach-heading">Daily outreach</h1>
@@ -46,13 +46,13 @@
                 <p class="record-date">{{ record.activity_date.isoformat() }}</p>
                 <h2>Daily outreach</h2>
               </div>
-              <dl class="record-details">
+              <dl class="record-details history-record-details">
                 <div><dt>Activities</dt><dd>{{ record.total_activities }}</dd></div>
                 <div><dt>Companies</dt><dd>{{ record.unique_companies }}</dd></div>
                 <div><dt>Meetings booked</dt><dd>{{ record.meetings_booked if record.meetings_booked is not none else '—' }}</dd></div>
               </dl>
             </div>
-            <div class="record-actions">
+            <div class="record-actions history-record-actions">
               <a class="button button-secondary" href="{{ url_for('dated_outreach', activity_date=record.activity_date.isoformat()) }}?{{ range_query }}">Edit</a>
             </div>
           </li>

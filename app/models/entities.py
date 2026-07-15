@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     Enum as SQLAlchemyEnum,
+    Index,
     Integer,
     UniqueConstraint,
     false,
@@ -223,6 +224,14 @@ class Target(SQLModel, table=True):
     """Time-bounded activity target for a user."""
 
     __tablename__ = "targets"
+    __table_args__ = (
+        Index(
+            "uq_targets_user_metric",
+            "user_id",
+            "metric_name",
+            unique=True,
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id")

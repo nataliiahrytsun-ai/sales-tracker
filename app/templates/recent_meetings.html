@@ -3,7 +3,7 @@
 {% block title %}Recent meetings - Sales Tracker{% endblock %}
 
 {% block content %}
-  <section class="records-page" aria-labelledby="recent-meetings-heading">
+  <section class="records-page history-records-page" aria-labelledby="recent-meetings-heading">
     <div class="section-heading">
       <p class="eyebrow">Meeting history</p>
       <h1 id="recent-meetings-heading">Meetings</h1>
@@ -47,13 +47,13 @@
                 <p class="record-date">{{ meeting.occurred_at.strftime('%Y-%m-%d %H:%M') }}</p>
                 <h2>{{ meeting.company_name or 'Meeting' }}</h2>
               </div>
-              <dl class="record-details meeting-record-details">
+              <dl class="record-details history-record-details">
                 <div><dt>Engagement</dt><dd>{{ meeting.customer_engagement.value }}</dd></div>
                 <div><dt>Need</dt><dd>{{ meeting.need_identified.value }}</dd></div>
                 <div><dt>Outcome</dt><dd>{{ meeting.outcome.value }}</dd></div>
               </dl>
             </div>
-            <div class="record-actions">
+            <div class="record-actions history-record-actions">
               <a class="button button-secondary" href="{{ url_for('edit_meeting', meeting_id=meeting.id) }}?{{ range_query }}">Edit</a>
               <form
                 method="post"
