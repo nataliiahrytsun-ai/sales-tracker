@@ -15,6 +15,11 @@
         {% endif %}
       </p>
       {% if editing %}
+        <p>
+          <strong>Editing:</strong>
+          {{ editing_meeting.occurred_at.strftime('%Y-%m-%d %H:%M') }}
+          · {{ editing_meeting.company_name or 'Company not provided' }}
+        </p>
         <a class="back-link" href="{{ url_for('recent_meetings') }}">Back to recent meetings</a>
       {% endif %}
     </div>

@@ -3,6 +3,7 @@
 import asyncio
 from base64 import b64decode, b64encode
 from collections.abc import Generator
+from datetime import date
 import json
 import logging
 from pathlib import Path
@@ -211,9 +212,91 @@ def test_authenticated_home_renders_scoped_actions(
     asyncio.run(scenario())
 
 
+def test_home_navigation_has_accessible_active_state() -> None:
+    """Home uses a distinct active treatment with hover and focus states."""
+    css = STYLESHEET_PATH.read_text(encoding="utf-8")
+    base_template = Path("app/templates/base.html").read_text(encoding="utf-8")
+    mobile_css, _desktop_css = css.split("@media (min-width: 48rem)", 1)
+    home_link = css_rule(mobile_css, ".header-home-link")
+    active = css_rule(mobile_css, ".header-home-link-active")
+    focus = css_rule(mobile_css, ".header-home-link:focus-visible")
+    hover = css_rule(mobile_css, ".header-home-link-active:hover")
+    inactive_hover = css_rule(mobile_css, ".header-home-link:hover")
+    keyboard_focus = css_rule(mobile_css, ":focus-visible")
+
+    assert "request.url.path == '/'" in base_template
+    assert "header-home-link-active" in base_template
+    assert "min-height: 2.75rem" in home_link
+    assert "padding: 0.55rem 0.8rem" in home_link
+    assert "border-radius: 0.5rem" in home_link
+    assert "text-decoration: none" in home_link
+    assert "background: #edf2ff" in active
+    assert "background: #dfe7ff" in focus
+    assert "color: #12337f" in focus
+    assert "@media (hover: hover)" in mobile_css
+    assert "background: #dfe7ff" in hover
+    assert "color: #12337f" in hover
+    assert "background: var(--background)" in inactive_hover
+    assert "color: var(--primary-hover)" in inactive_hover
+    assert "outline: 0.2rem solid var(--focus)" in keyboard_focus
+
+
+def test_home_navigation_is_active_only_on_home(
+    auth_application: tuple[FastAPI, Engine],
+) -> None:
+    """Only the exact home path marks the Home navigation link as current."""
+    application, _ = auth_application
+
+    async def scenario() -> tuple[httpx.Response, list[httpx.Response]]:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            await client.post(
+                "/login",
+                data={"email": ACTIVE_EMAIL, "password": TEST_PASSWORD},
+            )
+            created = await client.post(
+                "/meetings",
+                data={
+                    "customer_engagement": "High",
+                    "need_identified": "Yes",
+                    "outcome": "Follow-up",
+                },
+            )
+            meeting_id = int(created.headers["location"].rsplit("=", 1)[-1])
+            non_home_pages = [
+                await client.get("/meetings/new"),
+                await client.get("/outreach/today"),
+                await client.get("/meetings/recent"),
+                await client.get("/outreach/recent"),
+                await client.get(f"/meetings/{meeting_id}/edit"),
+                await client.get(f"/outreach/{date.today().isoformat()}"),
+            ]
+            return await client.get("/"), non_home_pages
+
+    home, non_home_pages = asyncio.run(scenario())
+    assert home.status_code == 200
+    assert re.search(
+        r'<a\s+class="header-home-link header-home-link-active"\s+'
+        r'href="http://testserver/"\s+aria-current="page"\s*>Home</a>',
+        home.text,
+    )
+    for response in non_home_pages:
+        assert response.status_code == 200
+        assert re.search(
+            r'<a\s+class="header-home-link"\s+'
+            r'href="http://testserver/"\s*>Home</a>',
+            response.text,
+        )
+        assert "header-home-link-active" not in response.text
+
+
 def test_home_layout_and_actions_are_structurally_responsive() -> None:
     """Home shares centered gutters and uses equal responsive actions."""
     css = STYLESHEET_PATH.read_text(encoding="utf-8")
+    home_template = Path("app/templates/home.html").read_text(encoding="utf-8")
     mobile_css, desktop_css = css.split("@media (min-width: 48rem)", 1)
 
     shell = css_rule(mobile_css, ".shell")
@@ -223,6 +306,7 @@ def test_home_layout_and_actions_are_structurally_responsive() -> None:
     action_children = css_rule(mobile_css, ".action-card > *")
     action_text = css_rule(mobile_css, ".action-card p")
     action_button = css_rule(mobile_css, ".action-card .button")
+    home_action_button = css_rule(mobile_css, ".home-action-button")
     shared_button = css_rule(mobile_css, ".button")
 
     assert "width: calc(100% - 2rem)" in shell
@@ -244,6 +328,11 @@ def test_home_layout_and_actions_are_structurally_responsive() -> None:
     assert "font-size: 0.92rem" in action_button
     assert "line-height: 1.2" in action_button
     assert "min-height: 2.75rem" in shared_button
+    assert home_template.count("home-action-button") == 3
+    assert "min-height: 2.75rem" in home_action_button
+    assert "align-self: end" in home_action_button
+    assert "padding: 0.45rem 0.875rem" in home_action_button
+    assert "line-height: 1.2" in home_action_button
 
     assert re.search(
         r"\.action-grid\s*\{[^}]*grid-template-columns:\s*"

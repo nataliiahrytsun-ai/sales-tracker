@@ -182,13 +182,16 @@ def test_recent_routes_require_authentication(
             transport=transport,
             base_url="http://testserver",
         ) as client:
-            for path in (
-                "/meetings/recent",
-                "/meetings/999/edit",
-                "/outreach/recent",
-                f"/outreach/{TEST_DATE.isoformat()}",
+            for method, path in (
+                ("GET", "/meetings/recent"),
+                ("GET", "/meetings/999/edit"),
+                ("POST", "/meetings/999"),
+                ("POST", "/meetings/999/delete"),
+                ("GET", "/outreach/recent"),
+                ("GET", f"/outreach/{TEST_DATE.isoformat()}"),
+                ("POST", f"/outreach/{TEST_DATE.isoformat()}"),
             ):
-                response = await client.get(path)
+                response = await client.request(method, path)
                 assert response.status_code == 303
                 assert response.headers["location"] == "/login"
 
@@ -335,10 +338,13 @@ def test_meeting_edit_reuses_validation_and_preserves_values(
 
     form, invalid, updated, confirmation = asyncio.run(scenario())
     assert form.status_code == 200
+    assert "<strong>Editing:</strong>" in form.text
+    assert "2026-07-12 12:00" in form.text
     assert "Before edit" in form.text
     assert invalid.status_code == 400
     assert "Select customer engagement." in invalid.text
     assert 'value="Keep this value"' in invalid.text
+    assert "Before edit" in invalid.text
     assert updated.status_code == 303
     assert updated.headers["location"] == "/meetings/recent?updated=true"
     assert "Meeting updated successfully." in confirmation.text
@@ -398,6 +404,36 @@ def test_meeting_delete_is_post_only_and_confirms(
         assert session.get(PipelineMeeting, meeting_id) is None
 
 
+def test_meeting_edit_identifies_record_without_company(
+    recent_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    """The edit heading identifies an optional-company meeting by timestamp."""
+    application, engine, first_user_id, _ = recent_application
+    with Session(engine) as session:
+        meeting = add_meeting(
+            session,
+            user_id=first_user_id,
+            occurred_at=datetime(2026, 7, 11, 9, 30, tzinfo=UTC),
+            company_name="",
+        )
+        assert meeting.id is not None
+        meeting_id = meeting.id
+
+    async def scenario() -> httpx.Response:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            await login(client)
+            return await client.get(f"/meetings/{meeting_id}/edit")
+
+    response = asyncio.run(scenario())
+    assert response.status_code == 200
+    assert "2026-07-11 09:30" in response.text
+    assert "Company not provided" in response.text
+
+
 def test_foreign_and_missing_meetings_return_404(
     recent_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
@@ -441,6 +477,46 @@ def test_foreign_and_missing_meetings_return_404(
     assert asyncio.run(scenario()) == [404] * 6
     with Session(engine) as session:
         assert session.get(PipelineMeeting, foreign_id) is not None
+
+
+def test_meeting_outside_recent_window_cannot_be_changed(
+    recent_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    """An owned but stale meeting is not available to edit or delete."""
+    application, engine, first_user_id, _ = recent_application
+    with Session(engine) as session:
+        meeting = add_meeting(
+            session,
+            user_id=first_user_id,
+            occurred_at=datetime(2026, 6, 14, 12, tzinfo=UTC),
+            company_name="Outside correction window",
+        )
+        assert meeting.id is not None
+        meeting_id = meeting.id
+
+    async def scenario() -> list[int]:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            await login(client)
+            return [
+                (await client.get(f"/meetings/{meeting_id}/edit")).status_code,
+                (
+                    await client.post(
+                        f"/meetings/{meeting_id}",
+                        data=meeting_data(),
+                    )
+                ).status_code,
+                (
+                    await client.post(f"/meetings/{meeting_id}/delete")
+                ).status_code,
+            ]
+
+    assert asyncio.run(scenario()) == [404, 404, 404]
+    with Session(engine) as session:
+        assert session.get(PipelineMeeting, meeting_id) is not None
 
 
 def test_outreach_edit_by_date_updates_without_duplicate(
@@ -504,7 +580,16 @@ def test_outreach_validation_future_dates_and_ownership(
         )
         foreign_id = foreign.id
 
-    async def scenario() -> tuple[httpx.Response, httpx.Response, httpx.Response]:
+    old_date = TEST_DATE - timedelta(days=30)
+
+    async def scenario() -> tuple[
+        httpx.Response,
+        httpx.Response,
+        httpx.Response,
+        httpx.Response,
+        httpx.Response,
+        httpx.Response,
+    ]:
         transport = httpx.ASGITransport(app=application)
         async with httpx.AsyncClient(
             transport=transport,
@@ -516,19 +601,39 @@ def test_outreach_validation_future_dates_and_ownership(
                 f"/outreach/{activity_date.isoformat()}",
                 data=outreach_data(total_activities="invalid", note="Keep safely"),
             )
-            future = await client.post(
+            future_get = await client.get(
+                f"/outreach/{(TEST_DATE + timedelta(days=1)).isoformat()}",
+            )
+            future_post = await client.post(
                 f"/outreach/{(TEST_DATE + timedelta(days=1)).isoformat()}",
                 data=outreach_data(),
             )
-            return private_form, invalid, future
+            old_get = await client.get(f"/outreach/{old_date.isoformat()}")
+            old_post = await client.post(
+                f"/outreach/{old_date.isoformat()}",
+                data=outreach_data(),
+            )
+            return (
+                private_form,
+                invalid,
+                future_get,
+                future_post,
+                old_get,
+                old_post,
+            )
 
-    private_form, invalid, future = asyncio.run(scenario())
+    private_form, invalid, future_get, future_post, old_get, old_post = (
+        asyncio.run(scenario())
+    )
     assert private_form.status_code == 200
     assert 'value="88"' not in private_form.text
     assert invalid.status_code == 400
     assert "Enter a whole number for total outreach activities." in invalid.text
     assert "Keep safely" in invalid.text
-    assert future.status_code == 400
+    assert future_get.status_code == 400
+    assert future_post.status_code == 400
+    assert old_get.status_code == 404
+    assert old_post.status_code == 404
 
     with Session(engine) as session:
         assert session.get(DailyOutreach, foreign_id) is not None
@@ -546,6 +651,9 @@ def test_recent_records_layout_is_structurally_responsive() -> None:
     outreach_template = Path("app/templates/outreach_form.html").read_text(
         encoding="utf-8",
     )
+    recent_meetings_template = Path(
+        "app/templates/recent_meetings.html",
+    ).read_text(encoding="utf-8")
     mobile_css, desktop_css = css.split("@media (min-width: 48rem)", 1)
     assert 'class="back-link"' in meeting_template
     assert 'class="back-link"' in outreach_template
@@ -555,6 +663,11 @@ def test_recent_records_layout_is_structurally_responsive() -> None:
     assert ".record-list" in mobile_css
     assert ".record-card" in mobile_css
     assert ".record-actions" in mobile_css
+    assert 'class="record-details meeting-record-details"' in (
+        recent_meetings_template
+    )
+    assert ".meeting-record-details" in mobile_css
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in mobile_css
     assert "min-width: 0" in mobile_css
     assert "flex-wrap: wrap" in mobile_css
     assert "grid-template-columns: minmax(0, 1fr)" in mobile_css

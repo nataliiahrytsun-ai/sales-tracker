@@ -47,6 +47,7 @@ def meeting_template_context(
     saved_meeting_id: int | None = None,
     undone: bool = False,
     meeting_id: int | None = None,
+    editing_meeting: PipelineMeeting | None = None,
 ) -> dict[str, object]:
     """Build the shared meeting form template context."""
     return {
@@ -57,6 +58,7 @@ def meeting_template_context(
         "undone": undone,
         "meeting_id": meeting_id,
         "editing": meeting_id is not None,
+        "editing_meeting": editing_meeting,
         "customer_engagement_options": tuple(CustomerEngagement),
         "need_identified_options": tuple(NeedIdentified),
         "outcome_options": tuple(PipelineOutcome),
@@ -250,6 +252,7 @@ def edit_meeting(
             current_user,
             form_values_from_meeting(meeting),
             meeting_id=meeting_id,
+            editing_meeting=meeting,
         ),
     )
 
@@ -300,6 +303,7 @@ def update_meeting(
                 values,
                 errors=errors,
                 meeting_id=meeting_id,
+                editing_meeting=meeting,
             ),
             status_code=status.HTTP_400_BAD_REQUEST,
         )
@@ -318,6 +322,7 @@ def update_meeting(
                 values,
                 errors={"form": "Meeting could not be updated. Please try again."},
                 meeting_id=meeting_id,
+                editing_meeting=meeting,
             ),
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )

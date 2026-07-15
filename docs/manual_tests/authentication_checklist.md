@@ -14,11 +14,11 @@ Record each test as **Pass**, **Fail**, or **Blocked**.
 | Session cookie has a finite lifetime | Pass | Login response contains the configured `Max-Age`; the default is 1,209,600 seconds (14 days). |
 | Stored password value is a hash and not plaintext | Pass | Stored value used the Argon2 format and differed from the test password. |
 | Insecure production session configuration fails clearly | Pass | Startup rejected both a missing secret and `SALES_TRACKER_SESSION_COOKIE_SECURE=false`, naming the relevant environment variable. |
-| A copied pre-logout cookie is rejected by the server | Blocked | Known limitation: stateless signed cookies cannot be revoked server-side; the strict replay test remains `xfail` until the session architecture changes. |
 
-## Known limitation
+## Additional Known Limitation (Not a Milestone 1 Gate)
 
 `POST /logout` expires the browser's session cookie and subsequent requests from
 that browser are redirected to `/login`. A cookie copied before logout remains
 cryptographically valid until its configured `Max-Age` expires. This limitation
-is documented and covered by a strict `xfail` integration test.
+is documented and covered by a strict `xfail` integration test. Server-side
+revocation is not required by the Milestone 1 login/logout acceptance criteria.

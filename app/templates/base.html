@@ -15,7 +15,11 @@
         <a class="brand" href="{{ url_for('home') }}">Sales Tracker</a>
         {% if current_user is defined and current_user %}
           <nav class="user-nav" aria-label="User navigation">
-            <a href="{{ url_for('home') }}" aria-current="page">Home</a>
+            <a
+              class="header-home-link{% if request.url.path == '/' %} header-home-link-active{% endif %}"
+              href="{{ url_for('home') }}"
+              {% if request.url.path == '/' %}aria-current="page"{% endif %}
+            >Home</a>
             <span class="user-name">{{ current_user.name }}</span>
             <form method="post" action="{{ url_for('logout') }}">
               <button class="button button-secondary" type="submit">

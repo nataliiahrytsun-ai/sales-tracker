@@ -88,6 +88,31 @@ a {
   margin: 0;
 }
 
+.header-home-link {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.5rem;
+  color: var(--primary);
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.header-home-link-active {
+  background: #edf2ff;
+  color: #183d9b;
+}
+
+.header-home-link:focus-visible {
+  background: #dfe7ff;
+  color: #12337f;
+}
+
 .user-name {
   color: var(--muted);
   overflow-wrap: anywhere;
@@ -282,6 +307,13 @@ textarea {
   font-size: 0.92rem;
   line-height: 1.2;
   text-decoration: none;
+}
+
+.home-action-button {
+  min-height: 2.75rem;
+  align-self: end;
+  padding: 0.45rem 0.875rem;
+  line-height: 1.2;
 }
 
 .status-label {
@@ -606,6 +638,11 @@ textarea {
   gap: 0.75rem;
 }
 
+.meeting-record-details {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
 .record-details div {
   min-width: 0;
 }
@@ -631,6 +668,16 @@ textarea {
 }
 
 @media (hover: hover) {
+  .header-home-link:hover {
+    background: var(--background);
+    color: var(--primary-hover);
+  }
+
+  .header-home-link-active:hover {
+    background: #dfe7ff;
+    color: #12337f;
+  }
+
   .choice-button:hover span {
     border-color: var(--primary);
     background: var(--background);
