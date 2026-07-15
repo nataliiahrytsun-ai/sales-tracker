@@ -136,12 +136,14 @@ def add_meeting(
     user_id: int,
     occurred_at: datetime,
     company_name: str,
+    country_code: str | None = None,
 ) -> PipelineMeeting:
     """Persist one meeting for list and ownership tests."""
     meeting = PipelineMeeting(
         user_id=user_id,
         occurred_at=occurred_at,
         company_name=company_name,
+        country_code=country_code,
         customer_engagement=CustomerEngagement.HIGH,
         need_identified=NeedIdentified.YES,
         outcome=PipelineOutcome.FOLLOW_UP,
@@ -303,6 +305,7 @@ def test_meeting_edit_reuses_validation_and_preserves_values(
             user_id=first_user_id,
             occurred_at=datetime(2026, 7, 12, 12, tzinfo=UTC),
             company_name="Before edit",
+            country_code="PL",
         )
         assert meeting.id is not None
         meeting_id = meeting.id
@@ -343,6 +346,8 @@ def test_meeting_edit_reuses_validation_and_preserves_values(
     assert "<strong>Editing:</strong>" in form.text
     assert "2026-07-12 12:00" in form.text
     assert "Before edit" in form.text
+    assert 'value="Poland"' in form.text
+    assert 'name="country_code" value="PL"' in form.text
     assert invalid.status_code == 400
     assert "Select customer engagement." in invalid.text
     assert 'value="Keep this value"' in invalid.text

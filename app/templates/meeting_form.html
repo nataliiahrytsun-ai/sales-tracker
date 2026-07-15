@@ -160,13 +160,23 @@
         </div>
 
         <div class="field-group">
-          <label for="country_code">Country <span class="optional">Optional</span></label>
-          <select id="country_code" name="country_code">
-            <option value="">Not provided</option>
-            {% for value, label in country_options %}
-              <option value="{{ value }}" {% if values.country_code == value %}selected{% endif %}>{{ label }}</option>
+          <label for="meeting_country_search">Country <span class="optional">Optional</span></label>
+          <input
+            id="meeting_country_search"
+            type="search"
+            list="meeting_country_options"
+            value="{{ selected_country_name }}"
+            placeholder="Search country..."
+            autocomplete="off"
+            aria-autocomplete="list"
+            data-meeting-country-search
+          >
+          <input type="hidden" id="country_code" name="country_code" value="{{ values.country_code }}" data-meeting-country-code>
+          <datalist id="meeting_country_options">
+            {% for code, label in country_options %}
+              <option value="{{ label }}" data-country-code="{{ code }}"></option>
             {% endfor %}
-          </select>
+          </datalist>
           {% if errors.country_code %}<p class="field-error">{{ errors.country_code }}</p>{% endif %}
         </div>
 
@@ -192,4 +202,5 @@
       </button>
     </form>
   </section>
+  <script src="{{ url_for('static', path='/js/meeting_country.js') }}" defer></script>
 {% endblock %}

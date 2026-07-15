@@ -1,4 +1,4 @@
-"""Local ISO 3166-1 alpha-2 country names for outreach entry."""
+"""Local ISO 3166-1 alpha-2 country names shared by product forms."""
 
 COUNTRY_OPTIONS: tuple[tuple[str, str], ...] = (
     ("AF", "Afghanistan"),

@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from sqlmodel import Session, select
 
+from app.countries import COUNTRY_CODES, COUNTRY_NAMES_BY_CODE, COUNTRY_OPTIONS
 from app.models import (
     CustomerEngagement,
     NeedIdentified,
@@ -13,11 +14,6 @@ from app.models import (
     UserMood,
 )
 
-COUNTRY_OPTIONS = (
-    ("DE", "Germany"),
-    ("AT", "Austria"),
-    ("CH", "Switzerland"),
-)
 BLOCKER_OPTIONS = (
     ("No budget", "No budget"),
     ("No decision-maker", "No decision-maker"),
@@ -29,7 +25,6 @@ BLOCKER_OPTIONS = (
     ("Other", "Other"),
 )
 
-COUNTRY_CODES = {value for value, _label in COUNTRY_OPTIONS}
 BLOCKER_VALUES = {value for value, _label in BLOCKER_OPTIONS}
 
 

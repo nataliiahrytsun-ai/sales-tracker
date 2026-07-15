@@ -143,17 +143,24 @@ def test_authenticated_user_can_open_meeting_form(
             "Difficult",
             "Okay",
             "Good",
-            "Germany",
-            "Austria",
-            "Switzerland",
+            "Brazil",
+            "Poland",
             "No budget",
             "Procurement/legal delay",
             "Other",
         ):
             assert value in response.text
-        for code, country_name in COUNTRY_OPTIONS:
-            assert re.search(rf'<option value="{code}"\s*>', response.text)
-            assert country_name in response.text
+        assert len(COUNTRY_OPTIONS) == 249
+        assert response.text.count('data-country-code="') == 249
+        assert 'type="search"' in response.text
+        assert 'list="meeting_country_options"' in response.text
+        assert 'name="country_code" value=""' in response.text
+        assert '/static/js/meeting_country.js' in response.text
+        for code, country_name in (("BR", "Brazil"), ("PL", "Poland")):
+            assert (
+                f'<option value="{country_name}" data-country-code="{code}">'
+                in response.text
+            )
 
     asyncio.run(scenario())
 
@@ -309,6 +316,25 @@ def test_meeting_visual_states_use_accessible_existing_palette() -> None:
     assert "box-shadow:" in confirmation
 
 
+def test_native_selects_use_the_shared_custom_arrow() -> None:
+    """Every native select uses one padded, accessible arrow treatment."""
+    css = STYLESHEET_PATH.read_text(encoding="utf-8")
+    mobile_css, _desktop_css = css.split("@media (min-width: 48rem)", 1)
+    select_rule = css_rule(mobile_css, "select")
+    disabled_rule = css_rule(mobile_css, "select:disabled")
+
+    assert "-webkit-appearance: none" in select_rule
+    assert "appearance: none" in select_rule
+    assert "padding-right: 2.75rem" in select_rule
+    assert "background-image: url(" in select_rule
+    assert "stroke-width='2.25'" in select_rule
+    assert "background-repeat: no-repeat" in select_rule
+    assert "background-position: right 0.85rem center" in select_rule
+    assert "background-size: 1rem 0.625rem" in select_rule
+    assert "opacity: 0.65" in disabled_rule
+    assert "cursor: not-allowed" in disabled_rule
+
+
 @pytest.mark.parametrize(
     ("method", "path"),
     [
@@ -361,7 +387,7 @@ def test_successful_meeting_is_saved_for_current_user_only(
                     "outcome": "Proposal requested",
                     "user_mood": "Good",
                     "blocker_tag": "Procurement/legal delay",
-                    "country_code": "DE",
+                    "country_code": "BR",
                     "company_name": "Example GmbH",
                     "next_step_date": "2026-07-20",
                     "note": "Send the requested overview.",
@@ -392,7 +418,7 @@ def test_successful_meeting_is_saved_for_current_user_only(
         assert meeting.outcome is PipelineOutcome.PROPOSAL_REQUESTED
         assert meeting.user_mood is UserMood.GOOD
         assert meeting.blocker_tag == "Procurement/legal delay"
-        assert meeting.country_code == "DE"
+        assert meeting.country_code == "BR"
         assert meeting.company_name == "Example GmbH"
         assert meeting.next_step_date == date(2026, 7, 20)
         assert meeting.note == "Send the requested overview."
@@ -433,6 +459,66 @@ def test_meeting_can_be_saved_with_only_required_fields(
         assert meeting.company_name is None
         assert meeting.next_step_date is None
         assert meeting.note is None
+
+
+def test_meeting_accepts_european_country_outside_dach(
+    meeting_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    """A valid worldwide ISO code is accepted outside the former DACH list."""
+    application, engine, _, _ = meeting_application
+
+    async def scenario() -> httpx.Response:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            await login(client)
+            return await client.post(
+                "/meetings",
+                data={
+                    "customer_engagement": "Medium",
+                    "need_identified": "Yes",
+                    "outcome": "Follow-up",
+                    "country_code": "PL",
+                },
+            )
+
+    response = asyncio.run(scenario())
+    assert response.status_code == 303
+    with Session(engine) as session:
+        assert session.exec(select(PipelineMeeting)).one().country_code == "PL"
+
+
+def test_selected_country_is_preserved_after_other_validation_error(
+    meeting_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    """A valid country name and code survive a failed meeting submission."""
+    application, engine, _, _ = meeting_application
+
+    async def scenario() -> httpx.Response:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            await login(client)
+            return await client.post(
+                "/meetings",
+                data={
+                    "customer_engagement": "invalid",
+                    "need_identified": "Yes",
+                    "outcome": "Follow-up",
+                    "country_code": "PL",
+                },
+            )
+
+    response = asyncio.run(scenario())
+    assert response.status_code == 400
+    assert 'value="Poland"' in response.text
+    assert 'name="country_code" value="PL"' in response.text
+    with Session(engine) as session:
+        assert session.exec(select(PipelineMeeting)).all() == []
 
 
 def test_missing_required_fields_return_form_errors(

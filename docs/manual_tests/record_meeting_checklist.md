@@ -16,6 +16,8 @@ unreliable.
 | Meeting form is usable on a mobile-sized viewport | Blocked | Requires a visual browser check. The built-in browser runtime repeatedly closed Codex and was intentionally not restarted. Next action: repeat in a stable browser environment at a mobile-sized viewport. |
 | Save a meeting using only the three required selections | Pass | HTTP submission returned 303; the saved row contained the three selections and all optional fields remained `NULL`. |
 | Save all optional fields with the documented selector values | Pass | HTTP submission persisted mood, blocker, country, company, next-step date, and note with the submitted values. |
+| Search and select a country by English name | Blocked | Verify the searchable selector quickly finds Brazil and Poland, displays the English name, and remains optional. |
+| Selected country survives errors and editing | Blocked | Verify a selected country remains visible after another validation error and when reopening Edit meeting. |
 | Invalid or missing selections show clear form errors | Pass | Invalid HTTP submission returned 400 and displayed the required customer-engagement error. Automated coverage also checks all required and invalid selector errors. |
 | Safe entered values remain in the form after validation failure | Pass | Company and note values remained in the returned HTML after the 400 response. |
 | Successful save shows confirmation and allows another entry | Pass | Confirmation HTML contained `Meeting saved successfully` and `Record another meeting`. |
@@ -31,14 +33,15 @@ unreliable.
 | Start the application without the browser runtime | Pass | Local Uvicorn became reachable on loopback. |
 | Health-check endpoint | Pass | `GET /health` returned 200. |
 | Authenticated meeting form exposes the documented required options | Pass | HTTP response contained Low/Medium/High, Yes/No/Unclear, and all documented outcomes checked by the automated suite. |
+| Worldwide country validation | Pass | Automated tests cover Brazil, Poland, empty country as `NULL`, rejection of an unknown code, error re-rendering, and Edit meeting display. |
 
 ## Automated Test Record
 
-- `.venv\Scripts\python.exe -m pytest`: **53 passed, 1 xfailed**. The
+- `python -m pytest --basetemp=C:\pytest-sales-tracker`: **90 passed, 1 xfailed**. The
   expected failure documents the known inability of stateless signed-cookie
   sessions to revoke a copied pre-logout cookie.
-- `.venv\Scripts\python.exe -m pytest tests\test_meetings.py -q`:
-  **16 passed**.
+- `.venv\Scripts\python.exe -m pytest tests\test_meetings.py tests\test_recent_records.py -q`:
+  **30 passed**.
 - `.venv\Scripts\python.exe -m compileall -q app tests`: **Pass**.
 - `git diff --check`: **Pass** (line-ending conversion warnings only; no
   whitespace errors).

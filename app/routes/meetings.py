@@ -22,6 +22,7 @@ from app.models import (
 )
 from app.services.meetings import (
     BLOCKER_OPTIONS,
+    COUNTRY_NAMES_BY_CODE,
     COUNTRY_OPTIONS,
     MeetingFormValues,
     apply_meeting_values,
@@ -64,6 +65,10 @@ def meeting_template_context(
         "outcome_options": tuple(PipelineOutcome),
         "mood_options": tuple(UserMood),
         "country_options": COUNTRY_OPTIONS,
+        "selected_country_name": COUNTRY_NAMES_BY_CODE.get(
+            values.country_code,
+            values.country_code,
+        ),
         "blocker_options": BLOCKER_OPTIONS,
     }
 
