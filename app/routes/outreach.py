@@ -1,10 +1,10 @@
 """Private create/update routes for today's daily outreach summary."""
 
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.exc import SQLAlchemyError
@@ -25,6 +25,11 @@ from app.services.outreach import (
     get_recent_outreach,
     upsert_daily_outreach,
     validate_outreach_form,
+)
+from app.services.recent_records import (
+    build_recent_range_query,
+    default_recent_date_values,
+    resolve_recent_date_range,
 )
 
 router = APIRouter(prefix="/outreach", tags=["outreach"])
@@ -54,6 +59,7 @@ def outreach_template_context(
     errors: dict[str, str] | None = None,
     saved: bool = False,
     dated: bool = False,
+    recent_range_query: str = "",
 ) -> dict[str, object]:
     """Build the shared outreach form template context."""
     country_total = country_total_from_values(values)
@@ -77,6 +83,7 @@ def outreach_template_context(
         "saved": saved,
         "country_total": country_total,
         "dated": dated,
+        "recent_range_query": recent_range_query,
         "mood_options": tuple(UserMood),
         "blocker_options": BLOCKER_OPTIONS,
         "country_options": COUNTRY_OPTIONS,
@@ -198,36 +205,60 @@ def recent_outreach(
     session: Annotated[Session, Depends(get_session)],
     today: Annotated[date, Depends(current_local_date)],
     saved: bool = False,
+    from_date: Annotated[str | None, Query(alias="from")] = None,
+    to_date: Annotated[str | None, Query(alias="to")] = None,
 ) -> Response:
-    """List the current user's outreach summaries from the last 30 days."""
+    """List the current user's outreach summaries in a calendar range."""
     assert current_user.id is not None
-    records = get_recent_outreach(
-        session,
-        user_id=current_user.id,
+    selected_range = resolve_recent_date_range(
         today=today,
+        from_value=from_date,
+        to_value=to_date,
     )
+    default_from, default_to = default_recent_date_values(today)
+    records = []
+    if selected_range.is_valid:
+        assert selected_range.start_date is not None
+        assert selected_range.end_date is not None
+        records = get_recent_outreach(
+            session,
+            user_id=current_user.id,
+            start_date=selected_range.start_date,
+            end_date=selected_range.end_date,
+        )
     return templates.TemplateResponse(
         request=request,
         name="recent_outreach.html",
         context={
             "current_user": current_user,
             "records": records,
-            "start_date": today - timedelta(days=29),
-            "end_date": today,
+            "from_value": selected_range.from_value,
+            "to_value": selected_range.to_value,
+            "range_query": selected_range.query_string,
+            "range_error": selected_range.error,
+            "default_from_value": default_from,
+            "default_to_value": default_to,
+            "is_default_range": (
+                selected_range.from_value == default_from
+                and selected_range.to_value == default_to
+            ),
             "saved": saved,
         },
+        status_code=(
+            status.HTTP_200_OK
+            if selected_range.is_valid
+            else status.HTTP_400_BAD_REQUEST
+        ),
     )
 
 
-def require_recent_outreach_date(activity_date: date, today: date) -> None:
-    """Reject future dates and dates outside the 30-day correction window."""
+def require_past_outreach_date(activity_date: date, today: date) -> None:
+    """Reject future outreach dates."""
     if activity_date > today:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Future outreach dates are not allowed.",
         )
-    if activity_date < today - timedelta(days=29):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
 @router.get("/{activity_date}", response_class=HTMLResponse)
@@ -238,9 +269,11 @@ def dated_outreach(
     session: Annotated[Session, Depends(get_session)],
     today: Annotated[date, Depends(current_local_date)],
     saved: bool = False,
+    from_date: Annotated[str | None, Query(alias="from")] = None,
+    to_date: Annotated[str | None, Query(alias="to")] = None,
 ) -> Response:
-    """Render an owned outreach record for an editable recent date."""
-    require_recent_outreach_date(activity_date, today)
+    """Render an owned outreach record for any past date."""
+    require_past_outreach_date(activity_date, today)
     assert current_user.id is not None
     record = get_daily_outreach(
         session,
@@ -261,6 +294,7 @@ def dated_outreach(
             values,
             saved=saved and record is not None,
             dated=True,
+            recent_range_query=build_recent_range_query(from_date, to_date),
         ),
     )
 
@@ -272,6 +306,8 @@ def save_dated_outreach(
     current_user: Annotated[User, Depends(get_current_user)],
     session: Annotated[Session, Depends(get_session)],
     today: Annotated[date, Depends(current_local_date)],
+    from_date: Annotated[str | None, Query(alias="from")] = None,
+    to_date: Annotated[str | None, Query(alias="to")] = None,
     total_activities: Annotated[str, Form()] = "",
     country_codes: Annotated[list[str] | None, Form()] = None,
     country_counts: Annotated[list[str] | None, Form()] = None,
@@ -282,8 +318,8 @@ def save_dated_outreach(
     blocker_tag: Annotated[str, Form()] = "",
     note: Annotated[str, Form()] = "",
 ) -> Response:
-    """Validate and upsert an owned outreach summary for a recent date."""
-    require_recent_outreach_date(activity_date, today)
+    """Validate and upsert an owned outreach summary for any past date."""
+    require_past_outreach_date(activity_date, today)
     values = OutreachFormValues(
         total_activities=total_activities,
         country_rows=country_rows_from_submission(
@@ -308,6 +344,10 @@ def save_dated_outreach(
                 values,
                 errors=errors,
                 dated=True,
+                recent_range_query=build_recent_range_query(
+                    from_date,
+                    to_date,
+                ),
             ),
             status_code=status.HTTP_400_BAD_REQUEST,
         )
@@ -334,11 +374,20 @@ def save_dated_outreach(
                     "form": "Daily outreach could not be saved. Please try again.",
                 },
                 dated=True,
+                recent_range_query=build_recent_range_query(
+                    from_date,
+                    to_date,
+                ),
             ),
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
+    range_query = build_recent_range_query(from_date, to_date)
     return RedirectResponse(
-        url=f"/outreach/{activity_date.isoformat()}?saved=true",
+        url=(
+            f"/outreach/{activity_date.isoformat()}?{range_query}&saved=true"
+            if range_query
+            else f"/outreach/{activity_date.isoformat()}?saved=true"
+        ),
         status_code=status.HTTP_303_SEE_OTHER,
     )

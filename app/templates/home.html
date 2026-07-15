@@ -12,54 +12,52 @@
   <section class="action-grid" aria-label="Sales activity actions">
     <article class="action-card">
       <div>
-        <h2>Record meeting</h2>
-        <p>Capture the outcome of a pipeline conversation.</p>
+        <h2>Meeting Entry</h2>
+        <p>Create meeting records, then review or correct previous entries.</p>
       </div>
-      <a class="button button-primary home-action-button" href="{{ url_for('new_meeting') }}">
-        Record meeting
-      </a>
+      <div class="home-card-actions">
+        <a class="button button-primary home-action-button" href="{{ url_for('new_meeting') }}">
+          Record meeting
+        </a>
+        <a class="button button-secondary home-action-button" href="{{ url_for('recent_meetings') }}">
+          View / edit meetings
+        </a>
+      </div>
     </article>
 
     <article class="action-card">
       <div>
-        <h2>Update today's outreach</h2>
-        <p>Record or adjust today's outbound activity.</p>
+        <h2>Outreach Entry</h2>
+        <p>Complete today’s outreach summary, then review or correct past entries.</p>
       </div>
-      <a class="button button-primary home-action-button" href="{{ url_for('today_outreach') }}">
-        Update today's outreach
-      </a>
+      <div class="home-card-actions">
+        <a class="button button-primary home-action-button" href="{{ url_for('today_outreach') }}">
+          Update today’s outreach
+        </a>
+        <a class="button button-secondary home-action-button" href="{{ url_for('recent_outreach') }}">
+          View / edit outreach
+        </a>
+      </div>
     </article>
 
     <article class="action-card">
       <div>
-        <h2>Recent records</h2>
-        <p>Review and correct your meetings and daily outreach from the last 30 days.</p>
+        <h2>My Week</h2>
+        <p>Your personal Monday-to-Sunday activity summary, using only your own records.</p>
       </div>
-      <a class="button button-primary home-action-button" href="{{ url_for('recent_meetings') }}">
-        Recent records
-      </a>
+      <div class="home-card-actions">
+        <button class="button button-secondary" type="button" disabled>Coming soon</button>
+      </div>
     </article>
 
     <article class="action-card">
       <div>
-        <h2>View this week</h2>
-        <p>Review this week's activity when the weekly view is available.</p>
+        <h2>Dashboard</h2>
+        <p>Company-wide aggregated reporting without access to private notes or individual records.</p>
       </div>
-      <button class="button button-secondary" type="button" disabled>
-        View this week
-      </button>
-      <span class="status-label">Coming soon</span>
-    </article>
-
-    <article class="action-card">
-      <div>
-        <h2>Open dashboard</h2>
-        <p>Open team reporting after dashboard delivery.</p>
+      <div class="home-card-actions">
+        <button class="button button-secondary" type="button" disabled>Coming soon</button>
       </div>
-      <button class="button button-secondary" type="button" disabled>
-        Open dashboard
-      </button>
-      <span class="status-label">Coming soon</span>
     </article>
   </section>
 {% endblock %}

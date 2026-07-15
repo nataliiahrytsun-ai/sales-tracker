@@ -1,10 +1,10 @@
 """Private pipeline meeting entry routes."""
 
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.exc import SQLAlchemyError
@@ -27,11 +27,16 @@ from app.services.meetings import (
     MeetingFormValues,
     apply_meeting_values,
     form_values_from_meeting,
-    get_owned_recent_meeting,
+    get_owned_meeting,
     get_recent_meetings,
     validate_meeting_form,
 )
 from app.services.outreach import current_local_date
+from app.services.recent_records import (
+    build_recent_range_query,
+    default_recent_date_values,
+    resolve_recent_date_range,
+)
 
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 templates = Jinja2Templates(
@@ -49,6 +54,7 @@ def meeting_template_context(
     undone: bool = False,
     meeting_id: int | None = None,
     editing_meeting: PipelineMeeting | None = None,
+    recent_range_query: str = "",
 ) -> dict[str, object]:
     """Build the shared meeting form template context."""
     return {
@@ -60,6 +66,7 @@ def meeting_template_context(
         "meeting_id": meeting_id,
         "editing": meeting_id is not None,
         "editing_meeting": editing_meeting,
+        "recent_range_query": recent_range_query,
         "customer_engagement_options": tuple(CustomerEngagement),
         "need_identified_options": tuple(NeedIdentified),
         "outcome_options": tuple(PipelineOutcome),
@@ -193,41 +200,65 @@ def recent_meetings(
     today: Annotated[date, Depends(current_local_date)],
     updated: bool = False,
     deleted: bool = False,
+    from_date: Annotated[str | None, Query(alias="from")] = None,
+    to_date: Annotated[str | None, Query(alias="to")] = None,
 ) -> Response:
-    """List the current user's meetings from the last 30 calendar days."""
+    """List the current user's meetings in a validated calendar range."""
     assert current_user.id is not None
-    meetings = get_recent_meetings(
-        session,
-        user_id=current_user.id,
+    selected_range = resolve_recent_date_range(
         today=today,
+        from_value=from_date,
+        to_value=to_date,
     )
+    default_from, default_to = default_recent_date_values(today)
+    meetings: list[PipelineMeeting] = []
+    if selected_range.is_valid:
+        assert selected_range.start_date is not None
+        assert selected_range.end_date is not None
+        meetings = get_recent_meetings(
+            session,
+            user_id=current_user.id,
+            start_date=selected_range.start_date,
+            end_date=selected_range.end_date,
+        )
     return templates.TemplateResponse(
         request=request,
         name="recent_meetings.html",
         context={
             "current_user": current_user,
             "meetings": meetings,
-            "start_date": today - timedelta(days=29),
-            "end_date": today,
+            "from_value": selected_range.from_value,
+            "to_value": selected_range.to_value,
+            "range_query": selected_range.query_string,
+            "range_error": selected_range.error,
+            "default_from_value": default_from,
+            "default_to_value": default_to,
+            "is_default_range": (
+                selected_range.from_value == default_from
+                and selected_range.to_value == default_to
+            ),
             "updated": updated,
             "deleted": deleted,
         },
+        status_code=(
+            status.HTTP_200_OK
+            if selected_range.is_valid
+            else status.HTTP_400_BAD_REQUEST
+        ),
     )
 
 
-def require_owned_recent_meeting(
+def require_owned_meeting(
     session: Session,
     *,
     meeting_id: int,
     user_id: int,
-    today: date,
 ) -> PipelineMeeting:
-    """Return an owned recent meeting or conceal it behind a 404."""
-    meeting = get_owned_recent_meeting(
+    """Return an owned meeting or conceal it behind a 404."""
+    meeting = get_owned_meeting(
         session,
         meeting_id=meeting_id,
         user_id=user_id,
-        today=today,
     )
     if meeting is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
@@ -240,15 +271,15 @@ def edit_meeting(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     session: Annotated[Session, Depends(get_session)],
-    today: Annotated[date, Depends(current_local_date)],
+    from_date: Annotated[str | None, Query(alias="from")] = None,
+    to_date: Annotated[str | None, Query(alias="to")] = None,
 ) -> Response:
-    """Render the shared meeting form for one owned recent meeting."""
+    """Render the shared meeting form for any owned meeting."""
     assert current_user.id is not None
-    meeting = require_owned_recent_meeting(
+    meeting = require_owned_meeting(
         session,
         meeting_id=meeting_id,
         user_id=current_user.id,
-        today=today,
     )
     return templates.TemplateResponse(
         request=request,
@@ -258,6 +289,7 @@ def edit_meeting(
             form_values_from_meeting(meeting),
             meeting_id=meeting_id,
             editing_meeting=meeting,
+            recent_range_query=build_recent_range_query(from_date, to_date),
         ),
     )
 
@@ -268,7 +300,8 @@ def update_meeting(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     session: Annotated[Session, Depends(get_session)],
-    today: Annotated[date, Depends(current_local_date)],
+    from_date: Annotated[str | None, Query(alias="from")] = None,
+    to_date: Annotated[str | None, Query(alias="to")] = None,
     customer_engagement: Annotated[str, Form()] = "",
     need_identified: Annotated[str, Form()] = "",
     outcome: Annotated[str, Form()] = "",
@@ -279,13 +312,12 @@ def update_meeting(
     next_step_date: Annotated[str, Form()] = "",
     note: Annotated[str, Form()] = "",
 ) -> Response:
-    """Validate and update one owned recent meeting."""
+    """Validate and update one owned meeting."""
     assert current_user.id is not None
-    meeting = require_owned_recent_meeting(
+    meeting = require_owned_meeting(
         session,
         meeting_id=meeting_id,
         user_id=current_user.id,
-        today=today,
     )
     values = MeetingFormValues(
         customer_engagement=customer_engagement,
@@ -309,6 +341,10 @@ def update_meeting(
                 errors=errors,
                 meeting_id=meeting_id,
                 editing_meeting=meeting,
+                recent_range_query=build_recent_range_query(
+                    from_date,
+                    to_date,
+                ),
             ),
             status_code=status.HTTP_400_BAD_REQUEST,
         )
@@ -328,12 +364,21 @@ def update_meeting(
                 errors={"form": "Meeting could not be updated. Please try again."},
                 meeting_id=meeting_id,
                 editing_meeting=meeting,
+                recent_range_query=build_recent_range_query(
+                    from_date,
+                    to_date,
+                ),
             ),
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
+    range_query = build_recent_range_query(from_date, to_date)
     return RedirectResponse(
-        url="/meetings/recent?updated=true",
+        url=(
+            f"/meetings/recent?{range_query}&updated=true"
+            if range_query
+            else "/meetings/recent?updated=true"
+        ),
         status_code=status.HTTP_303_SEE_OTHER,
     )
 
@@ -344,15 +389,15 @@ def delete_meeting(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     session: Annotated[Session, Depends(get_session)],
-    today: Annotated[date, Depends(current_local_date)],
+    from_date: Annotated[str | None, Query(alias="from")] = None,
+    to_date: Annotated[str | None, Query(alias="to")] = None,
 ) -> Response:
-    """Delete one owned recent meeting through a POST-only action."""
+    """Delete one owned meeting through a POST-only action."""
     assert current_user.id is not None
-    meeting = require_owned_recent_meeting(
+    meeting = require_owned_meeting(
         session,
         meeting_id=meeting_id,
         user_id=current_user.id,
-        today=today,
     )
     session.delete(meeting)
     try:
@@ -366,8 +411,13 @@ def delete_meeting(
 
     if request.session.get(LAST_CREATED_MEETING_SESSION_KEY) == meeting_id:
         request.session.pop(LAST_CREATED_MEETING_SESSION_KEY, None)
+    range_query = build_recent_range_query(from_date, to_date)
     return RedirectResponse(
-        url="/meetings/recent?deleted=true",
+        url=(
+            f"/meetings/recent?{range_query}&deleted=true"
+            if range_query
+            else "/meetings/recent?deleted=true"
+        ),
         status_code=status.HTTP_303_SEE_OTHER,
     )
 

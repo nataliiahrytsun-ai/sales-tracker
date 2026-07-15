@@ -249,6 +249,13 @@ textarea {
   background: var(--primary-hover);
 }
 
+.button-primary:disabled {
+  border-color: var(--border);
+  background: #d8dde8;
+  color: var(--muted);
+  opacity: 1;
+}
+
 .button-secondary {
   border-color: var(--border);
   background: var(--surface);
@@ -296,6 +303,7 @@ textarea {
 .action-card {
   position: relative;
   display: grid;
+  grid-template-rows: 1fr auto;
   gap: 1rem;
   min-width: 0;
   padding: 1.25rem;
@@ -311,6 +319,12 @@ textarea {
 
 .action-card p {
   margin-bottom: 0;
+}
+
+.home-card-actions {
+  display: grid;
+  min-width: 0;
+  gap: 0.5rem;
 }
 
 .action-card .button {
@@ -721,7 +735,6 @@ textarea {
   margin-inline: auto;
 }
 
-.record-tabs,
 .record-actions {
   display: flex;
   flex-wrap: wrap;
@@ -729,11 +742,39 @@ textarea {
   gap: 0.5rem;
 }
 
-.record-tabs {
-  margin-block: 1rem 1.5rem;
+.record-filter {
+  display: grid;
+  min-width: 0;
+  margin-block: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  gap: 0.75rem;
 }
 
-.record-tabs .button,
+.record-filter input {
+  min-width: 0;
+}
+
+.record-filter-form {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  gap: 0.75rem;
+}
+
+.record-filter-reset {
+  min-width: 0;
+  margin: 0;
+}
+
+.record-filter .button {
+  width: 100%;
+  min-height: 2.75rem;
+  text-decoration: none;
+}
+
 .record-actions .button {
   min-height: 2.75rem;
   text-decoration: none;
@@ -897,6 +938,20 @@ textarea {
 
   .record-details {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .record-filter {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+
+  .record-filter-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+    align-items: end;
+  }
+
+  .record-filter-reset .button {
+    width: auto;
   }
 
   .record-card {

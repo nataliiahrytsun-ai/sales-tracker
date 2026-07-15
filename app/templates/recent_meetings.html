@@ -5,13 +5,34 @@
 {% block content %}
   <section class="records-page" aria-labelledby="recent-meetings-heading">
     <div class="section-heading">
-      <p class="eyebrow">Recent records</p>
+      <p class="eyebrow">Meeting history</p>
       <h1 id="recent-meetings-heading">Meetings</h1>
-      <p>{{ start_date.isoformat() }} to {{ end_date.isoformat() }} · Newest first.</p>
-      <nav class="record-tabs" aria-label="Recent record types">
-        <a class="button button-primary" href="{{ url_for('recent_meetings') }}" aria-current="page">Meetings</a>
-        <a class="button button-secondary" href="{{ url_for('recent_outreach') }}">Daily outreach</a>
-      </nav>
+      <p>{{ from_value }} to {{ to_value }} &middot; Newest first.</p>
+      <a class="back-link" href="{{ url_for('home') }}">Back to Home</a>
+      {% if range_error %}<p class="alert" role="alert">{{ range_error }}</p>{% endif %}
+      <div
+        class="record-filter"
+        data-date-filter
+        data-applied-from="{{ from_value }}"
+        data-applied-to="{{ to_value }}"
+        data-default-from="{{ default_from_value }}"
+        data-default-to="{{ default_to_value }}"
+      >
+        <form class="record-filter-form" method="get" action="{{ url_for('recent_meetings') }}">
+          <div class="field-group">
+            <label for="meetings_from">From</label>
+            <input id="meetings_from" name="from" type="date" value="{{ from_value }}" max="{{ default_to_value }}" required data-filter-from>
+          </div>
+          <div class="field-group">
+            <label for="meetings_to">To</label>
+            <input id="meetings_to" name="to" type="date" value="{{ to_value }}" max="{{ default_to_value }}" required data-filter-to>
+          </div>
+          <button class="button button-primary" type="submit" disabled data-filter-apply>Apply</button>
+        </form>
+        <form class="record-filter-reset" method="get" action="{{ url_for('recent_meetings') }}">
+          <button class="button button-secondary" type="submit" {% if is_default_range %}disabled{% endif %} data-filter-reset>Reset</button>
+        </form>
+      </div>
     </div>
 
     {% if updated %}<p class="success" role="status">Meeting updated successfully.</p>{% endif %}
@@ -33,10 +54,10 @@
               </dl>
             </div>
             <div class="record-actions">
-              <a class="button button-secondary" href="{{ url_for('edit_meeting', meeting_id=meeting.id) }}">Edit</a>
+              <a class="button button-secondary" href="{{ url_for('edit_meeting', meeting_id=meeting.id) }}?{{ range_query }}">Edit</a>
               <form
                 method="post"
-                action="{{ url_for('delete_meeting', meeting_id=meeting.id) }}"
+                action="{{ url_for('delete_meeting', meeting_id=meeting.id) }}?{{ range_query }}"
                 onsubmit="return window.confirm('Are you sure you want to delete this meeting?')"
               >
                 <button class="button button-danger" type="submit">Delete</button>
@@ -48,9 +69,10 @@
     {% else %}
       <div class="empty-state">
         <h2>No recent meetings</h2>
-        <p>Your meetings from the last 30 days will appear here.</p>
+        <p>Your meetings in the selected period will appear here.</p>
         <a class="button button-primary" href="{{ url_for('new_meeting') }}">Record meeting</a>
       </div>
     {% endif %}
   </section>
+  <script src="{{ url_for('static', path='/js/recent_date_filter.js') }}" defer></script>
 {% endblock %}

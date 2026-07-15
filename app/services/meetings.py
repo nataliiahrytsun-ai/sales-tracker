@@ -58,11 +58,13 @@ class ValidatedMeetingValues:
     note: str | None
 
 
-def recent_meeting_bounds(today: date) -> tuple[datetime, datetime]:
-    """Return UTC bounds for the 30 local calendar days ending today."""
-    start_date = today - timedelta(days=29)
+def meeting_date_bounds(
+    start_date: date,
+    end_date: date,
+) -> tuple[datetime, datetime]:
+    """Return UTC bounds for an inclusive local calendar-date range."""
     start_local = datetime.combine(start_date, time.min)
-    end_local = datetime.combine(today + timedelta(days=1), time.min)
+    end_local = datetime.combine(end_date + timedelta(days=1), time.min)
     return start_local.astimezone(UTC), end_local.astimezone(UTC)
 
 
@@ -103,10 +105,11 @@ def get_recent_meetings(
     session: Session,
     *,
     user_id: int,
-    today: date,
+    start_date: date,
+    end_date: date,
 ) -> list[PipelineMeeting]:
-    """Return the user's meetings from the last 30 local calendar days."""
-    start, end = recent_meeting_bounds(today)
+    """Return the user's meetings in one inclusive calendar-date range."""
+    start, end = meeting_date_bounds(start_date, end_date)
     return list(
         session.exec(
             select(PipelineMeeting)
@@ -120,21 +123,17 @@ def get_recent_meetings(
     )
 
 
-def get_owned_recent_meeting(
+def get_owned_meeting(
     session: Session,
     *,
     meeting_id: int,
     user_id: int,
-    today: date,
 ) -> PipelineMeeting | None:
-    """Return one owned meeting only when it is inside the recent window."""
-    start, end = recent_meeting_bounds(today)
+    """Return one meeting only when it belongs to the requested user."""
     return session.exec(
         select(PipelineMeeting).where(
             PipelineMeeting.id == meeting_id,
             PipelineMeeting.user_id == user_id,
-            PipelineMeeting.occurred_at >= start,
-            PipelineMeeting.occurred_at < end,
         ),
     ).one_or_none()
 

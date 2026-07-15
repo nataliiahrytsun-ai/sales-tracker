@@ -9,7 +9,7 @@
       <h1 id="meeting-heading">{% if editing %}Edit meeting{% else %}Record meeting{% endif %}</h1>
       <p>
         {% if editing %}
-          Correct this recent meeting using the same structured fields.
+          Correct this meeting using the same structured fields.
         {% else %}
           Record the structured outcome. Customer details and notes are optional.
         {% endif %}
@@ -20,7 +20,7 @@
           {{ editing_meeting.occurred_at.strftime('%Y-%m-%d %H:%M') }}
           · {{ editing_meeting.company_name or 'Company not provided' }}
         </p>
-        <a class="back-link" href="{{ url_for('recent_meetings') }}">Back to recent meetings</a>
+        <a class="back-link" href="{{ url_for('recent_meetings') }}{% if recent_range_query %}?{{ recent_range_query }}{% endif %}">Back to recent meetings</a>
       {% endif %}
     </div>
 
@@ -53,7 +53,7 @@
     <form
       class="meeting-form"
       method="post"
-      action="{% if editing %}{{ url_for('update_meeting', meeting_id=meeting_id) }}{% else %}{{ url_for('create_meeting') }}{% endif %}"
+      action="{% if editing %}{{ url_for('update_meeting', meeting_id=meeting_id) }}{% if recent_range_query %}?{{ recent_range_query }}{% endif %}{% else %}{{ url_for('create_meeting') }}{% endif %}"
     >
       <section class="field-section required-fields" aria-labelledby="required-fields-heading">
         <div class="field-section-heading">

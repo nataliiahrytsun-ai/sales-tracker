@@ -9,7 +9,7 @@
       <h1 id="outreach-heading">{% if dated %}Edit daily outreach{% else %}Update today's outreach{% endif %}</h1>
       <p>{{ activity_date.isoformat() }} · Create or update your daily summary.</p>
       {% if dated %}
-        <a class="back-link" href="{{ url_for('recent_outreach') }}">Back to recent outreach</a>
+        <a class="back-link" href="{{ url_for('recent_outreach') }}{% if recent_range_query %}?{{ recent_range_query }}{% endif %}">Back to recent outreach</a>
       {% endif %}
     </div>
 
@@ -32,7 +32,7 @@
     <form
       class="meeting-form outreach-form"
       method="post"
-      action="{% if dated %}{{ url_for('save_dated_outreach', activity_date=activity_date.isoformat()) }}{% else %}{{ url_for('save_today_outreach') }}{% endif %}"
+      action="{% if dated %}{{ url_for('save_dated_outreach', activity_date=activity_date.isoformat()) }}{% if recent_range_query %}?{{ recent_range_query }}{% endif %}{% else %}{{ url_for('save_today_outreach') }}{% endif %}"
     >
       <section
         class="field-section required-fields"

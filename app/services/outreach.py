@@ -1,7 +1,7 @@
 """Validation and persistence for today's daily outreach workflow."""
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from itertools import zip_longest
 
 from sqlmodel import Session, select
@@ -225,17 +225,17 @@ def get_recent_outreach(
     session: Session,
     *,
     user_id: int,
-    today: date,
+    start_date: date,
+    end_date: date,
 ) -> list[DailyOutreach]:
-    """Return the user's outreach summaries from the last 30 calendar days."""
-    start_date = today - timedelta(days=29)
+    """Return the user's outreach summaries in an inclusive date range."""
     return list(
         session.exec(
             select(DailyOutreach)
             .where(
                 DailyOutreach.user_id == user_id,
                 DailyOutreach.activity_date >= start_date,
-                DailyOutreach.activity_date <= today,
+                DailyOutreach.activity_date <= end_date,
             )
             .order_by(DailyOutreach.activity_date.desc()),
         ).all(),

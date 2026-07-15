@@ -189,7 +189,7 @@ def test_login_page_uses_shared_responsive_layout(
 def test_authenticated_home_renders_scoped_actions(
     auth_application: tuple[FastAPI, Engine],
 ) -> None:
-    """Home renders active data-entry and recent-record actions."""
+    """Home renders four scoped cards with integrated record management."""
     application, _ = auth_application
 
     async def scenario() -> None:
@@ -207,19 +207,32 @@ def test_authenticated_home_renders_scoped_actions(
         assert response.status_code == 200
         assert 'aria-label="User navigation"' in response.text
         assert 'action="http://testserver/logout"' in response.text
+        for heading in (
+            "Meeting Entry",
+            "Outreach Entry",
+            "My Week",
+            "Dashboard",
+        ):
+            assert f"<h2>{heading}</h2>" in response.text
         for action in (
             "Record meeting",
-            "Update today's outreach",
-            "Recent records",
-            "View this week",
-            "Open dashboard",
+            "Update today’s outreach",
+            "View / edit meetings",
+            "View / edit outreach",
         ):
             assert action in response.text
+        assert response.text.count('class="action-card"') == 4
         assert response.text.count(" disabled") == 2
+        assert response.text.count("Coming soon") == 2
         assert 'href="http://testserver/meetings/new"' in response.text
         assert 'href="http://testserver/outreach/today"' in response.text
         assert 'href="http://testserver/meetings/recent"' in response.text
+        assert 'href="http://testserver/outreach/recent"' in response.text
+        assert response.text.count('href="http://testserver/meetings/recent"') == 1
+        assert response.text.count('href="http://testserver/outreach/recent"') == 1
         assert 'href="http://testserver/change-password"' in response.text
+        assert "View this week" not in response.text
+        assert "Open dashboard" not in response.text
         assert "/dashboard" not in response.text
 
     asyncio.run(scenario())
@@ -319,6 +332,7 @@ def test_home_layout_and_actions_are_structurally_responsive() -> None:
     action_children = css_rule(mobile_css, ".action-card > *")
     action_text = css_rule(mobile_css, ".action-card p")
     action_button = css_rule(mobile_css, ".action-card .button")
+    card_actions = css_rule(mobile_css, ".home-card-actions")
     home_action_button = css_rule(mobile_css, ".home-action-button")
     shared_button = css_rule(mobile_css, ".button")
 
@@ -329,9 +343,12 @@ def test_home_layout_and_actions_are_structurally_responsive() -> None:
 
     assert "display: grid" in action_grid
     assert "display: grid" in action_card
+    assert "grid-template-rows: 1fr auto" in action_card
     assert "max-width: 100%" in action_children
     assert "min-width: 0" in action_children
     assert "overflow-wrap: anywhere" in action_text
+    assert "display: grid" in card_actions
+    assert "min-width: 0" in card_actions
 
     assert "width: 100%" in action_button
     assert "max-width: 100%" in action_button
@@ -341,7 +358,8 @@ def test_home_layout_and_actions_are_structurally_responsive() -> None:
     assert "font-size: 0.92rem" in action_button
     assert "line-height: 1.2" in action_button
     assert "min-height: 2.75rem" in shared_button
-    assert home_template.count("home-action-button") == 3
+    assert home_template.count('class="action-card"') == 4
+    assert home_template.count("home-action-button") == 4
     assert "min-height: 2.75rem" in home_action_button
     assert "align-self: end" in home_action_button
     assert "padding: 0.45rem 0.875rem" in home_action_button

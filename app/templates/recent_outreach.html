@@ -5,13 +5,34 @@
 {% block content %}
   <section class="records-page" aria-labelledby="recent-outreach-heading">
     <div class="section-heading">
-      <p class="eyebrow">Recent records</p>
+      <p class="eyebrow">Outreach history</p>
       <h1 id="recent-outreach-heading">Daily outreach</h1>
-      <p>{{ start_date.isoformat() }} to {{ end_date.isoformat() }} · Newest first.</p>
-      <nav class="record-tabs" aria-label="Recent record types">
-        <a class="button button-secondary" href="{{ url_for('recent_meetings') }}">Meetings</a>
-        <a class="button button-primary" href="{{ url_for('recent_outreach') }}" aria-current="page">Daily outreach</a>
-      </nav>
+      <p>{{ from_value }} to {{ to_value }} &middot; Newest first.</p>
+      <a class="back-link" href="{{ url_for('home') }}">Back to Home</a>
+      {% if range_error %}<p class="alert" role="alert">{{ range_error }}</p>{% endif %}
+      <div
+        class="record-filter"
+        data-date-filter
+        data-applied-from="{{ from_value }}"
+        data-applied-to="{{ to_value }}"
+        data-default-from="{{ default_from_value }}"
+        data-default-to="{{ default_to_value }}"
+      >
+        <form class="record-filter-form" method="get" action="{{ url_for('recent_outreach') }}">
+          <div class="field-group">
+            <label for="outreach_from">From</label>
+            <input id="outreach_from" name="from" type="date" value="{{ from_value }}" max="{{ default_to_value }}" required data-filter-from>
+          </div>
+          <div class="field-group">
+            <label for="outreach_to">To</label>
+            <input id="outreach_to" name="to" type="date" value="{{ to_value }}" max="{{ default_to_value }}" required data-filter-to>
+          </div>
+          <button class="button button-primary" type="submit" disabled data-filter-apply>Apply</button>
+        </form>
+        <form class="record-filter-reset" method="get" action="{{ url_for('recent_outreach') }}">
+          <button class="button button-secondary" type="submit" {% if is_default_range %}disabled{% endif %} data-filter-reset>Reset</button>
+        </form>
+      </div>
     </div>
 
     {% if saved %}<p class="success" role="status">Daily outreach updated successfully.</p>{% endif %}
@@ -32,7 +53,7 @@
               </dl>
             </div>
             <div class="record-actions">
-              <a class="button button-secondary" href="{{ url_for('dated_outreach', activity_date=record.activity_date.isoformat()) }}">Edit</a>
+              <a class="button button-secondary" href="{{ url_for('dated_outreach', activity_date=record.activity_date.isoformat()) }}?{{ range_query }}">Edit</a>
             </div>
           </li>
         {% endfor %}
@@ -40,9 +61,10 @@
     {% else %}
       <div class="empty-state">
         <h2>No recent outreach</h2>
-        <p>Your daily summaries from the last 30 days will appear here.</p>
+        <p>Your daily summaries in the selected period will appear here.</p>
         <a class="button button-primary" href="{{ url_for('today_outreach') }}">Update today's outreach</a>
       </div>
     {% endif %}
   </section>
+  <script src="{{ url_for('static', path='/js/recent_date_filter.js') }}" defer></script>
 {% endblock %}
