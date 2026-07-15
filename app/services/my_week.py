@@ -5,6 +5,7 @@ from datetime import date
 
 from sqlmodel import Session
 
+from app.services.activity_metrics import aggregate_activity_actuals
 from app.services.meetings import get_recent_meetings
 from app.services.outreach import get_recent_outreach
 from app.services.targets import TARGET_FIELDS, current_week_bounds, get_user_targets
@@ -41,7 +42,6 @@ class MyWeekSummary:
     week_end: date
     metrics: tuple[WeekMetric, ...]
     has_activity: bool
-
 
 def build_week_metric(
     *,
@@ -110,20 +110,7 @@ def get_my_week_summary(
         start_date=week_start,
         end_date=week_end,
     )
-    actuals = {
-        "total_activities": sum(record.total_activities for record in outreach_records),
-        "companies_contacted": sum(
-            record.unique_companies for record in outreach_records
-        ),
-        "replies": sum(record.replies or 0 for record in outreach_records),
-        "positive_replies": sum(
-            record.positive_replies or 0 for record in outreach_records
-        ),
-        "meetings_booked": sum(
-            record.meetings_booked or 0 for record in outreach_records
-        ),
-        "meetings_held": len(meetings),
-    }
+    actuals = aggregate_activity_actuals(outreach_records, meetings)
     targets = {
         target.metric_name: int(target.target_value)
         for target in get_user_targets(session, user_id=user_id)

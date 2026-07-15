@@ -6,9 +6,17 @@
   <section class="form-card targets-card" aria-labelledby="targets-heading">
     <div class="section-heading">
       <p class="eyebrow">Personal goals</p>
-      <h1 id="targets-heading">Weekly targets</h1>
-      <p>{{ week_start.isoformat() }} to {{ week_end.isoformat() }} &middot; Monday to Sunday.</p>
-      <a class="back-link" href="{{ url_for('home') }}">Back to Home</a>
+      <div class="report-heading-row">
+        <h1 id="targets-heading">Weekly targets</h1>
+        <div class="report-period-summary" role="status">
+          <strong>Current week</strong>
+          <span class="report-period-separator" aria-hidden="true">&middot;</span>
+          <span>{{ week_start.day }} {{ week_start.strftime('%b') }}{% if week_start.year != week_end.year %} {{ week_start.year }}{% endif %} – {{ week_end.day }} {{ week_end.strftime('%b') }} {{ week_end.year }}</span>
+        </div>
+      </div>
+      <div class="report-navigation-row report-navigation-spaced">
+        <a class="back-link" href="{{ url_for('home') }}">Back to Home</a>
+      </div>
     </div>
 
     {% if saved %}

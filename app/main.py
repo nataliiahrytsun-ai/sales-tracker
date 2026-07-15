@@ -8,6 +8,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import Settings, settings
 from app.routes.auth import router as auth_router
+from app.routes.dashboard import router as dashboard_router
 from app.routes.health import router as health_router
 from app.routes.home import router as home_router
 from app.routes.meetings import router as meetings_router
@@ -35,6 +36,7 @@ def create_app(application_settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(health_router)
     application.include_router(auth_router)
+    application.include_router(dashboard_router)
     application.include_router(home_router)
     application.include_router(meetings_router)
     application.include_router(my_week_router)

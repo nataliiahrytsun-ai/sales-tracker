@@ -23,6 +23,8 @@ week boundaries, aggregation, and progress calculations are covered by tests.
 | Progress bars expose accessible values and labels | Pass | Template coverage verifies progressbar ARIA attributes and textual values. |
 | Empty week shows a clear message and six zero metrics | Pass | Focused empty-state coverage verifies both. |
 | Back to Home and Set weekly targets work | Pass | Both destinations are present in rendered HTML. |
+| Current week period aligns beside My Week on desktop/tablet | Pass | Shared report-heading structural coverage verifies the title/period row and compact range. |
+| Navigation has consistent space below the heading and above metrics | Pass | Shared report-navigation spacing is covered structurally; confirm visual rhythm manually. |
 | Desktop/tablet card grid is readable | Blocked | Verify the two-column grid in a stable user-controlled browser. |
 | Mobile cards use one column without horizontal scrolling | Blocked | Verify around 375–376 px in a stable user-controlled browser. |
 

@@ -284,7 +284,8 @@ def test_weekly_totals_boundaries_targets_and_ownership(
 
     page = asyncio.run(scenario())
     assert page.status_code == 200
-    assert "2026-07-13 to 2026-07-19" in page.text
+    assert "Current week" in page.text
+    assert "13 Jul – 19 Jul 2026" in page.text
     assert 'data-metric="meetings_held"' in page.text
     assert 'data-actual="2"' in page.text
     assert 'data-percentage="200"' in page.text
@@ -342,17 +343,36 @@ def test_my_week_layout_is_responsive_and_accessible() -> None:
     assert 'role="progressbar"' in template
     assert 'aria-valuenow="{{ metric.aria_value }}"' in template
     assert 'class="week-metric-primary"' in template
-    assert 'class="week-metric-secondary"' in template
+    assert 'class="metric-primary-row"' in template
+    assert 'class="metric-remaining"' in template
+    assert 'class="report-heading-row"' in template
+    assert 'class="report-period-summary"' in template
+    assert (
+        'class="report-navigation-row report-navigation-spaced my-week-links"'
+        in template
+    )
     assert 'class="week-metric-percentage"' in template
     assert 'class="week-no-target"' in template
     assert ".week-metric-grid" in mobile_css
     assert ".week-metric-card" in mobile_css
     assert "margin-bottom: 1.25rem" in mobile_css
     assert ".week-metric-primary" in mobile_css
-    assert ".week-metric-secondary" in mobile_css
+    assert ".metric-primary-row" in mobile_css
+    assert ".metric-remaining" in mobile_css
+    assert ".report-heading-row" in mobile_css
+    assert ".report-period-summary" in mobile_css
+    assert ".report-navigation-row" in mobile_css
+    assert ".report-navigation-spaced" in mobile_css
     assert ".week-metric-percentage" in mobile_css
     assert ".week-no-target" in mobile_css
     assert ".week-metric-values" not in css
+    primary_row = template.split('class="metric-primary-row"', 1)[1].split(
+        "</div>",
+        1,
+    )[0]
+    assert "week-metric-primary" in primary_row
+    assert "week-metric-percentage" in primary_row
+    assert "remaining" not in primary_row
     assert "min-width: 0" in mobile_css
     assert "overflow-wrap: anywhere" in mobile_css
     assert ".week-progress-fill-orange" in mobile_css

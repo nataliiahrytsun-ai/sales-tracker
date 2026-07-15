@@ -6,9 +6,15 @@
   <section class="my-week-page" aria-labelledby="my-week-heading">
     <div class="section-heading">
       <p class="eyebrow">Personal weekly summary</p>
-      <h1 id="my-week-heading">My Week</h1>
-      <p>{{ summary.week_start.isoformat() }} to {{ summary.week_end.isoformat() }} &middot; Monday to Sunday.</p>
-      <div class="my-week-links">
+      <div class="report-heading-row">
+        <h1 id="my-week-heading">My Week</h1>
+        <div class="report-period-summary" role="status">
+          <strong>Current week</strong>
+          <span class="report-period-separator" aria-hidden="true">&middot;</span>
+          <span>{{ summary.week_start.day }} {{ summary.week_start.strftime('%b') }}{% if summary.week_start.year != summary.week_end.year %} {{ summary.week_start.year }}{% endif %} – {{ summary.week_end.day }} {{ summary.week_end.strftime('%b') }} {{ summary.week_end.year }}</span>
+        </div>
+      </div>
+      <div class="report-navigation-row report-navigation-spaced my-week-links">
         <a class="back-link" href="{{ url_for('home') }}">Back to Home</a>
         <a href="{{ url_for('targets_page') }}">Set weekly targets</a>
       </div>
@@ -35,18 +41,20 @@
         >
           <h2>{{ metric.label }}</h2>
           {% if metric.target > 0 %}
-            <p
-              class="week-metric-primary"
-              aria-label="Actual {{ metric.actual }} of target {{ metric.target }}"
-            ><strong>{{ metric.actual }}</strong> of {{ metric.target }}</p>
-            <div class="week-metric-secondary">
-              {% if metric.actual > metric.target %}
-                <span>Goal exceeded by {{ metric.actual - metric.target }}</span>
-              {% else %}
-                <span>{{ metric.remaining }} remaining</span>
-              {% endif %}
+            <div class="metric-primary-row">
+              <p
+                class="week-metric-primary"
+                aria-label="Actual {{ metric.actual }} of target {{ metric.target }}"
+              ><strong>{{ metric.actual }}</strong> of {{ metric.target }}</p>
               <span class="week-metric-percentage">{{ metric.percentage_text }}</span>
             </div>
+            <p class="metric-remaining">
+              {% if metric.actual > metric.target %}
+                Goal exceeded by {{ metric.actual - metric.target }}
+              {% else %}
+                {{ metric.remaining }} remaining
+              {% endif %}
+            </p>
             <div
               class="week-progress"
               role="progressbar"

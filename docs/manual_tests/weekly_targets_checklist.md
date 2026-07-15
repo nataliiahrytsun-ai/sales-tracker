@@ -20,6 +20,8 @@ ownership, persistence, and responsive structure are covered by automated tests.
 | Saved values appear when reopening the page | Pass | Focused integration coverage verifies stored values and confirmation text. |
 | Users cannot see or overwrite another user's targets | Pass | Focused integration coverage verifies user-scoped reads and updates. |
 | Back to Home works | Pass | The template contains the shared Home link. |
+| Current week period aligns beside Weekly targets on desktop/tablet | Pass | Shared report-heading structural coverage verifies the compact title/period row. |
+| Header, navigation, and form use the shared report spacing | Pass | Shared report-navigation spacing is covered structurally; confirm visual rhythm manually. |
 | Desktop and tablet layout is compact and readable | Blocked | Verify the two-column form and action alignment in a stable user-controlled browser. |
 | Mobile layout has no horizontal scrolling | Blocked | Verify the one-column form around 375–376 px in a stable user-controlled browser. |
 

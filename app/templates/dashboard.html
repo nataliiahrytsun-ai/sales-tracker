@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% block title %}Company Dashboard - Sales Tracker{% endblock %}
+
+{% block content %}
+  <section class="dashboard-page" aria-labelledby="dashboard-heading">
+    <div class="dashboard-topbar">
+      <div class="section-heading dashboard-heading">
+        <p class="eyebrow">Company-wide aggregated reporting</p>
+        <div class="report-heading-row dashboard-heading-row">
+          <h1 id="dashboard-heading">Company Dashboard</h1>
+          {% if summary %}
+            <div class="report-period-summary dashboard-period-summary" role="status">
+              <strong>{{ summary.selected_period.label }}</strong>
+              <span class="report-period-separator" aria-hidden="true">&middot;</span>
+              <span>{{ summary.selected_period.display_range }}</span>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="report-navigation-row dashboard-navigation-row">
+        <a class="back-link" href="{{ url_for('home') }}">Back to Home</a>
+        <form
+          class="dashboard-filter{% if selected_period_key == 'custom' %} dashboard-filter-custom{% endif %}"
+          method="get"
+          action="{{ url_for('dashboard_page') }}"
+          data-dashboard-filter
+          data-initial-period="{{ selected_period_key }}"
+          data-initial-from="{{ from_value }}"
+          data-initial-to="{{ to_value }}"
+          data-today="{{ today_value }}"
+        >
+      <div class="field-group dashboard-period-field">
+        <label for="dashboard-period">Period</label>
+        <select id="dashboard-period" name="period" data-period-select>
+          {% for value, label in period_options %}
+            <option value="{{ value }}"{% if selected_period_key == value %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="dashboard-custom-dates" data-custom-dates{% if selected_period_key != 'custom' %} hidden{% endif %}>
+        <div class="field-group">
+          <label for="dashboard-from">From</label>
+          <input id="dashboard-from" name="from" type="date" value="{{ from_value }}" data-from>
+        </div>
+        <div class="field-group">
+          <label for="dashboard-to">To</label>
+          <input id="dashboard-to" name="to" type="date" value="{{ to_value }}" max="{{ today_value }}" data-to>
+        </div>
+      </div>
+      <div class="dashboard-filter-actions">
+        <button class="button button-primary" type="submit" data-apply disabled>Apply</button>
+        <button
+          class="button button-secondary"
+          type="submit"
+          name="reset"
+          value="true"
+          data-reset
+          {% if selected_period_key == 'current-week' and not from_value and not to_value %}disabled{% endif %}
+        >Reset</button>
+      </div>
+      {% if filter_error %}
+        <p class="alert dashboard-filter-error" role="alert">{{ filter_error }}</p>
+      {% endif %}
+        </form>
+      </div>
+    </div>
+
+    {% if summary %}
+      {% if not summary.has_activity %}
+        <div class="week-empty-state" role="status">
+          <h2>No company activity recorded for this period</h2>
+          <p>The dashboard will update when meeting or daily outreach records are available.</p>
+        </div>
+      {% endif %}
+
+      {% if not summary.show_targets %}
+        <p class="dashboard-target-note">
+          Historical Targets are unavailable because target history is not stored yet. Weekly Targets are not scaled to this period.
+        </p>
+      {% endif %}
+
+      <section aria-labelledby="company-metrics-heading">
+        <h2 id="company-metrics-heading" class="dashboard-section-title">Company metrics</h2>
+        <div class="dashboard-metric-grid">
+          {% for metric in summary.metrics %}
+            <article
+              class="week-metric-card dashboard-metric-card"
+              data-metric="{{ metric.key }}"
+              data-actual="{{ metric.actual }}"
+              data-target="{{ metric.target }}"
+              data-remaining="{{ metric.remaining }}"
+              data-percentage="{{ metric.percentage if metric.percentage is not none else 'none' }}"
+              data-progress-state="{{ metric.progress_state }}"
+              data-bar-percentage="{{ metric.bar_percentage }}"
+            >
+              <h3>{{ metric.label }}</h3>
+              {% if summary.show_targets and metric.target > 0 %}
+                <div class="metric-primary-row">
+                  <p class="week-metric-primary" aria-label="Actual {{ metric.actual }} of company target {{ metric.target }}">
+                    <strong>{{ metric.actual }}</strong> of {{ metric.target }}
+                  </p>
+                  <span class="week-metric-percentage">{{ metric.percentage_text }}</span>
+                </div>
+                <p class="metric-remaining">
+                  {% if metric.actual > metric.target %}
+                    Goal exceeded by {{ metric.actual - metric.target }}
+                  {% else %}
+                    {{ metric.remaining }} remaining
+                  {% endif %}
+                </p>
+                <div
+                  class="week-progress"
+                  role="progressbar"
+                  aria-label="{{ metric.label }}: actual {{ metric.actual }}, company target {{ metric.target }}, remaining {{ metric.remaining }}, {{ metric.percentage_text }}"
+                  aria-valuemin="0"
+                  aria-valuemax="{{ metric.aria_max }}"
+                  aria-valuenow="{{ metric.aria_value }}"
+                >
+                  <span class="week-progress-fill week-progress-fill-{{ metric.progress_state }}" style="width: {{ metric.bar_percentage }}%"></span>
+                </div>
+              {% elif summary.show_targets %}
+                <p class="dashboard-actual">Actual <strong>{{ metric.actual }}</strong></p>
+                <p class="week-no-target">No target set</p>
+              {% else %}
+                <p class="dashboard-actual">Actual <strong>{{ metric.actual }}</strong></p>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="dashboard-analysis-card dashboard-activity-card" aria-labelledby="daily-activity-heading">
+        <div class="report-section-heading">
+          <h2 id="daily-activity-heading">Activity by day</h2>
+          <p class="report-section-note">Outreach and meetings shown separately.</p>
+        </div>
+        <div class="dashboard-chart-legend" aria-label="Chart legend">
+          <span><i class="dashboard-chart-key dashboard-chart-key-outreach" aria-hidden="true"></i>Outreach activities</span>
+          <span><i class="dashboard-chart-key dashboard-chart-key-meetings" aria-hidden="true"></i>Meetings held</span>
+        </div>
+        <div
+          class="dashboard-grouped-chart{% if summary.activity_buckets | length > 7 %} dashboard-grouped-chart-dense{% endif %}"
+          data-grouped-chart
+          data-columns="{{ summary.activity_buckets | length }}"
+          role="group"
+          aria-label="Grouped bar chart of Outreach activities and Meetings held for {{ summary.selected_period.start_date.isoformat() }} to {{ summary.selected_period.end_date.isoformat() }}"
+        >
+          {% for bucket in summary.activity_buckets %}
+            <div
+              class="dashboard-chart-group"
+              tabindex="0"
+              title="{{ bucket.range_label }} — Outreach activities: {{ bucket.outreach_activities }}; Meetings held: {{ bucket.meetings_held }}"
+              aria-label="{{ bucket.range_label }}. Outreach activities: {{ bucket.outreach_activities }}. Meetings held: {{ bucket.meetings_held }}."
+              data-start="{{ bucket.start_date.isoformat() }}"
+              data-end="{{ bucket.end_date.isoformat() }}"
+            >
+              <div class="dashboard-chart-bars" aria-hidden="true">
+                <span class="dashboard-chart-series">
+                  <span class="dashboard-chart-bar-group" data-bar-height="{{ bucket.outreach_bar }}">
+                    <span class="dashboard-chart-value">{% if bucket.outreach_activities %}{{ bucket.outreach_activities }}{% endif %}</span>
+                    <span class="dashboard-chart-bar dashboard-chart-bar-outreach"></span>
+                  </span>
+                </span>
+                <span class="dashboard-chart-series">
+                  <span class="dashboard-chart-bar-group" data-bar-height="{{ bucket.meetings_bar }}">
+                    <span class="dashboard-chart-value">{% if bucket.meetings_held %}{{ bucket.meetings_held }}{% endif %}</span>
+                    <span class="dashboard-chart-bar dashboard-chart-bar-meetings"></span>
+                  </span>
+                </span>
+              </div>
+              <span class="dashboard-chart-label">
+                {% if loop.index0 % summary.activity_label_stride == 0 or loop.last %}{{ bucket.label }}{% else %}&nbsp;{% endif %}
+              </span>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="visually-hidden">
+          <table>
+            <caption>Exact company activity values for the selected period</caption>
+            <thead>
+              <tr>
+                <th scope="col">Date or week</th>
+                <th scope="col">Outreach activities</th>
+                <th scope="col">Meetings held</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for bucket in summary.activity_buckets %}
+                <tr>
+                  <th scope="row">{{ bucket.range_label }}</th>
+                  <td>{{ bucket.outreach_activities }}</td>
+                  <td>{{ bucket.meetings_held }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="dashboard-breakdown-grid" aria-label="Company aggregate analysis">
+        <article class="dashboard-analysis-card">
+          <h2>Companies contacted by country</h2>
+          {% if summary.countries %}
+            <div class="dashboard-breakdown-list">
+              {% for item in summary.countries %}
+                <div class="dashboard-breakdown-item" data-country="{{ item.key }}">
+                  <span>{{ item.label }}</span><strong>{{ item.value }}</strong>
+                  <span class="dashboard-bar" aria-hidden="true"><span class="dashboard-bar-fill" style="width: {{ item.bar_percentage }}%"></span></span>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}<p class="dashboard-card-note">No country activity for this period.</p>{% endif %}
+        </article>
+
+        <article class="dashboard-analysis-card">
+          <h2>Daily outreach blockers</h2>
+          {% if summary.blockers %}
+            <div class="dashboard-breakdown-list">
+              {% for item in summary.blockers %}
+                <div class="dashboard-breakdown-item" data-blocker="{{ item.key }}">
+                  <span>{{ item.label }}</span><strong>{{ item.value }}</strong>
+                  <span class="dashboard-bar" aria-hidden="true"><span class="dashboard-bar-fill" style="width: {{ item.bar_percentage }}%"></span></span>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}<p class="dashboard-card-note">No Daily outreach blockers for this period.</p>{% endif %}
+        </article>
+
+        <article class="dashboard-analysis-card">
+          <h2>Daily outreach mood</h2>
+          <p class="dashboard-card-note">Missing mood is excluded, not treated as neutral.</p>
+          {% if summary.moods %}
+            <div class="dashboard-breakdown-list">
+              {% for item in summary.moods %}
+                <div class="dashboard-breakdown-item" data-mood="{{ item.key }}">
+                  <span>{{ item.label }}</span><strong>{{ item.value }}</strong>
+                  <span class="dashboard-bar" aria-hidden="true"><span class="dashboard-bar-fill" style="width: {{ item.bar_percentage }}%"></span></span>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}<p class="dashboard-card-note">No Daily outreach mood for this period.</p>{% endif %}
+        </article>
+      </section>
+    {% endif %}
+  </section>
+  <script src="{{ url_for('static', path='/js/dashboard_filter.js') }}" defer></script>
+{% endblock %}

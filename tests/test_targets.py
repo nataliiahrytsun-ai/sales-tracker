@@ -298,10 +298,19 @@ def test_targets_form_is_responsive_and_links_home() -> None:
     mobile_css, desktop_css = css.split("@media (min-width: 48rem)", 1)
 
     assert "Back to Home" in template
+    assert 'class="report-heading-row"' in template
+    assert 'class="report-period-summary"' in template
+    assert 'class="report-navigation-row report-navigation-spaced"' in template
+    assert "Current week" in template
+    assert "Monday to Sunday" not in template
+    assert "week_start.isoformat()" not in template
     assert 'type="number"' in template
     assert 'min="0"' in template
     assert 'step="1"' in template
     assert ".targets-form" in mobile_css
     assert ".targets-grid" in mobile_css
+    assert ".report-heading-row" in mobile_css
+    assert ".report-period-summary" in mobile_css
+    assert ".report-navigation-spaced" in mobile_css
     assert "min-width: 0" in mobile_css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in desktop_css

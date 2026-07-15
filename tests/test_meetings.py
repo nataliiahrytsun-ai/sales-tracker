@@ -221,10 +221,11 @@ def test_meeting_option_grids_are_structurally_responsive() -> None:
 
     assert "box-sizing: border-box" in universal_box
     assert "min-width: 0" in body
-    assert "width: calc(100% - 2rem)" in shell
-    assert "max-width: 68rem" in shell
+    assert "width: 100%" in shell
+    assert "max-width: none" in shell
     assert "min-width: 0" in shell
-    assert "margin-inline: auto" in shell
+    assert "margin-inline: 0" in shell
+    assert "padding-inline: max(1rem, calc((100% - 68rem) / 2))" in shell
     assert "width: 100%" not in page_content
     assert "min-width: 0" in page_content
 

@@ -224,23 +224,23 @@ def test_authenticated_home_renders_scoped_actions(
             "View / edit outreach",
             "Set weekly targets",
             "View My Week",
+            "Open Dashboard",
         ):
             assert action in response.text
         assert response.text.count('class="action-card"') == 4
-        assert response.text.count(" disabled") == 1
-        assert response.text.count("Coming soon") == 1
+        assert response.text.count(" disabled") == 0
+        assert "Coming soon" not in response.text
         assert 'href="http://testserver/meetings/new"' in response.text
         assert 'href="http://testserver/outreach/today"' in response.text
         assert 'href="http://testserver/meetings/recent"' in response.text
         assert 'href="http://testserver/outreach/recent"' in response.text
         assert 'href="http://testserver/targets"' in response.text
         assert 'href="http://testserver/my-week"' in response.text
+        assert 'href="http://testserver/dashboard"' in response.text
         assert response.text.count('href="http://testserver/meetings/recent"') == 1
         assert response.text.count('href="http://testserver/outreach/recent"') == 1
         assert 'href="http://testserver/change-password"' in response.text
         assert "View this week" not in response.text
-        assert "Open dashboard" not in response.text
-        assert "/dashboard" not in response.text
 
     asyncio.run(scenario())
 
@@ -357,9 +357,10 @@ def test_home_layout_and_actions_are_structurally_responsive() -> None:
     home_action_button = css_rule(mobile_css, ".home-action-button")
     shared_button = css_rule(mobile_css, ".button")
 
-    assert "width: calc(100% - 2rem)" in shell
-    assert "max-width: 68rem" in shell
-    assert "margin-inline: auto" in shell
+    assert "width: 100%" in shell
+    assert "max-width: none" in shell
+    assert "margin-inline: 0" in shell
+    assert "padding-inline: max(1rem, calc((100% - 68rem) / 2))" in shell
     assert "width: 100%" not in page_content
 
     assert "display: grid" in action_grid
@@ -369,6 +370,7 @@ def test_home_layout_and_actions_are_structurally_responsive() -> None:
     assert "min-width: 0" in action_children
     assert "overflow-wrap: anywhere" in action_text
     assert "display: grid" in card_actions
+    assert "grid-template-rows: repeat(2, minmax(2.75rem, auto))" in card_actions
     assert "min-width: 0" in card_actions
 
     assert "width: 100%" in action_button
@@ -380,7 +382,7 @@ def test_home_layout_and_actions_are_structurally_responsive() -> None:
     assert "line-height: 1.2" in action_button
     assert "min-height: 2.75rem" in shared_button
     assert home_template.count('class="action-card"') == 4
-    assert home_template.count("home-action-button") == 6
+    assert home_template.count("home-action-button") == 7
     assert "min-height: 2.75rem" in home_action_button
     assert "align-self: end" in home_action_button
     assert "padding: 0.45rem 0.875rem" in home_action_button
