@@ -16,6 +16,7 @@ import pytest
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, select
 
+from app import cli
 from app.config import (
     DEFAULT_SESSION_MAX_AGE_SECONDS,
     Settings,
@@ -28,7 +29,10 @@ from app.services.passwords import hash_password, verify_password
 
 ACTIVE_EMAIL = "active@example.com"
 INACTIVE_EMAIL = "inactive@example.com"
+TEMPORARY_EMAIL = "temporary@example.com"
 TEST_PASSWORD = "correct-test-password"
+TEMPORARY_PASSWORD = "temporary-test-password"
+NEW_PASSWORD = "new-secure-password"
 SESSION_COOKIE_NAME = "sales_tracker_session"
 TEST_SESSION_SECRET = "test-session-secret-with-at-least-32-characters"
 TEST_SESSION_MAX_AGE_SECONDS = 3_600
@@ -69,6 +73,14 @@ def auth_application(
                 name="Active User",
                 email=ACTIVE_EMAIL,
                 password_hash=hash_password(TEST_PASSWORD),
+            ),
+        )
+        session.add(
+            User(
+                name="Temporary User",
+                email=TEMPORARY_EMAIL,
+                password_hash=hash_password(TEMPORARY_PASSWORD),
+                must_change_password=True,
             ),
         )
         session.add(
@@ -207,6 +219,7 @@ def test_authenticated_home_renders_scoped_actions(
         assert 'href="http://testserver/meetings/new"' in response.text
         assert 'href="http://testserver/outreach/today"' in response.text
         assert 'href="http://testserver/meetings/recent"' in response.text
+        assert 'href="http://testserver/change-password"' in response.text
         assert "/dashboard" not in response.text
 
     asyncio.run(scenario())
@@ -371,7 +384,7 @@ def test_successful_login_sets_httponly_session_cookie(
     asyncio.run(scenario())
 
 
-def test_session_cookie_contains_only_user_id(
+def test_session_cookie_contains_only_required_authentication_state(
     auth_application: tuple[FastAPI, Engine],
 ) -> None:
     """The signed client session contains no credentials or user profile data."""
@@ -395,10 +408,307 @@ def test_session_cookie_contains_only_user_id(
                 select(User).where(User.email == ACTIVE_EMAIL),
             ).one()
 
-        assert payload == {"user_id": user.id}
+        assert payload == {
+            "user_id": user.id,
+            "auth_version": user.auth_version,
+        }
         assert "password" not in payload
         assert "password_hash" not in payload
         assert "email" not in payload
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("method", ("GET", "POST"))
+def test_change_password_requires_authentication(
+    auth_application: tuple[FastAPI, Engine],
+    method: str,
+) -> None:
+    """Anonymous users cannot read or submit the password-change form."""
+    application, _ = auth_application
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            response = await client.request(method, "/change-password")
+
+        assert response.status_code == 303
+        assert response.headers["location"] == "/login"
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    ("form_overrides", "expected_error"),
+    [
+        (
+            {"current_password": "wrong-current-password"},
+            "Current password is incorrect.",
+        ),
+        (
+            {"confirm_new_password": "different-new-password"},
+            "New passwords do not match.",
+        ),
+        (
+            {"new_password": "short", "confirm_new_password": "short"},
+            "New password must be at least 10 characters.",
+        ),
+        (
+            {
+                "new_password": TEST_PASSWORD,
+                "confirm_new_password": TEST_PASSWORD,
+            },
+            "New password must be different from current password.",
+        ),
+    ],
+)
+def test_change_password_rejects_invalid_values_without_repopulating_secrets(
+    auth_application: tuple[FastAPI, Engine],
+    form_overrides: dict[str, str],
+    expected_error: str,
+) -> None:
+    """Every password rule is enforced without echoing submitted secrets."""
+    application, engine = auth_application
+    form_data = {
+        "current_password": TEST_PASSWORD,
+        "new_password": NEW_PASSWORD,
+        "confirm_new_password": NEW_PASSWORD,
+    }
+    form_data.update(form_overrides)
+
+    async def scenario() -> httpx.Response:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            await client.post(
+                "/login",
+                data={"email": ACTIVE_EMAIL, "password": TEST_PASSWORD},
+            )
+            return await client.post("/change-password", data=form_data)
+
+    response = asyncio.run(scenario())
+    assert response.status_code == 400
+    assert expected_error in response.text
+    assert response.text.count('type="password"') == 3
+    for submitted_secret in set(form_data.values()):
+        assert submitted_secret not in response.text
+
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.email == ACTIVE_EMAIL)).one()
+        assert verify_password(TEST_PASSWORD, user.password_hash)
+        assert user.auth_version == 1
+
+
+def test_successful_password_change_replaces_password_and_current_session(
+    auth_application: tuple[FastAPI, Engine],
+) -> None:
+    """A successful change updates the hash and keeps only this session valid."""
+    application, engine = auth_application
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            login_response = await client.post(
+                "/login",
+                data={"email": ACTIVE_EMAIL, "password": TEST_PASSWORD},
+            )
+            old_cookie = login_response.cookies[SESSION_COOKIE_NAME]
+            changed = await client.post(
+                "/change-password",
+                data={
+                    "current_password": TEST_PASSWORD,
+                    "new_password": NEW_PASSWORD,
+                    "confirm_new_password": NEW_PASSWORD,
+                },
+            )
+            home = await client.get("/")
+
+        assert changed.status_code == 303
+        assert changed.headers["location"] == "/"
+        assert changed.cookies[SESSION_COOKIE_NAME] != old_cookie
+        assert home.status_code == 200
+
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as login_client:
+            old_login = await login_client.post(
+                "/login",
+                data={"email": ACTIVE_EMAIL, "password": TEST_PASSWORD},
+            )
+            new_login = await login_client.post(
+                "/login",
+                data={"email": ACTIVE_EMAIL, "password": NEW_PASSWORD},
+            )
+        assert old_login.status_code == 401
+        assert new_login.status_code == 303
+
+    asyncio.run(scenario())
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.email == ACTIVE_EMAIL)).one()
+        assert verify_password(NEW_PASSWORD, user.password_hash)
+        assert user.must_change_password is False
+        assert user.auth_version == 2
+
+
+def test_password_change_invalidates_another_existing_session(
+    auth_application: tuple[FastAPI, Engine],
+) -> None:
+    """A copied or second old-version session is rejected after a change."""
+    application, _ = auth_application
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=application)
+        async with (
+            httpx.AsyncClient(
+                transport=transport,
+                base_url="http://testserver",
+            ) as changing_client,
+            httpx.AsyncClient(
+                transport=transport,
+                base_url="http://testserver",
+            ) as old_client,
+        ):
+            for client in (changing_client, old_client):
+                response = await client.post(
+                    "/login",
+                    data={"email": ACTIVE_EMAIL, "password": TEST_PASSWORD},
+                )
+                assert response.status_code == 303
+
+            changed = await changing_client.post(
+                "/change-password",
+                data={
+                    "current_password": TEST_PASSWORD,
+                    "new_password": NEW_PASSWORD,
+                    "confirm_new_password": NEW_PASSWORD,
+                },
+            )
+            stale_response = await old_client.get("/")
+
+        assert changed.status_code == 303
+        assert stale_response.status_code == 303
+        assert stale_response.headers["location"] == "/login"
+
+    asyncio.run(scenario())
+
+
+def test_temporary_password_forces_change_and_blocks_private_routes(
+    auth_application: tuple[FastAPI, Engine],
+) -> None:
+    """Temporary-password users can access only password change and logout."""
+    application, engine = auth_application
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            login_response = await client.post(
+                "/login",
+                data={
+                    "email": TEMPORARY_EMAIL,
+                    "password": TEMPORARY_PASSWORD,
+                },
+            )
+            assert login_response.status_code == 303
+            assert login_response.headers["location"] == "/change-password"
+
+            for path in ("/", "/meetings/new", "/outreach/today"):
+                blocked = await client.get(path)
+                assert blocked.status_code == 303
+                assert blocked.headers["location"] == "/change-password"
+
+            form = await client.get("/change-password")
+            assert form.status_code == 200
+            assert "Replace your temporary password" in form.text
+            assert ">Home</a>" not in form.text
+
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="http://testserver",
+            ) as logout_client:
+                await logout_client.post(
+                    "/login",
+                    data={
+                        "email": TEMPORARY_EMAIL,
+                        "password": TEMPORARY_PASSWORD,
+                    },
+                )
+                logged_out = await logout_client.post("/logout")
+                assert logged_out.status_code == 303
+                assert logged_out.headers["location"] == "/login"
+
+            changed = await client.post(
+                "/change-password",
+                data={
+                    "current_password": TEMPORARY_PASSWORD,
+                    "new_password": NEW_PASSWORD,
+                    "confirm_new_password": NEW_PASSWORD,
+                },
+            )
+            home = await client.get("/")
+
+        assert changed.status_code == 303
+        assert home.status_code == 200
+
+    asyncio.run(scenario())
+    with Session(engine) as session:
+        user = session.exec(
+            select(User).where(User.email == TEMPORARY_EMAIL),
+        ).one()
+        assert user.must_change_password is False
+        assert user.auth_version == 2
+
+
+def test_cli_password_reset_invalidates_existing_web_session(
+    auth_application: tuple[FastAPI, Engine],
+) -> None:
+    """A CLI reset revokes cookies issued before the auth-version increment."""
+    application, engine = auth_application
+    reset_password = "reset-temporary-password"
+
+    async def scenario() -> None:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            login_response = await client.post(
+                "/login",
+                data={"email": ACTIVE_EMAIL, "password": TEST_PASSWORD},
+            )
+            assert login_response.status_code == 303
+
+            passwords = iter([reset_password, reset_password])
+            with Session(engine) as session:
+                result = cli.reset_password(
+                    session,
+                    prompt=lambda _message: ACTIVE_EMAIL,
+                    secret_prompt=lambda _message: next(passwords),
+                    output=lambda _message: None,
+                )
+            assert result == 0
+
+            stale_response = await client.get("/")
+            assert stale_response.status_code == 303
+            assert stale_response.headers["location"] == "/login"
+
+            reset_login = await client.post(
+                "/login",
+                data={"email": ACTIVE_EMAIL, "password": reset_password},
+            )
+            assert reset_login.status_code == 303
+            assert reset_login.headers["location"] == "/change-password"
 
     asyncio.run(scenario())
 

@@ -69,7 +69,16 @@ def test_expected_product_tables_are_registered() -> None:
 def test_model_columns_match_implementation_plan() -> None:
     """Each product table contains exactly its documented fields."""
     expected_columns = {
-        User: {"id", "name", "email", "password_hash", "active", "created_at"},
+        User: {
+            "id",
+            "name",
+            "email",
+            "password_hash",
+            "active",
+            "must_change_password",
+            "auth_version",
+            "created_at",
+        },
         PipelineMeeting: {
             "id",
             "user_id",
@@ -170,10 +179,12 @@ def test_user_email_is_unique(db_engine: Engine) -> None:
             session.commit()
 
 
-def test_user_is_active_by_default(db_engine: Engine) -> None:
-    """New users default to active in the model and database."""
+def test_user_authentication_state_has_safe_defaults(db_engine: Engine) -> None:
+    """Existing-style users remain active without a forced password change."""
     user = make_user()
     assert user.active is True
+    assert user.must_change_password is False
+    assert user.auth_version == 1
 
     with Session(db_engine) as session:
         session.add(user)
@@ -181,6 +192,8 @@ def test_user_is_active_by_default(db_engine: Engine) -> None:
         session.refresh(user)
 
         assert user.active is True
+        assert user.must_change_password is False
+        assert user.auth_version == 1
 
 
 def test_updated_at_changes_when_records_are_updated(

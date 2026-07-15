@@ -8,7 +8,9 @@ from sqlalchemy import (
     Boolean,
     Column,
     Enum as SQLAlchemyEnum,
+    Integer,
     UniqueConstraint,
+    false,
     true,
 )
 from sqlmodel import Field, Relationship, SQLModel
@@ -92,6 +94,22 @@ class User(SQLModel, table=True):
             Boolean,
             nullable=False,
             server_default=true(),
+        ),
+    )
+    must_change_password: bool = Field(
+        default=False,
+        sa_column=Column(
+            Boolean,
+            nullable=False,
+            server_default=false(),
+        ),
+    )
+    auth_version: int = Field(
+        default=1,
+        sa_column=Column(
+            Integer,
+            nullable=False,
+            server_default="1",
         ),
     )
     created_at: datetime = Field(default_factory=utc_now)

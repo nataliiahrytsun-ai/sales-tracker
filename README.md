@@ -56,23 +56,33 @@ or a committed configuration file.
 
 Open `http://127.0.0.1:8000/login` and sign in with the email address of an
 existing active user. Authentication uses a signed HttpOnly session cookie.
-There is no public registration or automatic seed data; account provisioning is
-performed locally with the interactive CLI after applying migrations:
+There is no public registration or automatic seed data.
+
+## User management
+
+Run user-management commands locally after applying migrations:
 
 ```powershell
 python -m app.cli create-user
+python -m app.cli reset-password
 ```
 
-The command prompts for email and name, then requests the password twice using
-hidden input. It refuses duplicate email addresses and prints no credentials in
-its success confirmation.
+`create-user` creates a user with a temporary password. On the first login, the
+user is redirected to replace it before using the rest of the application.
+
+Use `reset-password` when a user has forgotten their password. Passwords cannot
+be recovered; the command can only set a new temporary password. It invalidates
+the user's existing authenticated sessions, and the temporary password must be
+changed after the next login.
 
 ### Known session limitation
 
 Sessions use stateless signed cookies. Logout instructs the browser to delete
 its cookie, but the server cannot revoke a copy captured before logout. Such a
 copied cookie remains usable until its configured `Max-Age` expires, unless the
-user is deleted or made inactive. Server-side replay revocation would require a
+user is deleted, made inactive, or has their password changed or reset. Password
+changes increment the user's authentication version and revoke older sessions;
+ordinary logout does not. Full logout replay revocation would require a
 server-side session store or revocation mechanism and is not part of the current
 architecture.
 
@@ -92,10 +102,9 @@ Create or update the database to the latest migration:
 python -m alembic upgrade head
 ```
 
-The migration chain currently contains the initial Alembic setup, product-table
-revision `20260714_0002`, and model-cleanup revision `20260714_0003`. Running
-`upgrade head` applies all migrations to a new database and only pending
-migrations to an existing database.
+The migration chain currently runs through password-state revision
+`20260715_0005`. Running `upgrade head` applies all migrations to a new database
+and only pending migrations to an existing database.
 
 Create a migration after changing SQLModel metadata:
 

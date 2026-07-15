@@ -14,11 +14,25 @@ Record each test as **Pass**, **Fail**, or **Blocked**.
 | Session cookie has a finite lifetime | Pass | Login response contains the configured `Max-Age`; the default is 1,209,600 seconds (14 days). |
 | Stored password value is a hash and not plaintext | Pass | Stored value used the Argon2 format and differed from the test password. |
 | Insecure production session configuration fails clearly | Pass | Startup rejected both a missing secret and `SALES_TRACKER_SESSION_COOKIE_SECURE=false`, naming the relevant environment variable. |
+| Change password form is usable | Blocked | Manually verify the three empty password fields, visible validation messages, keyboard focus, and responsive layout. |
+| Temporary password forces replacement | Blocked | Log in with a CLI-created user and verify every private page redirects to Change password while Logout remains available. |
+| Successful password change restores access | Blocked | Verify the new password opens the application, the old password fails, and password fields remain empty after validation errors. |
+
+## Password Management Headless Checks
+
+| Check | Status | Evidence |
+| --- | --- | --- |
+| Password rules | Pass | Focused tests cover incorrect current password, mismatch, minimum length, reuse, and successful replacement. |
+| Forced first change | Pass | Focused tests verify the redirect, private-route blocking, allowed logout, and clearing `must_change_password`. |
+| Session invalidation | Pass | Focused tests verify old sessions fail after both in-app change and CLI reset while the refreshed current session remains valid. |
+| CLI password reset | Pass | Focused tests verify Argon2 replacement, forced-change state, auth-version increment, and a clear unknown-email error. |
 
 ## Additional Known Limitation (Not a Milestone 1 Gate)
 
 `POST /logout` expires the browser's session cookie and subsequent requests from
 that browser are redirected to `/login`. A cookie copied before logout remains
 cryptographically valid until its configured `Max-Age` expires. This limitation
-is documented and covered by a strict `xfail` integration test. Server-side
-revocation is not required by the Milestone 1 login/logout acceptance criteria.
+is documented and covered by a strict `xfail` integration test. Password changes
+and resets do revoke older cookies through `auth_version`; ordinary logout does
+not increment that version. Full logout replay revocation is not required by the
+Milestone 1 login/logout acceptance criteria.
