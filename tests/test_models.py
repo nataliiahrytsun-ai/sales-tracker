@@ -242,6 +242,38 @@ def test_daily_outreach_is_unique_per_user_and_date(
             session.commit()
 
 
+def test_outreach_country_is_unique_per_daily_record(
+    db_engine: Engine,
+) -> None:
+    """The database rejects duplicate country codes for one daily record."""
+    with Session(db_engine) as session:
+        user = make_user()
+        session.add(user)
+        session.flush()
+        assert user.id is not None
+        outreach = make_outreach(user.id, date(2026, 7, 14))
+        session.add(outreach)
+        session.flush()
+        assert outreach.id is not None
+        session.add(
+            OutreachCountry(
+                outreach_daily_id=outreach.id,
+                country_code="BR",
+                companies_contacted=1,
+            ),
+        )
+        session.add(
+            OutreachCountry(
+                outreach_daily_id=outreach.id,
+                country_code="BR",
+                companies_contacted=2,
+            ),
+        )
+
+        with pytest.raises(IntegrityError):
+            session.commit()
+
+
 def test_foreign_keys_are_enforced(db_engine: Engine) -> None:
     """A meeting cannot reference a user that does not exist."""
     with Session(db_engine) as session:

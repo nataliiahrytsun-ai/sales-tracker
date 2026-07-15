@@ -185,6 +185,13 @@ class OutreachCountry(SQLModel, table=True):
     """Per-country company count for a daily outreach record."""
 
     __tablename__ = "outreach_countries"
+    __table_args__ = (
+        UniqueConstraint(
+            "outreach_daily_id",
+            "country_code",
+            name="uq_outreach_countries_daily_country",
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     outreach_daily_id: int = Field(foreign_key="daily_outreach.id")

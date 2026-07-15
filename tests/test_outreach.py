@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, SQLModel, select
 
 from app.config import Settings
+from app.countries import COUNTRY_CODES, COUNTRY_NAMES_BY_CODE, COUNTRY_OPTIONS
 from app.database import create_db_engine, get_session
 from app.main import create_app
 from app.models import DailyOutreach, OutreachCountry, User, UserMood
@@ -27,14 +28,15 @@ TEST_DATE = date(2026, 7, 14)
 STYLESHEET_PATH = Path("app/static/css/app.css")
 
 
-def valid_outreach_data(**overrides: str) -> dict[str, str]:
-    """Return one exact-plan valid outreach form submission."""
-    values = {
+def valid_outreach_data(
+    **overrides: str | list[str],
+) -> dict[str, str | list[str]]:
+    """Return one valid outreach form submission with arbitrary countries."""
+    values: dict[str, str | list[str]] = {
         "total_activities": "40",
-        "unique_companies": "12",
-        "country_de": "6",
-        "country_at": "4",
-        "country_ch": "2",
+        "unique_companies": "999",
+        "country_codes": ["DE", "BR", "PL"],
+        "country_counts": ["6", "4", "2"],
         "replies": "8",
         "positive_replies": "5",
         "meetings_booked": "2",
@@ -110,6 +112,16 @@ async def login(
     assert response.status_code == 303
 
 
+def test_local_country_list_contains_worldwide_iso_codes() -> None:
+    """The local list is complete, unique, and includes required examples."""
+    assert len(COUNTRY_OPTIONS) == 249
+    assert len(COUNTRY_CODES) == len(COUNTRY_OPTIONS)
+    assert COUNTRY_NAMES_BY_CODE["DE"] == "Germany"
+    assert COUNTRY_NAMES_BY_CODE["FR"] == "France"
+    assert COUNTRY_NAMES_BY_CODE["PL"] == "Poland"
+    assert COUNTRY_NAMES_BY_CODE["BR"] == "Brazil"
+
+
 def test_authenticated_user_can_open_today_outreach_form(
     outreach_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
@@ -130,10 +142,6 @@ def test_authenticated_user_can_open_today_outreach_form(
         assert TEST_DATE.isoformat() in response.text
         for field in (
             "total_activities",
-            "unique_companies",
-            "country_de",
-            "country_at",
-            "country_ch",
             "replies",
             "positive_replies",
             "meetings_booked",
@@ -142,13 +150,33 @@ def test_authenticated_user_can_open_today_outreach_form(
             "note",
         ):
             assert f'name="{field}"' in response.text
+        assert 'name="unique_companies"' not in response.text
+        assert '<output class="country-summary-value" data-countries-selected>0' in (
+            response.text
+        )
+        assert (
+            '<output class="country-summary-value" data-companies-contacted>0'
+            in response.text
+        )
+        assert "Countries selected" in response.text
+        assert "Companies contacted" in response.text
+        assert "Count each company only once per day." in response.text
+        assert 'aria-describedby="positive_replies_error"' in response.text
+        assert 'id="positive_replies_error"></p>' in response.text
+        assert 'data-country-row data-country-code=' not in response.text
         for code, country in (
             ("DE", "Germany"),
-            ("AT", "Austria"),
-            ("CH", "Switzerland"),
+            ("BR", "Brazil"),
+            ("FR", "France"),
+            ("PL", "Poland"),
         ):
-            assert f'name="country_{code.lower()}"' in response.text
+            assert f'data-country-code="{code}"' in response.text
             assert country in response.text
+        assert 'data-country-search' in response.text
+        assert 'data-country-add' in response.text
+        assert 'data-country-rows' in response.text
+        assert 'data-country-summary' in response.text
+        assert '/static/js/outreach_countries.js' in response.text
         assert 'name="user_id"' not in response.text
         assert 'name="activity_date"' not in response.text
 
@@ -180,7 +208,7 @@ def test_anonymous_today_outreach_redirects_to_login(
 def test_successful_create_persists_today_for_authenticated_user(
     outreach_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
-    """All exact-plan fields and DACH codes persist on the owned record."""
+    """Brazil and multiple arbitrary countries persist on the owned record."""
     application, engine, first_user_id, second_user_id = outreach_application
 
     async def scenario() -> None:
@@ -195,7 +223,6 @@ def test_successful_create_persists_today_for_authenticated_user(
                 {
                     "user_id": str(second_user_id),
                     "activity_date": "1999-01-01",
-                    "country_us": "999",
                 },
             )
             response = await client.post("/outreach/today", data=submitted)
@@ -232,13 +259,13 @@ def test_successful_create_persists_today_for_authenticated_user(
         assert {
             country.country_code: country.companies_contacted
             for country in countries
-        } == {"DE": 6, "AT": 4, "CH": 2}
+        } == {"DE": 6, "BR": 4, "PL": 2}
 
 
 def test_repeat_post_updates_same_daily_record_and_country_rows(
     outreach_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
-    """A second save updates rather than duplicating today's owned record."""
+    """A second save updates, adds, and removes countries without duplicates."""
     application, engine, first_user_id, _ = outreach_application
 
     async def scenario() -> None:
@@ -257,10 +284,8 @@ def test_repeat_post_updates_same_daily_record_and_country_rows(
                 "/outreach/today",
                 data=valid_outreach_data(
                     total_activities="55",
-                    unique_companies="10",
-                    country_de="3",
-                    country_at="2",
-                    country_ch="5",
+                    country_codes=["BR", "FR"],
+                    country_counts=["7", "3"],
                     replies="",
                     positive_replies="",
                     meetings_booked="",
@@ -275,6 +300,12 @@ def test_repeat_post_updates_same_daily_record_and_country_rows(
         assert reopened.status_code == 200
         assert re.search(r'name="total_activities"[^>]*value="55"', reopened.text)
         assert "Updated safely" in reopened.text
+        assert 'name="country_codes" value="BR"' in reopened.text
+        assert 'name="country_codes" value="FR"' in reopened.text
+        for removed_code in ("DE", "AT", "CH", "PL"):
+            assert f'name="country_codes" value="{removed_code}"' not in (
+                reopened.text
+            )
 
     asyncio.run(scenario())
 
@@ -288,6 +319,7 @@ def test_repeat_post_updates_same_daily_record_and_country_rows(
         assert len(records) == 1
         record = records[0]
         assert record.total_activities == 55
+        assert record.unique_companies == 10
         assert record.replies is None
         assert record.positive_replies is None
         assert record.meetings_booked is None
@@ -300,11 +332,11 @@ def test_repeat_post_updates_same_daily_record_and_country_rows(
                 OutreachCountry.outreach_daily_id == record.id,
             ),
         ).all()
-        assert len(countries) == 3
+        assert len(countries) == 2
         assert {
             country.country_code: country.companies_contacted
             for country in countries
-        } == {"DE": 3, "AT": 2, "CH": 5}
+        } == {"BR": 7, "FR": 3}
 
 
 def test_second_user_has_separate_record_for_same_date(
@@ -372,9 +404,8 @@ def test_invalid_counters_and_selectors_preserve_safe_values(
                 data={
                     "total_activities": "",
                     "unique_companies": "-1",
-                    "country_de": "not-a-number",
-                    "country_at": "",
-                    "country_ch": "2",
+                    "country_codes": ["BR", "FR"],
+                    "country_counts": ["-3", "1.5"],
                     "replies": "-2",
                     "positive_replies": "1.5",
                     "meetings_booked": "3",
@@ -386,12 +417,10 @@ def test_invalid_counters_and_selectors_preserve_safe_values(
 
         assert response.status_code == 400
         assert "Enter total outreach activities." in response.text
-        assert "Unique companies contacted cannot be negative." in response.text
-        assert (
-            "Enter a whole number for companies contacted in Germany."
-            in response.text
+        assert "Companies contacted in Brazil cannot be negative." in response.text
+        assert "Enter a whole number for companies contacted in France." in (
+            response.text
         )
-        assert "Enter companies contacted in Austria." in response.text
         assert "Replies received cannot be negative." in response.text
         assert "Enter a whole number for positive replies." in response.text
         assert "Select a valid mood" in response.text
@@ -399,6 +428,11 @@ def test_invalid_counters_and_selectors_preserve_safe_values(
         assert "&lt;script&gt;" in response.text
         assert '<script>alert("safe")</script>' not in response.text
         assert re.search(r'name="meetings_booked"[^>]*value="3"', response.text)
+        assert 'name="country_codes" value="BR"' in response.text
+        assert 'name="country_codes" value="FR"' in response.text
+        assert 'name="country_counts"' in response.text
+        assert 'value="-3"' in response.text
+        assert 'value="1.5"' in response.text
 
     asyncio.run(scenario())
 
@@ -406,10 +440,10 @@ def test_invalid_counters_and_selectors_preserve_safe_values(
         assert session.exec(select(DailyOutreach)).all() == []
 
 
-def test_country_mismatch_warns_but_allows_save(
+def test_server_calculates_unique_companies_and_ignores_forged_value(
     outreach_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
-    """Country sum mismatch is non-blocking exactly as documented."""
+    """The server derives the total instead of trusting the browser."""
     application, engine, _, _ = outreach_application
 
     async def scenario() -> None:
@@ -422,23 +456,217 @@ def test_country_mismatch_warns_but_allows_save(
             response = await client.post(
                 "/outreach/today",
                 data=valid_outreach_data(
-                    unique_companies="12",
-                    country_de="2",
-                    country_at="1",
-                    country_ch="0",
+                    unique_companies="500",
+                    country_codes=["BR", "FR"],
+                    country_counts=["2", "1"],
                 ),
             )
             confirmation = await client.get(response.headers["location"])
 
         assert response.status_code == 303
         assert "Today's outreach was saved." in confirmation.text
-        assert "Country total does not match unique companies." in confirmation.text
-        assert "breakdown totals 3" in confirmation.text
+        assert "Country total does not match unique companies." not in confirmation.text
+        assert '<output class="country-summary-value" data-countries-selected>2' in (
+            confirmation.text
+        )
+        assert '<output class="country-summary-value" data-companies-contacted>3' in (
+            confirmation.text
+        )
 
     asyncio.run(scenario())
 
     with Session(engine) as session:
-        assert len(session.exec(select(DailyOutreach)).all()) == 1
+        records = session.exec(select(DailyOutreach)).all()
+        assert len(records) == 1
+    assert records[0].unique_companies == 3
+
+
+@pytest.mark.parametrize(
+    ("replies", "positive_replies"),
+    [("5", "2"), ("5", "5")],
+)
+def test_positive_replies_at_or_below_replies_received_are_saved(
+    outreach_application: tuple[FastAPI, Engine, int, int],
+    replies: str,
+    positive_replies: str,
+) -> None:
+    """Valid and equal reply counts pass server validation."""
+    application, engine, _, _ = outreach_application
+
+    async def scenario() -> httpx.Response:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            await login(client)
+            return await client.post(
+                "/outreach/today",
+                data=valid_outreach_data(
+                    replies=replies,
+                    positive_replies=positive_replies,
+                ),
+            )
+
+    response = asyncio.run(scenario())
+    assert response.status_code == 303
+    with Session(engine) as session:
+        record = session.exec(select(DailyOutreach)).one()
+        assert record.replies == int(replies)
+        assert record.positive_replies == int(positive_replies)
+
+
+@pytest.mark.parametrize(
+    ("replies", "positive_replies"),
+    [("", "1"), ("2", "3")],
+)
+def test_positive_replies_require_sufficient_replies_received(
+    outreach_application: tuple[FastAPI, Engine, int, int],
+    replies: str,
+    positive_replies: str,
+) -> None:
+    """Missing or lower replies block saving and preserve both values."""
+    application, engine, _, _ = outreach_application
+
+    async def scenario() -> httpx.Response:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            await login(client)
+            return await client.post(
+                "/outreach/today",
+                data=valid_outreach_data(
+                    replies=replies,
+                    positive_replies=positive_replies,
+                ),
+            )
+
+    response = asyncio.run(scenario())
+    assert response.status_code == 400
+    assert "Positive replies cannot exceed replies received." in response.text
+    assert 'aria-describedby="positive_replies_error"' in response.text
+    assert 'id="positive_replies_error">Positive replies cannot exceed' in (
+        response.text
+    )
+    assert re.search(
+        rf'name="replies"[^>]*value="{re.escape(replies)}"',
+        response.text,
+    )
+    assert re.search(
+        rf'name="positive_replies"[^>]*value="{positive_replies}"',
+        response.text,
+    )
+    with Session(engine) as session:
+        assert session.exec(select(DailyOutreach)).all() == []
+
+
+@pytest.mark.parametrize(
+    ("country_codes", "country_counts", "expected_error"),
+    [
+        (["BR", "BR"], ["2", "3"], "Each country can be added only once."),
+        (["XX"], ["2"], "Select only countries from the available list."),
+    ],
+)
+def test_server_rejects_duplicate_and_unknown_countries(
+    outreach_application: tuple[FastAPI, Engine, int, int],
+    country_codes: list[str],
+    country_counts: list[str],
+    expected_error: str,
+) -> None:
+    """Server validation does not rely on the dynamic-country JavaScript."""
+    application, engine, _, _ = outreach_application
+
+    async def scenario() -> httpx.Response:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            await login(client)
+            return await client.post(
+                "/outreach/today",
+                data=valid_outreach_data(
+                    country_codes=country_codes,
+                    country_counts=country_counts,
+                ),
+            )
+
+    response = asyncio.run(scenario())
+    assert response.status_code == 400
+    assert expected_error in response.text
+    for code, count in zip(country_codes, country_counts, strict=True):
+        assert f'name="country_codes" value="{code}"' in response.text
+        assert f'value="{count}"' in response.text
+
+    with Session(engine) as session:
+        assert session.exec(select(DailyOutreach)).all() == []
+
+
+def test_empty_country_breakdown_is_allowed(
+    outreach_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    """A daily summary may be saved without any country rows."""
+    application, engine, _, _ = outreach_application
+
+    async def scenario() -> httpx.Response:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            await login(client)
+            return await client.post(
+                "/outreach/today",
+                data=valid_outreach_data(
+                    unique_companies="100",
+                    country_codes=[],
+                    country_counts=[],
+                ),
+            )
+
+    response = asyncio.run(scenario())
+    assert response.status_code == 303
+    with Session(engine) as session:
+        records = session.exec(select(DailyOutreach)).all()
+        assert len(records) == 1
+        assert records[0].unique_companies == 0
+        assert session.exec(select(OutreachCountry)).all() == []
+
+
+def test_database_rejects_duplicate_country_for_daily_outreach(
+    outreach_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    """The database enforces one row per outreach and country code."""
+    _, engine, first_user_id, _ = outreach_application
+    with Session(engine) as session:
+        record = DailyOutreach(
+            user_id=first_user_id,
+            activity_date=TEST_DATE,
+            total_activities=2,
+            unique_companies=2,
+        )
+        session.add(record)
+        session.commit()
+        session.refresh(record)
+        assert record.id is not None
+        session.add(
+            OutreachCountry(
+                outreach_daily_id=record.id,
+                country_code="BR",
+                companies_contacted=1,
+            ),
+        )
+        session.add(
+            OutreachCountry(
+                outreach_daily_id=record.id,
+                country_code="BR",
+                companies_contacted=1,
+            ),
+        )
+        with pytest.raises(IntegrityError):
+            session.commit()
 
 
 def test_database_constraint_rejects_duplicate_user_and_date(
@@ -468,27 +696,63 @@ def test_database_constraint_rejects_duplicate_user_and_date(
             session.commit()
 
 
-def test_outreach_form_has_mobile_first_and_desktop_grids() -> None:
-    """Outreach counters remain overflow-safe across existing breakpoints."""
+def test_outreach_form_has_responsive_dynamic_country_controls() -> None:
+    """Country rows and controls remain compact and overflow-safe."""
     css = STYLESHEET_PATH.read_text(encoding="utf-8")
+    template = Path("app/templates/outreach_form.html").read_text(
+        encoding="utf-8",
+    )
+    javascript = Path("app/static/js/outreach_countries.js").read_text(
+        encoding="utf-8",
+    )
     mobile_css, desktop_css = css.split("@media (min-width: 48rem)", 1)
 
+    for selector in (
+        ".country-add-row",
+        ".country-rows",
+        ".country-row",
+        ".country-count-controls",
+        ".country-row-name",
+    ):
+        assert selector in mobile_css
+    assert "flex-wrap: wrap" in mobile_css
+    assert "overflow-wrap: anywhere" in mobile_css
     assert re.search(
-        r"\.counter-grid,\s*\.country-grid\s*\{[^}]*display:\s*grid;"
-        r"[^}]*min-width:\s*0",
+        r"\.country-summary-card\s*\{[^}]*display:\s*flex;"
+        r"[^}]*align-items:\s*center;[^}]*justify-content:\s*space-between;",
         mobile_css,
     )
-    assert "grid-template-columns" not in re.search(
-        r"\.counter-grid,\s*\.country-grid\s*\{(?P<body>[^}]+)\}",
-        mobile_css,
-    ).group("body")
+    assert re.search(r"\.reply-errors\s*\{[^}]*min-height:\s*3rem", mobile_css)
     assert re.search(
         r"\.counter-grid\s*\{[^}]*grid-template-columns:\s*"
         r"repeat\(2,\s*minmax\(0,\s*1fr\)\)",
         desktop_css,
     )
     assert re.search(
-        r"\.country-grid\s*\{[^}]*grid-template-columns:\s*"
-        r"repeat\(3,\s*minmax\(0,\s*1fr\)\)",
+        r"\.country-add-row\s*\{[^}]*grid-template-columns:\s*"
+        r"minmax\(0,\s*1fr\)",
         desktop_css,
     )
+    assert 'list="country_options"' in template
+    assert 'name="country_codes"' in template
+    assert 'name="country_counts"' in template
+    assert 'class="reply-fields"' in template
+    assert 'class="reply-errors" aria-live="polite"' in template
+    assert 'aria-describedby="positive_replies_error"' in template
+    for attribute in (
+        "data-country-add",
+        "data-country-increase",
+        "data-country-decrease",
+        "data-country-remove",
+        "data-countries-selected",
+        "data-companies-contacted",
+    ):
+        assert attribute in template
+        assert attribute in javascript
+    assert "This country is already added" in javascript
+    assert "window.setTimeout" in javascript
+    assert "Math.max(0, current - 1)" in javascript
+    assert 'name="unique_companies"' not in template
+    assert "Count each company only once per day." in template
+    assert "Country total" not in template
+    assert "Country total does not match unique companies." not in template

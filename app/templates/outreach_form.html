@@ -22,16 +22,6 @@
       </div>
     {% endif %}
 
-    {% if country_mismatch %}
-      <div class="warning" role="status">
-        <strong>Country total does not match unique companies.</strong>
-        <p>
-          The country breakdown totals {{ country_total }}, while unique companies
-          is {{ values.unique_companies }}. The record was saved and can be corrected.
-        </p>
-      </div>
-    {% endif %}
-
     {% if errors %}
       <div class="alert" role="alert">
         <strong>Check the form and try again.</strong>
@@ -56,7 +46,7 @@
           <p>Enter non-negative whole-number totals for this date.</p>
         </div>
 
-        <div class="counter-grid">
+        <div class="counter-grid counter-grid-single">
           <div class="field-group">
             <label for="total_activities">Total outreach activities</label>
             <input
@@ -72,57 +62,83 @@
               <p class="field-error">{{ errors.total_activities }}</p>
             {% endif %}
           </div>
-
-          <div class="field-group">
-            <label for="unique_companies">Unique companies contacted</label>
-            <input
-              id="unique_companies"
-              name="unique_companies"
-              type="number"
-              min="0"
-              step="1"
-              value="{{ values.unique_companies }}"
-              required
-            >
-            {% if errors.unique_companies %}
-              <p class="field-error">{{ errors.unique_companies }}</p>
-            {% endif %}
-          </div>
         </div>
       </section>
 
-      <section
-        class="field-section required-fields"
-        aria-labelledby="country-breakdown-heading"
-      >
+      <section class="field-section required-fields" aria-labelledby="country-breakdown-heading">
         <div class="field-section-heading">
           <div>
-            <p class="section-kicker">Required</p>
+            <p class="section-kicker">Optional</p>
             <h2 id="country-breakdown-heading">Country breakdown</h2>
           </div>
-          <p>Companies contacted in Germany, Austria, and Switzerland.</p>
+          <p>Add only the countries contacted on this date.</p>
         </div>
 
-        <div class="country-grid">
-          {% for code, label in country_options %}
-            {% set field_name = 'country_' ~ code|lower %}
-            <div class="field-group">
-              <label for="{{ field_name }}">{{ label }}</label>
-              <input
-                id="{{ field_name }}"
-                name="{{ field_name }}"
-                type="number"
-                min="0"
-                step="1"
-                value="{{ country_values[code] }}"
-                required
-              >
-              {% if errors[field_name] %}
-                <p class="field-error">{{ errors[field_name] }}</p>
-              {% endif %}
+        <div class="country-summary-grid" aria-live="polite" data-country-summary>
+          <div class="country-summary-card">
+            <span class="country-summary-label">Countries selected</span>
+            <output class="country-summary-value" data-countries-selected>{{ country_rows|length }}</output>
+          </div>
+          <div class="country-summary-card">
+            <span class="country-summary-label">Companies contacted</span>
+            <output class="country-summary-value" data-companies-contacted>{{ country_total }}</output>
+          </div>
+        </div>
+        <p class="country-summary-help">Count each company only once per day.</p>
+
+        <div class="country-add-row" data-country-add-row>
+          <div class="field-group country-search-field">
+            <label for="country_search">Country</label>
+            <input
+              id="country_search"
+              type="search"
+              list="country_options"
+              placeholder="Search country..."
+              autocomplete="off"
+              data-country-search
+            >
+            <datalist id="country_options">
+              {% for code, label in country_options %}
+                <option value="{{ label }}" data-country-code="{{ code }}"></option>
+              {% endfor %}
+            </datalist>
+          </div>
+          <div class="field-group country-add-count-field">
+            <label for="country_add_count">Companies count</label>
+            <input id="country_add_count" type="number" min="0" step="1" value="0" data-country-add-count>
+          </div>
+          <button class="button button-secondary country-add-button" type="button" data-country-add>Add</button>
+        </div>
+        <p class="field-error country-inline-message" role="status" data-country-message>
+          {% if errors.countries %}{{ errors.countries }}{% endif %}
+        </p>
+
+        <div class="country-rows" data-country-rows>
+          {% for row in country_rows %}
+            <div class="country-row" data-country-row data-country-code="{{ row.code }}">
+              <span class="country-row-name">{{ row.name }}</span>
+              <div class="country-count-controls">
+                <button class="button button-secondary country-step-button" type="button" aria-label="Decrease companies contacted in {{ row.name }}" data-country-decrease>&minus;</button>
+                <input type="hidden" name="country_codes" value="{{ row.code }}">
+                <input
+                  class="country-count-input"
+                  name="country_counts"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value="{{ row.count }}"
+                  aria-label="Companies contacted in {{ row.name }}"
+                  data-country-count
+                  required
+                >
+                <button class="button button-secondary country-step-button" type="button" aria-label="Increase companies contacted in {{ row.name }}" data-country-increase>+</button>
+                <button class="button button-secondary country-remove-button" type="button" aria-label="Remove {{ row.name }} from country breakdown" data-country-remove>Remove</button>
+              </div>
+              {% if row.error %}<p class="field-error country-row-error">{{ row.error }}</p>{% endif %}
             </div>
           {% endfor %}
         </div>
+
       </section>
 
       <section
@@ -137,16 +153,21 @@
           <p>Leave any unavailable result or sentiment value empty.</p>
         </div>
 
-        <div class="field-group">
-          <label for="replies">Replies received <span class="optional">Optional</span></label>
-          <input id="replies" name="replies" type="number" min="0" step="1" value="{{ values.replies }}">
-          {% if errors.replies %}<p class="field-error">{{ errors.replies }}</p>{% endif %}
-        </div>
+        <div class="reply-fields">
+          <div class="field-group">
+            <label for="replies">Replies received <span class="optional">Optional</span></label>
+            <input id="replies" name="replies" type="number" min="0" step="1" value="{{ values.replies }}" {% if errors.replies %}aria-describedby="replies_error"{% endif %}>
+          </div>
 
-        <div class="field-group">
-          <label for="positive_replies">Positive replies <span class="optional">Optional</span></label>
-          <input id="positive_replies" name="positive_replies" type="number" min="0" step="1" value="{{ values.positive_replies }}">
-          {% if errors.positive_replies %}<p class="field-error">{{ errors.positive_replies }}</p>{% endif %}
+          <div class="field-group">
+            <label for="positive_replies">Positive replies <span class="optional">Optional</span></label>
+            <input id="positive_replies" name="positive_replies" type="number" min="0" step="1" value="{{ values.positive_replies }}" aria-describedby="positive_replies_error">
+          </div>
+
+          <div class="reply-errors" aria-live="polite">
+            <p class="field-error reply-error" id="replies_error">{% if errors.replies %}{{ errors.replies }}{% endif %}</p>
+            <p class="field-error reply-error" id="positive_replies_error">{% if errors.positive_replies %}{{ errors.positive_replies }}{% endif %}</p>
+          </div>
         </div>
 
         <div class="field-group">
@@ -188,4 +209,5 @@
       </button>
     </form>
   </section>
+  <script src="{{ url_for('static', path='/js/outreach_countries.js') }}" defer></script>
 {% endblock %}

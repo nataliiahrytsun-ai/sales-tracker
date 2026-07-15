@@ -18,6 +18,7 @@ from app.models import (
     CustomerEngagement,
     DailyOutreach,
     NeedIdentified,
+    OutreachCountry,
     PipelineMeeting,
     PipelineOutcome,
     User,
@@ -48,14 +49,15 @@ def meeting_data(**overrides: str) -> dict[str, str]:
     return values
 
 
-def outreach_data(**overrides: str) -> dict[str, str]:
+def outreach_data(
+    **overrides: str | list[str],
+) -> dict[str, str | list[str]]:
     """Return a valid outreach form submission."""
-    values = {
+    values: dict[str, str | list[str]] = {
         "total_activities": "20",
         "unique_companies": "10",
-        "country_de": "4",
-        "country_at": "3",
-        "country_ch": "3",
+        "country_codes": ["BR", "FR"],
+        "country_counts": ["6", "4"],
         "replies": "5",
         "positive_replies": "2",
         "meetings_booked": "1",
@@ -563,6 +565,16 @@ def test_outreach_edit_by_date_updates_without_duplicate(
         ).all()
         assert len(records) == 1
         assert records[0].total_activities == 27
+        assert records[0].id is not None
+        countries = session.exec(
+            select(OutreachCountry).where(
+                OutreachCountry.outreach_daily_id == records[0].id,
+            ),
+        ).all()
+        assert {
+            country.country_code: country.companies_contacted
+            for country in countries
+        } == {"BR": 6, "FR": 4}
 
 
 def test_outreach_validation_future_dates_and_ownership(

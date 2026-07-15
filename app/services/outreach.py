@@ -2,15 +2,24 @@
 
 from dataclasses import dataclass
 from datetime import date, timedelta
+from itertools import zip_longest
 
 from sqlmodel import Session, select
 
+from app.countries import COUNTRY_CODES, COUNTRY_NAMES_BY_CODE, COUNTRY_OPTIONS
 from app.models import DailyOutreach, OutreachCountry, UserMood
 from app.services.meetings import (
     BLOCKER_OPTIONS,
     BLOCKER_VALUES,
-    COUNTRY_OPTIONS,
 )
+
+
+@dataclass(frozen=True)
+class CountryFormValue:
+    """One submitted country row retained for validation re-rendering."""
+
+    country_code: str
+    companies_contacted: str
 
 
 @dataclass(frozen=True)
@@ -18,10 +27,7 @@ class OutreachFormValues:
     """Submitted strings retained for safe form re-rendering."""
 
     total_activities: str = ""
-    unique_companies: str = ""
-    country_de: str = "0"
-    country_at: str = "0"
-    country_ch: str = "0"
+    country_rows: tuple[CountryFormValue, ...] = ()
     replies: str = ""
     positive_replies: str = ""
     meetings_booked: str = ""
@@ -35,7 +41,6 @@ class ValidatedOutreachValues:
     """Typed values ready for the existing outreach models."""
 
     total_activities: int
-    unique_companies: int
     country_counts: tuple[tuple[str, int], ...]
     replies: int | None
     positive_replies: int | None
@@ -49,11 +54,6 @@ class ValidatedOutreachValues:
         """Return the number of companies represented by country rows."""
         return sum(count for _code, count in self.country_counts)
 
-    @property
-    def country_mismatch(self) -> bool:
-        """Report the documented non-blocking country-total mismatch."""
-        return self.country_total != self.unique_companies
-
 
 def current_local_date() -> date:
     """Return today's date in the application process's local timezone."""
@@ -63,6 +63,24 @@ def current_local_date() -> date:
 def _optional_text(value: str) -> str | None:
     cleaned_value = value.strip()
     return cleaned_value or None
+
+
+def country_rows_from_submission(
+    country_codes: list[str],
+    country_counts: list[str],
+) -> tuple[CountryFormValue, ...]:
+    """Pair repeated form fields without silently dropping malformed rows."""
+    return tuple(
+        CountryFormValue(
+            country_code=(code or "").strip().upper(),
+            companies_contacted=count or "",
+        )
+        for code, count in zip_longest(
+            country_codes,
+            country_counts,
+            fillvalue="",
+        )
+    )
 
 
 def _parse_counter(
@@ -87,7 +105,7 @@ def _parse_counter(
         return None
 
     if parsed_value < 0:
-        errors[field] = f"{label.capitalize()} cannot be negative."
+        errors[field] = f"{label[0].upper()}{label[1:]} cannot be negative."
         return None
     return parsed_value
 
@@ -104,25 +122,22 @@ def validate_outreach_form(
         required=True,
         errors=errors,
     )
-    unique_companies = _parse_counter(
-        values.unique_companies,
-        field="unique_companies",
-        label="unique companies contacted",
-        required=True,
-        errors=errors,
-    )
-
     country_counts: list[tuple[str, int]] = []
-    country_values = {
-        "DE": values.country_de,
-        "AT": values.country_at,
-        "CH": values.country_ch,
-    }
-    for code, label in COUNTRY_OPTIONS:
-        field = f"country_{code.lower()}"
+    seen_country_codes: set[str] = set()
+    for index, row in enumerate(values.country_rows):
+        code = row.country_code.strip().upper()
+        if code not in COUNTRY_CODES:
+            errors["countries"] = "Select only countries from the available list."
+            continue
+        if code in seen_country_codes:
+            errors["countries"] = "Each country can be added only once."
+            continue
+        seen_country_codes.add(code)
+
+        label = COUNTRY_NAMES_BY_CODE[code]
         count = _parse_counter(
-            country_values[code],
-            field=field,
+            row.companies_contacted,
+            field=f"country_count_{index}",
             label=f"companies contacted in {label}",
             required=True,
             errors=errors,
@@ -144,6 +159,15 @@ def validate_outreach_form(
         required=False,
         errors=errors,
     )
+    if positive_replies is not None:
+        if replies is None and not values.replies.strip():
+            errors["positive_replies"] = (
+                "Positive replies cannot exceed replies received."
+            )
+        elif replies is not None and positive_replies > replies:
+            errors["positive_replies"] = (
+                "Positive replies cannot exceed replies received."
+            )
     meetings_booked = _parse_counter(
         values.meetings_booked,
         field="meetings_booked",
@@ -167,12 +191,9 @@ def validate_outreach_form(
         return None, errors
 
     assert total_activities is not None
-    assert unique_companies is not None
-    assert len(country_counts) == len(COUNTRY_OPTIONS)
     return (
         ValidatedOutreachValues(
             total_activities=total_activities,
-            unique_companies=unique_companies,
             country_counts=tuple(country_counts),
             replies=replies,
             positive_replies=positive_replies,
@@ -232,17 +253,23 @@ def form_values_from_record(
             OutreachCountry.outreach_daily_id == record.id,
         ),
     ).all()
-    counts = {
-        country.country_code: country.companies_contacted
-        for country in stored_countries
-    }
+    country_rows = tuple(
+        CountryFormValue(
+            country_code=country.country_code,
+            companies_contacted=str(country.companies_contacted),
+        )
+        for country in sorted(
+            stored_countries,
+            key=lambda item: COUNTRY_NAMES_BY_CODE.get(
+                item.country_code,
+                item.country_code,
+            ),
+        )
+    )
 
     return OutreachFormValues(
         total_activities=str(record.total_activities),
-        unique_companies=str(record.unique_companies),
-        country_de=str(counts.get("DE", 0)),
-        country_at=str(counts.get("AT", 0)),
-        country_ch=str(counts.get("CH", 0)),
+        country_rows=country_rows,
         replies="" if record.replies is None else str(record.replies),
         positive_replies=(
             "" if record.positive_replies is None else str(record.positive_replies)
@@ -274,11 +301,11 @@ def upsert_daily_outreach(
             user_id=user_id,
             activity_date=activity_date,
             total_activities=values.total_activities,
-            unique_companies=values.unique_companies,
+            unique_companies=values.country_total,
         )
 
     record.total_activities = values.total_activities
-    record.unique_companies = values.unique_companies
+    record.unique_companies = values.country_total
     record.replies = values.replies
     record.positive_replies = values.positive_replies
     record.meetings_booked = values.meetings_booked
@@ -294,27 +321,37 @@ def upsert_daily_outreach(
             OutreachCountry.outreach_daily_id == record.id,
         ),
     ).all()
-    for country in stored_countries:
-        session.delete(country)
-    session.flush()
+    stored_by_code = {
+        country.country_code: country for country in stored_countries
+    }
 
     for code, count in values.country_counts:
-        session.add(
-            OutreachCountry(
+        country = stored_by_code.pop(code, None)
+        if country is None:
+            country = OutreachCountry(
                 outreach_daily_id=record.id,
                 country_code=code,
                 companies_contacted=count,
-            ),
-        )
+            )
+        else:
+            country.companies_contacted = count
+        session.add(country)
+
+    for removed_country in stored_by_code.values():
+        session.delete(removed_country)
     return record
 
 
 __all__ = [
     "BLOCKER_OPTIONS",
+    "COUNTRY_CODES",
+    "COUNTRY_NAMES_BY_CODE",
     "COUNTRY_OPTIONS",
+    "CountryFormValue",
     "OutreachFormValues",
     "ValidatedOutreachValues",
     "current_local_date",
+    "country_rows_from_submission",
     "form_values_from_record",
     "get_daily_outreach",
     "get_recent_outreach",
