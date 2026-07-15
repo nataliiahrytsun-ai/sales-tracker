@@ -34,7 +34,10 @@ STYLESHEET_PATH = Path("app/static/css/app.css")
 
 def css_rule(css: str, selector: str) -> str:
     """Return declarations for one selector from a CSS source section."""
-    match = re.search(rf"{re.escape(selector)}\s*\{{(?P<body>[^}}]+)\}}", css)
+    match = re.search(
+        rf"(?m)^\s*{re.escape(selector)}\s*\{{(?P<body>[^}}]+)\}}",
+        css,
+    )
     assert match is not None
     return match.group("body")
 

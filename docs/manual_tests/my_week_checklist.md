@@ -1,0 +1,39 @@
+# Milestone 2 My Week: Manual Test Checklist
+
+Record each test as **Pass**, **Fail**, or **Blocked**.
+
+The browser runtime was intentionally not started. Authentication, ownership,
+week boundaries, aggregation, and progress calculations are covered by tests.
+
+| Test | Status | Evidence / next action |
+| --- | --- | --- |
+| Anonymous `/my-week` redirects to login | Pass | Focused integration coverage verifies the private route. |
+| Home opens My Week and retains Set weekly targets | Pass | Home integration coverage verifies both links. |
+| Current week displays Monday through Sunday | Pass | Deterministic coverage verifies 2026-07-13 through 2026-07-19. |
+| Outreach totals include both week boundaries | Pass | Monday and Sunday fixture records are included. |
+| Records before Monday or after Sunday are excluded | Pass | Focused aggregation coverage includes both outside-boundary cases. |
+| Other users' records and targets are excluded | Pass | Foreign data with deliberately large values does not affect results. |
+| Empty optional outreach counters count as zero | Pass | Monday fixture leaves optional counters empty without changing totals. |
+| Meetings held counts owned Meeting rows once | Pass | Focused coverage verifies two in-week meetings and excludes outside/foreign rows. |
+| Existing Weekly Targets continue across later weeks | Pass | Targets with older effective dates remain active in focused coverage. |
+| Actual, Target, Remaining, and percentage are correct | Pass | Focused coverage verifies all six comparisons. |
+| Actual above Target shows Remaining 0 and a capped bar | Pass | Meetings held renders 200% text with a 100% bar. |
+| Target 0 shows No target set without division | Pass | Neutral-state coverage verifies zero targets. |
+| Progress states use orange, amber, light-green, green, and neutral styles | Pass | Unit and structural coverage verify thresholds and CSS classes. |
+| Progress bars expose accessible values and labels | Pass | Template coverage verifies progressbar ARIA attributes and textual values. |
+| Empty week shows a clear message and six zero metrics | Pass | Focused empty-state coverage verifies both. |
+| Back to Home and Set weekly targets work | Pass | Both destinations are present in rendered HTML. |
+| Desktop/tablet card grid is readable | Blocked | Verify the two-column grid in a stable user-controlled browser. |
+| Mobile cards use one column without horizontal scrolling | Blocked | Verify around 375–376 px in a stable user-controlled browser. |
+
+## Automated Test Record
+
+- `.venv\Scripts\python.exe -m pytest tests\test_my_week.py tests\test_targets.py tests\test_auth.py -q --basetemp=.pytest-my-week`: **41 passed, 1 xfailed**.
+- `python -m pytest --basetemp=C:\pytest-sales-tracker`: **121 passed, 1 xfailed**.
+- `.venv\Scripts\python.exe -m compileall app tests`: **passed**.
+- The expected xfail is the existing documented copied-cookie logout limitation.
+
+## Unresolved Manual Checks
+
+Desktop, tablet, and mobile visual verification remain **Blocked** because the
+browser runtime was intentionally not used. Repeat these checks manually.

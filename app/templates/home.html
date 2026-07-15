@@ -46,7 +46,9 @@
         <p>Your personal Monday-to-Sunday activity summary, using only your own records.</p>
       </div>
       <div class="home-card-actions">
-        <button class="button button-secondary" type="button" disabled>Coming soon</button>
+        <a class="button button-primary home-action-button" href="{{ url_for('my_week_page') }}">
+          View My Week
+        </a>
         <a class="button button-secondary home-action-button" href="{{ url_for('targets_page') }}">
           Set weekly targets
         </a>

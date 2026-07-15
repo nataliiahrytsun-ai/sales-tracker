@@ -11,6 +11,7 @@ from app.routes.auth import router as auth_router
 from app.routes.health import router as health_router
 from app.routes.home import router as home_router
 from app.routes.meetings import router as meetings_router
+from app.routes.my_week import router as my_week_router
 from app.routes.outreach import router as outreach_router
 from app.routes.targets import router as targets_router
 
@@ -36,6 +37,7 @@ def create_app(application_settings: Settings | None = None) -> FastAPI:
     application.include_router(auth_router)
     application.include_router(home_router)
     application.include_router(meetings_router)
+    application.include_router(my_week_router)
     application.include_router(outreach_router)
     application.include_router(targets_router)
     return application

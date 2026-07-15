@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}My Week - Sales Tracker{% endblock %}
+
+{% block content %}
+  <section class="my-week-page" aria-labelledby="my-week-heading">
+    <div class="section-heading">
+      <p class="eyebrow">Personal weekly summary</p>
+      <h1 id="my-week-heading">My Week</h1>
+      <p>{{ summary.week_start.isoformat() }} to {{ summary.week_end.isoformat() }} &middot; Monday to Sunday.</p>
+      <div class="my-week-links">
+        <a class="back-link" href="{{ url_for('home') }}">Back to Home</a>
+        <a href="{{ url_for('targets_page') }}">Set weekly targets</a>
+      </div>
+    </div>
+
+    {% if not summary.has_activity %}
+      <div class="week-empty-state" role="status">
+        <h2>No activity recorded this week</h2>
+        <p>Your weekly totals will update when you record meetings or daily outreach.</p>
+      </div>
+    {% endif %}
+
+    <div class="week-metric-grid">
+      {% for metric in summary.metrics %}
+        <article
+          class="week-metric-card"
+          data-metric="{{ metric.key }}"
+          data-actual="{{ metric.actual }}"
+          data-target="{{ metric.target }}"
+          data-remaining="{{ metric.remaining }}"
+          data-percentage="{{ metric.percentage if metric.percentage is not none else 'none' }}"
+          data-progress-state="{{ metric.progress_state }}"
+          data-bar-percentage="{{ metric.bar_percentage }}"
+        >
+          <h2>{{ metric.label }}</h2>
+          {% if metric.target > 0 %}
+            <p
+              class="week-metric-primary"
+              aria-label="Actual {{ metric.actual }} of target {{ metric.target }}"
+            ><strong>{{ metric.actual }}</strong> of {{ metric.target }}</p>
+            <div class="week-metric-secondary">
+              {% if metric.actual > metric.target %}
+                <span>Goal exceeded by {{ metric.actual - metric.target }}</span>
+              {% else %}
+                <span>{{ metric.remaining }} remaining</span>
+              {% endif %}
+              <span class="week-metric-percentage">{{ metric.percentage_text }}</span>
+            </div>
+            <div
+              class="week-progress"
+              role="progressbar"
+              aria-label="{{ metric.label }}: actual {{ metric.actual }}, target {{ metric.target }}, remaining {{ metric.remaining }}, {{ metric.percentage_text }}"
+              aria-valuemin="0"
+              aria-valuemax="{{ metric.aria_max }}"
+              aria-valuenow="{{ metric.aria_value }}"
+            >
+              <span
+                class="week-progress-fill week-progress-fill-{{ metric.progress_state }}"
+                style="width: {{ metric.bar_percentage }}%"
+              ></span>
+            </div>
+          {% else %}
+            <p class="week-no-target">No target set</p>
+            <a class="week-target-link" href="{{ url_for('targets_page') }}">Set weekly targets</a>
+          {% endif %}
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

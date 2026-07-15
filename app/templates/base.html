@@ -12,7 +12,14 @@
   <body>
     <header class="site-header">
       <div class="shell header-content">
-        <a class="brand" href="{{ url_for('home') }}">Sales Tracker</a>
+        <div class="header-top-row">
+          <a class="brand" href="{{ url_for('home') }}">Sales Tracker</a>
+          {% if current_user is defined and current_user %}
+            <form class="header-logout" method="post" action="{{ url_for('logout') }}">
+              <button class="button button-secondary" type="submit">Logout</button>
+            </form>
+          {% endif %}
+        </div>
         {% if current_user is defined and current_user %}
           <nav class="user-nav" aria-label="User navigation">
             {% if not current_user.must_change_password %}
@@ -28,11 +35,6 @@
               {% if request.url.path == '/change-password' %}aria-current="page"{% endif %}
             >Change password</a>
             <span class="user-name">{{ current_user.name }}</span>
-            <form method="post" action="{{ url_for('logout') }}">
-              <button class="button button-secondary" type="submit">
-                Logout
-              </button>
-            </form>
           </nav>
         {% endif %}
       </div>

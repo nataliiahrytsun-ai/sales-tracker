@@ -41,7 +41,10 @@ STYLESHEET_PATH = Path("app/static/css/app.css")
 
 def css_rule(css: str, selector: str) -> str:
     """Return declarations for one selector from a CSS source section."""
-    match = re.search(rf"{re.escape(selector)}\s*\{{(?P<body>[^}}]+)\}}", css)
+    match = re.search(
+        rf"(?m)^\s*{re.escape(selector)}\s*\{{(?P<body>[^}}]+)\}}",
+        css,
+    )
     assert match is not None
     return match.group("body")
 
@@ -220,16 +223,18 @@ def test_authenticated_home_renders_scoped_actions(
             "View / edit meetings",
             "View / edit outreach",
             "Set weekly targets",
+            "View My Week",
         ):
             assert action in response.text
         assert response.text.count('class="action-card"') == 4
-        assert response.text.count(" disabled") == 2
-        assert response.text.count("Coming soon") == 2
+        assert response.text.count(" disabled") == 1
+        assert response.text.count("Coming soon") == 1
         assert 'href="http://testserver/meetings/new"' in response.text
         assert 'href="http://testserver/outreach/today"' in response.text
         assert 'href="http://testserver/meetings/recent"' in response.text
         assert 'href="http://testserver/outreach/recent"' in response.text
         assert 'href="http://testserver/targets"' in response.text
+        assert 'href="http://testserver/my-week"' in response.text
         assert response.text.count('href="http://testserver/meetings/recent"') == 1
         assert response.text.count('href="http://testserver/outreach/recent"') == 1
         assert 'href="http://testserver/change-password"' in response.text
@@ -246,6 +251,11 @@ def test_home_navigation_has_accessible_active_state() -> None:
     base_template = Path("app/templates/base.html").read_text(encoding="utf-8")
     mobile_css, _desktop_css = css.split("@media (min-width: 48rem)", 1)
     home_link = css_rule(mobile_css, ".header-home-link")
+    header_content = css_rule(mobile_css, ".header-content")
+    header_top_row = css_rule(mobile_css, ".header-top-row")
+    header_logout = css_rule(mobile_css, ".header-logout .button")
+    user_nav = css_rule(mobile_css, ".user-nav")
+    user_name = css_rule(mobile_css, ".user-name")
     active = css_rule(mobile_css, ".header-home-link-active")
     focus = css_rule(mobile_css, ".header-home-link:focus-visible")
     hover = css_rule(mobile_css, ".header-home-link-active:hover")
@@ -254,10 +264,15 @@ def test_home_navigation_has_accessible_active_state() -> None:
 
     assert "request.url.path == '/'" in base_template
     assert "header-home-link-active" in base_template
-    assert "min-height: 2.75rem" in home_link
-    assert "padding: 0.55rem 0.8rem" in home_link
+    assert "min-height: 2.5rem" in home_link
+    assert "padding: 0.45rem 0.65rem" in home_link
     assert "border-radius: 0.5rem" in home_link
     assert "text-decoration: none" in home_link
+    assert "display: grid" in header_content
+    assert "justify-content: space-between" in header_top_row
+    assert "min-height: 2.35rem" in header_logout
+    assert "flex-wrap: nowrap" in user_nav
+    assert "display: none" in user_name
     assert "background: #edf2ff" in active
     assert "background: #dfe7ff" in focus
     assert "color: #12337f" in focus
@@ -267,6 +282,9 @@ def test_home_navigation_has_accessible_active_state() -> None:
     assert "background: var(--background)" in inactive_hover
     assert "color: var(--primary-hover)" in inactive_hover
     assert "outline: 0.2rem solid var(--focus)" in keyboard_focus
+    assert "display: contents" in _desktop_css
+    assert "display: inline" in _desktop_css
+    assert "min-height: 2.75rem" in _desktop_css
 
 
 def test_home_navigation_is_active_only_on_home(
@@ -299,6 +317,7 @@ def test_home_navigation_is_active_only_on_home(
                 await client.get("/outreach/today"),
                 await client.get("/meetings/recent"),
                 await client.get("/outreach/recent"),
+                await client.get("/my-week"),
                 await client.get(f"/meetings/{meeting_id}/edit"),
                 await client.get(f"/outreach/{date.today().isoformat()}"),
             ]
@@ -361,7 +380,7 @@ def test_home_layout_and_actions_are_structurally_responsive() -> None:
     assert "line-height: 1.2" in action_button
     assert "min-height: 2.75rem" in shared_button
     assert home_template.count('class="action-card"') == 4
-    assert home_template.count("home-action-button") == 5
+    assert home_template.count("home-action-button") == 6
     assert "min-height: 2.75rem" in home_action_button
     assert "align-self: end" in home_action_button
     assert "padding: 0.45rem 0.875rem" in home_action_button
