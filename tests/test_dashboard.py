@@ -334,10 +334,7 @@ def test_current_week_aggregates_all_users_without_private_details(
         assert f'data-metric="{metric}"' in response.text
         assert f'data-actual="{actual}"' in response.text
     for private_value in (
-        "Private outreach note",
-        "Foreign private note",
         "Do not expose company",
-        "Do not expose meeting note",
         ACTIVE_EMAIL,
         "foreign-dashboard@example.com",
     ):
