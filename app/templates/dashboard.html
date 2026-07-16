@@ -123,6 +123,18 @@
             </div>
           </fieldset>
           <a class="dashboard-reset-filters" href="{{ url_for('dashboard_page') }}?period=current-week&amp;user_scope=all">Reset filters</a>
+          {% if export_urls %}
+            <details class="dashboard-export-dropdown">
+              <summary class="dashboard-export-trigger">
+                <span>Export</span>
+                <span class="dashboard-control-arrow" aria-hidden="true">&#9662;</span>
+              </summary>
+              <div class="dashboard-export-panel">
+                <a href="{{ export_urls.pipeline }}">Pipeline CSV</a>
+                <a href="{{ export_urls.outreach }}">Outreach CSV</a>
+              </div>
+            </details>
+          {% endif %}
         </div>
         {% if filter_error %}
           <p class="alert dashboard-filter-error" role="alert">{{ filter_error }}</p>

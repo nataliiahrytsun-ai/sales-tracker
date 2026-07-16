@@ -1051,7 +1051,13 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert "width: min(18rem, 100%)" not in tablet_css
     assert "margin-inline-start: auto" not in tablet_css
     assert ".dashboard-filter-bar" in css
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr)) auto" in css
+    assert (
+        "grid-template-columns: repeat(2, minmax(0, 1fr)) auto auto"
+        in css
+    )
+    assert 'class="dashboard-export-dropdown"' in template
+    assert "Pipeline CSV" in template
+    assert "Outreach CSV" in template
     assert "width: 100%" in tablet_css
     assert "grid-template-columns: minmax(0, 1fr)" in tablet_css
     assert "min-height: 2.75rem" in css

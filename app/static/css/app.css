@@ -641,7 +641,7 @@ textarea {
   display: grid;
   width: 100%;
   min-width: 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto auto;
   align-items: end;
   gap: 0.65rem 0.85rem;
 }
@@ -847,6 +847,61 @@ textarea {
   line-height: 1.5;
   text-decoration: none;
   white-space: nowrap;
+}
+
+.dashboard-export-dropdown {
+  position: relative;
+  min-width: 0;
+}
+
+.dashboard-export-trigger {
+  position: relative;
+  display: flex;
+  min-width: 7rem;
+  min-height: 2.75rem;
+  padding: 0.55rem 2.25rem 0.55rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  align-items: center;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.5;
+  cursor: pointer;
+  list-style: none;
+}
+
+.dashboard-export-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.dashboard-export-dropdown[open] .dashboard-control-arrow {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.dashboard-export-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  display: grid;
+  width: max-content;
+  min-width: 100%;
+  max-width: 18rem;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--surface);
+  box-shadow: 0 0.75rem 1.75rem rgb(23 32 51 / 18%);
+  gap: 0.2rem;
+}
+
+.dashboard-export-panel a {
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.35rem;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  text-decoration: none;
 }
 
 .dashboard-custom-applied {
@@ -1792,6 +1847,9 @@ textarea {
   .dashboard-users-panel,
   .dashboard-user-options,
   .dashboard-reset-filters,
+  .dashboard-export-dropdown,
+  .dashboard-export-trigger,
+  .dashboard-export-panel,
   .dashboard-metric-grid,
   .dashboard-metric-card,
   .dashboard-activity-card,
@@ -1835,6 +1893,12 @@ textarea {
 
   .dashboard-edit-dates {
     grid-column: 1;
+  }
+
+  .dashboard-export-panel {
+    right: auto;
+    left: 0;
+    width: 100%;
   }
 
   .dashboard-period-field,
@@ -2033,6 +2097,11 @@ textarea {
 
   .dashboard-reset-filters {
     grid-column: 3;
+    grid-row: 1;
+  }
+
+  .dashboard-export-dropdown {
+    grid-column: 4;
     grid-row: 1;
   }
 

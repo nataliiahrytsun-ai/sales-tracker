@@ -3,6 +3,7 @@
 from datetime import date
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, Response
@@ -16,10 +17,8 @@ from app.services.dashboard import (
     CURRENT_WEEK,
     PERIOD_OPTIONS,
     USER_SCOPE_ALL,
-    get_dashboard_user_options,
     get_dashboard_summary,
-    normalize_dashboard_user_filter,
-    resolve_dashboard_filter,
+    resolve_dashboard_filters,
 )
 from app.services.outreach import current_local_date
 
@@ -46,19 +45,19 @@ def dashboard_page(
     if reset:
         period, from_value, to_value = CURRENT_WEEK, "", ""
         user_scope, user_id = USER_SCOPE_ALL, []
-    user_options = get_dashboard_user_options(session)
-    selected_users, user_error = normalize_dashboard_user_filter(
-        user_scope=user_scope,
-        user_ids=user_id or [],
-        existing_user_ids={option.user_id for option in user_options},
-    )
-    selected_period, period_error = resolve_dashboard_filter(
+    resolved = resolve_dashboard_filters(
+        session,
         today=today,
         period=period,
         from_value=from_value,
         to_value=to_value,
+        user_scope=user_scope,
+        user_ids=user_id or [],
     )
-    error = period_error or user_error
+    user_options = resolved.user_options
+    selected_users = resolved.user_filter
+    selected_period = resolved.selected_period
+    error = resolved.error
     if selected_users is None or selected_users.includes_all:
         user_filter_summary = "All users"
     elif not selected_users.user_ids:
@@ -81,6 +80,28 @@ def dashboard_page(
             user_filter=selected_users,
         )
     )
+    export_urls: dict[str, str] = {}
+    if selected_period is not None and selected_users is not None:
+        export_params: list[tuple[str, str | int]] = [
+            ("period", selected_period.key),
+            ("user_scope", selected_users.scope),
+        ]
+        if selected_period.key == "custom":
+            export_params.extend(
+                (
+                    ("from", selected_period.start_date.isoformat()),
+                    ("to", selected_period.end_date.isoformat()),
+                ),
+            )
+        export_params.extend(
+            ("user_id", selected_user_id)
+            for selected_user_id in selected_users.user_ids
+        )
+        query = urlencode(export_params)
+        export_urls = {
+            "pipeline": f"{request.url_for('export_pipeline_csv')}?{query}",
+            "outreach": f"{request.url_for('export_outreach_csv')}?{query}",
+        }
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -101,6 +122,7 @@ def dashboard_page(
             ),
             "user_filter_summary": user_filter_summary,
             "filter_error": error,
+            "export_urls": export_urls,
         },
         status_code=400 if error else 200,
     )

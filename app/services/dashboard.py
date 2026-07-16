@@ -82,6 +82,16 @@ class DashboardUserFilter:
 
 
 @dataclass(frozen=True)
+class ResolvedDashboardFilters:
+    """Shared validated Dashboard filters for HTML and export routes."""
+
+    selected_period: DashboardFilter | None
+    user_filter: DashboardUserFilter | None
+    user_options: tuple[DashboardUserOption, ...]
+    error: str | None
+
+
+@dataclass(frozen=True)
 class ActivityBucket:
     """Separate outreach and meeting values for one chart category."""
 
@@ -221,6 +231,37 @@ def normalize_dashboard_user_filter(
             user_ids=tuple(sorted(parsed_ids)),
         ),
         None,
+    )
+
+
+def resolve_dashboard_filters(
+    session: Session,
+    *,
+    today: date,
+    period: str,
+    from_value: str = "",
+    to_value: str = "",
+    user_scope: str | None = None,
+    user_ids: list[str] | tuple[str, ...] = (),
+) -> ResolvedDashboardFilters:
+    """Resolve the complete shared Dashboard/export GET filter contract."""
+    user_options = get_dashboard_user_options(session)
+    user_filter, user_error = normalize_dashboard_user_filter(
+        user_scope=user_scope,
+        user_ids=user_ids,
+        existing_user_ids={option.user_id for option in user_options},
+    )
+    selected_period, period_error = resolve_dashboard_filter(
+        today=today,
+        period=period,
+        from_value=from_value,
+        to_value=to_value,
+    )
+    return ResolvedDashboardFilters(
+        selected_period=selected_period,
+        user_filter=user_filter,
+        user_options=user_options,
+        error=period_error or user_error,
     )
 
 
@@ -469,10 +510,12 @@ __all__ = [
     "DashboardUserOption",
     "PERIOD_OPTIONS",
     "PREVIOUS_WEEK",
+    "ResolvedDashboardFilters",
     "USER_SCOPE_ALL",
     "USER_SCOPE_SELECTED",
     "get_dashboard_user_options",
     "get_dashboard_summary",
     "normalize_dashboard_user_filter",
     "resolve_dashboard_filter",
+    "resolve_dashboard_filters",
 ]
