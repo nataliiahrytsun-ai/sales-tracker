@@ -226,8 +226,9 @@ class Target(SQLModel, table=True):
     __tablename__ = "targets"
     __table_args__ = (
         Index(
-            "uq_targets_user_metric",
+            "uq_targets_user_week_metric",
             "user_id",
+            "week_start",
             "metric_name",
             unique=True,
         ),
@@ -237,6 +238,7 @@ class Target(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id")
     metric_name: str
     target_value: float
+    week_start: date
     effective_from: date
     effective_until: date | None = None
 
