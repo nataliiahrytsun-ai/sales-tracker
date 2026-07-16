@@ -33,8 +33,10 @@ An authenticated user can:
 ## Acceptance Criteria
 
 * Meeting entry supports the three required selections
-* Outreach entry supports counters and country totals
-* Country-total mismatch shows a warning but allows saving
+* Outreach entry supports counters and company counts by country
+* Companies contacted is calculated automatically as the sum of country company counts and is not entered separately
+* The application does not collect company names or identifiers for outreach and does not verify uniqueness or perform deduplication
+* The internal `unique_companies` field may be retained for backward compatibility; its user-facing meaning is the automatically calculated Companies contacted metric
 * Only one outreach record exists per user and date
 * Missing mood remains empty
 * Data is stored correctly and protected by authorization checks
@@ -67,7 +69,7 @@ Record each test as:
 - A recent meeting can be edited and deleted.
 - Today's outreach record can be created.
 - Today's outreach record can be updated without creating a duplicate.
-- Country-total mismatch shows a warning and still allows saving.
+- Companies contacted equals the sum of the submitted country company counts and is not entered separately.
 - Optional mood, blocker, company, country, next-step date, and note fields may be empty.
 - Main data-entry screens are usable on a mobile-sized viewport.
   
@@ -255,7 +257,7 @@ Record each test with one of these statuses:
 - A recent meeting can be deleted or undone according to the implemented behavior.
 - A daily outreach record can be created.
 - The same daily outreach record can be updated without creating a duplicate.
-- Country-total mismatch shows a warning but allows saving.
+- Companies contacted equals the sum of the submitted country company counts and is not entered separately.
 - The current week is visible immediately after opening the dashboard.
 - Activity, progress, engagement, and sentiment are displayed separately.
 - Countries and common blockers are visible.

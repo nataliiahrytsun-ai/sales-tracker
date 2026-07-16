@@ -40,7 +40,7 @@ started because prior visual checks repeatedly closed Codex.
 | Duplicate country protection | Pass | Server validation and the database unique constraint both reject a repeated country code for one daily record. |
 | Server-derived companies contacted | Pass | Focused tests verify the saved value equals the country sum, including add/change/remove and an empty breakdown. |
 | Forged legacy company-total value | Pass | A submitted legacy `unique_companies` value is ignored by the server. |
-| Obsolete mismatch warning removed | Pass | Focused tests verify the old mismatch warning is absent because the totals cannot diverge. |
+| No separate aggregate input or mismatch warning | Pass | Companies contacted is derived from the country breakdown, so the totals cannot diverge. |
 | Replies relationship validation | Pass | Focused tests cover positive replies below, equal to, above, and present without replies received. Invalid submissions are not saved. |
 | Forged ownership and date fields | Pass | Submitted `user_id` and `activity_date` values were ignored; ownership and date came from the authenticated session and application-local date. |
 | Clean-database migrations | Pass | Revisions `20260714_0001` through `20260715_0004` create the product tables and both required outreach uniqueness constraints. |
