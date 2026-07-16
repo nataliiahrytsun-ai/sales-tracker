@@ -122,7 +122,7 @@
               </div>
             </div>
           </fieldset>
-          <a class="dashboard-reset-filters" href="{{ url_for('dashboard_page') }}?period=current-week&amp;user_scope=all">Reset filters</a>
+          <a class="dashboard-reset-filters" href="{{ url_for('dashboard_page') }}?period=current-week&amp;user_scope=all&amp;comment_group=employee">Reset filters</a>
           {% if export_urls %}
             <details class="dashboard-export-dropdown">
               <summary class="dashboard-export-trigger">
@@ -324,6 +324,57 @@
           {% else %}<p class="dashboard-card-note">No Daily outreach mood for this period.</p>{% endif %}
           <p class="dashboard-card-note dashboard-mood-note">Missing mood is excluded, not treated as neutral.</p>
         </article>
+      </section>
+
+      <section class="dashboard-analysis-card dashboard-comments" aria-labelledby="comments-overview-heading">
+        <div class="report-section-heading">
+          <h2 id="comments-overview-heading">Comments overview</h2>
+          <nav class="dashboard-comment-grouping" aria-label="Group comments">
+            <span>Group</span>
+            {% for value, label in [('employee', 'By employee'), ('date', 'By date'), ('source', 'By source')] %}
+              <a
+                class="dashboard-group-button{% if comment_grouping == value %} is-active{% endif %}"
+                href="{{ comment_group_urls[value] }}"
+                {% if comment_grouping == value %}aria-current="true"{% endif %}
+              >{{ label }}</a>
+            {% endfor %}
+          </nav>
+        </div>
+        {% if comment_groups %}
+          <div class="dashboard-comment-groups">
+            {% for group in comment_groups %}
+              <section class="dashboard-comment-group" aria-labelledby="comment-group-{{ loop.index }}">
+                <h3 id="comment-group-{{ loop.index }}">{{ group.label }}</h3>
+                <div class="dashboard-table-wrap">
+                  <table class="dashboard-data-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Employee</th>
+                        <th scope="col">Source</th>
+                        <th scope="col">Outcome</th>
+                        <th scope="col">Comment</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for item in group.comments %}
+                        <tr data-comment-source="{{ item.source_type | lower | replace(' ', '-') }}">
+                          <td>{{ item.date.isoformat() }}</td>
+                          <td>{{ item.employee }}</td>
+                          <td>{{ item.source_type }}</td>
+                          <td>{{ item.outcome or '?' }}</td>
+                          <td>{{ item.comment }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="dashboard-card-note">No comments for this period.</p>
+        {% endif %}
       </section>
       </div>
     {% endif %}

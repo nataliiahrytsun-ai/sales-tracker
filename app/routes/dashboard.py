@@ -18,6 +18,7 @@ from app.services.dashboard import (
     PERIOD_OPTIONS,
     USER_SCOPE_ALL,
     get_dashboard_summary,
+    group_dashboard_comments,
     resolve_dashboard_filters,
 )
 from app.services.outreach import current_local_date
@@ -40,11 +41,13 @@ def dashboard_page(
     user_scope: Annotated[str | None, Query()] = None,
     user_id: Annotated[list[str] | None, Query()] = None,
     reset: Annotated[bool, Query()] = False,
+    comment_group: Annotated[str, Query()] = "employee",
 ) -> Response:
     """Render privacy-safe aggregates for the selected company period."""
     if reset:
         period, from_value, to_value = CURRENT_WEEK, "", ""
         user_scope, user_id = USER_SCOPE_ALL, []
+        comment_group = "employee"
     resolved = resolve_dashboard_filters(
         session,
         today=today,
@@ -80,6 +83,40 @@ def dashboard_page(
             user_filter=selected_users,
         )
     )
+    comment_grouping = (
+        comment_group
+        if comment_group in {"employee", "date", "source"}
+        else "employee"
+    )
+    comment_groups = (
+        group_dashboard_comments(summary.comments, comment_grouping)
+        if summary is not None
+        else ()
+    )
+    comment_group_urls: dict[str, str] = {}
+    if selected_period is not None and selected_users is not None:
+        comment_params: list[tuple[str, str | int]] = [
+            ("period", selected_period.key),
+            ("user_scope", selected_users.scope),
+        ]
+        if selected_period.key == "custom":
+            comment_params.extend(
+                (
+                    ("from", selected_period.start_date.isoformat()),
+                    ("to", selected_period.end_date.isoformat()),
+                ),
+            )
+        comment_params.extend(
+            ("user_id", selected_user_id)
+            for selected_user_id in selected_users.user_ids
+        )
+        comment_group_urls = {
+            grouping: (
+                f"{request.url_for('dashboard_page')}?"
+                f"{urlencode([*comment_params, ('comment_group', grouping)])}"
+            )
+            for grouping in ("employee", "date", "source")
+        }
     export_urls: dict[str, str] = {}
     if selected_period is not None and selected_users is not None:
         export_params: list[tuple[str, str | int]] = [
@@ -123,6 +160,9 @@ def dashboard_page(
             "user_filter_summary": user_filter_summary,
             "filter_error": error,
             "export_urls": export_urls,
+            "comment_grouping": comment_grouping,
+            "comment_groups": comment_groups,
+            "comment_group_urls": comment_group_urls,
         },
         status_code=400 if error else 200,
     )

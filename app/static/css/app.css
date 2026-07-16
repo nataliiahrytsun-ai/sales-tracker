@@ -1052,6 +1052,86 @@ textarea {
   margin-bottom: 0;
 }
 
+.dashboard-comments {
+  margin-top: 0.75rem;
+}
+
+.dashboard-comment-grouping {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.dashboard-group-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.dashboard-group-button:hover,
+.dashboard-group-button:focus-visible,
+.dashboard-group-button.is-active {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.dashboard-group-button.is-active {
+  background: var(--accent-soft);
+}
+
+.dashboard-comment-groups,
+.dashboard-comment-group {
+  display: grid;
+  min-width: 0;
+  gap: 0.65rem;
+}
+
+.dashboard-comment-group + .dashboard-comment-group {
+  margin-top: 0.5rem;
+}
+
+.dashboard-comment-group h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dashboard-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.dashboard-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.dashboard-data-table th,
+.dashboard-data-table td {
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.dashboard-data-table th {
+  color: var(--muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .dashboard-card-note {
   margin-block: 0.2rem 0.45rem;
   font-size: 0.92rem;

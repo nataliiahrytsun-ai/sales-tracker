@@ -122,6 +122,25 @@ class BreakdownItem:
 
 
 @dataclass(frozen=True)
+class DashboardComment:
+    """One non-empty comment from an existing activity note field."""
+
+    date: date
+    employee: str
+    source_type: str
+    outcome: str | None
+    comment: str
+
+
+@dataclass(frozen=True)
+class CommentGroup:
+    """One presentation-only grouping of dashboard comments."""
+
+    label: str
+    comments: tuple[DashboardComment, ...]
+
+
+@dataclass(frozen=True)
 class DashboardSummary:
     """All privacy-safe company aggregates for one selected period."""
 
@@ -131,6 +150,7 @@ class DashboardSummary:
     countries: tuple[BreakdownItem, ...]
     blockers: tuple[BreakdownItem, ...]
     moods: tuple[BreakdownItem, ...]
+    comments: tuple[DashboardComment, ...]
     has_activity: bool
     has_selected_users: bool
 
@@ -305,6 +325,91 @@ def _company_targets(
     for target in session.exec(query).all():
         totals[target.metric_name] += int(target.target_value)
     return totals
+
+
+def _user_names(session: Session, user_ids: set[int]) -> dict[int, str]:
+    """Load public employee names in one query."""
+    if not user_ids:
+        return {}
+    return {
+        user.id: user.name
+        for user in session.exec(select(User).where(User.id.in_(user_ids))).all()
+        if user.id is not None
+    }
+
+
+def _dashboard_comments(
+    session: Session,
+    outreach: list[DailyOutreach],
+    meetings: list[PipelineMeeting],
+) -> tuple[DashboardComment, ...]:
+    """Build comments only from the two real optional note fields."""
+    user_names = _user_names(
+        session,
+        {record.user_id for record in outreach}
+        | {record.user_id for record in meetings},
+    )
+    comments: list[DashboardComment] = []
+    for meeting in meetings:
+        note = (meeting.note or "").strip()
+        if note:
+            comments.append(
+                DashboardComment(
+                    date=_local_meeting_date(meeting),
+                    employee=user_names.get(meeting.user_id, "Unknown user"),
+                    source_type="Meeting",
+                    outcome=meeting.outcome.value,
+                    comment=note,
+                ),
+            )
+    for record in outreach:
+        note = (record.note or "").strip()
+        if note:
+            comments.append(
+                DashboardComment(
+                    date=record.activity_date,
+                    employee=user_names.get(record.user_id, "Unknown user"),
+                    source_type="Daily Outreach",
+                    outcome=None,
+                    comment=note,
+                ),
+            )
+    return tuple(
+        sorted(
+            comments,
+            key=lambda item: (
+                -item.date.toordinal(),
+                item.employee.casefold(),
+                item.source_type,
+                item.comment,
+            ),
+        ),
+    )
+
+
+def group_dashboard_comments(
+    comments: tuple[DashboardComment, ...],
+    grouping: str,
+) -> tuple[CommentGroup, ...]:
+    """Group a fixed comment set without changing its membership."""
+    key_functions = {
+        "employee": lambda item: item.employee,
+        "date": lambda item: item.date.isoformat(),
+        "source": lambda item: item.source_type,
+    }
+    key_function = key_functions[grouping]
+    grouped: dict[str, list[DashboardComment]] = {}
+    for comment in comments:
+        grouped.setdefault(key_function(comment), []).append(comment)
+    labels = sorted(
+        grouped,
+        key=(lambda label: label if grouping == "date" else label.casefold()),
+        reverse=grouping == "date",
+    )
+    return tuple(
+        CommentGroup(label=label, comments=tuple(grouped[label]))
+        for label in labels
+    )
 
 
 def _local_meeting_date(meeting: PipelineMeeting) -> date:
@@ -491,6 +596,7 @@ def get_dashboard_summary(
         countries=_country_breakdown(session, outreach),
         blockers=_relative_breakdown(blockers),
         moods=_mood_breakdown(outreach),
+        comments=_dashboard_comments(session, outreach, meetings),
         has_activity=bool(outreach or meetings),
         has_selected_users=(
             user_filter is None
@@ -504,6 +610,7 @@ __all__ = [
     "CURRENT_MONTH",
     "CURRENT_WEEK",
     "CUSTOM_RANGE",
+    "DashboardComment",
     "DashboardFilter",
     "DashboardSummary",
     "DashboardUserFilter",
@@ -515,6 +622,7 @@ __all__ = [
     "USER_SCOPE_SELECTED",
     "get_dashboard_user_options",
     "get_dashboard_summary",
+    "group_dashboard_comments",
     "normalize_dashboard_user_filter",
     "resolve_dashboard_filter",
     "resolve_dashboard_filters",
