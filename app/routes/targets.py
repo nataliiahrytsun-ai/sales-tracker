@@ -130,8 +130,16 @@ def save_targets(
         meetings_booked=meetings_booked,
         meetings_held=meetings_held,
     )
+    selected_week, week_error = resolve_target_week(week, today=today)
     validated, errors = validate_target_form(values)
-    if validated is None:
+    if week_error:
+        errors["week"] = week_error
+    current_week_start, _ = current_week_bounds(today)
+    if selected_week is not None and selected_week.start_date < current_week_start:
+        errors["form"] = "Past weekly targets are read-only."
+    if validated is None or errors:
+        fallback_week, _ = resolve_target_week(None, today=today)
+        assert fallback_week is not None
         return templates.TemplateResponse(
             request=request,
             name="targets.html",
