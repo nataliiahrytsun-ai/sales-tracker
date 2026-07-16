@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Generator
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 import re
 
@@ -41,7 +41,9 @@ from app.services.targets import TARGET_FIELDS, TARGET_METRICS
 ACTIVE_EMAIL = "dashboard-user@example.com"
 TEST_PASSWORD = "dashboard-test-password"
 TEST_DATE = date(2026, 7, 15)
-TARGET_DECISION_NOTICE = "Targets are currently shown only for Current week."
+TARGET_CALCULATION_NOTICE = (
+    "Targets are calculated from the weekly goals that overlap the selected period."
+)
 
 
 def add_outreach(
@@ -216,6 +218,16 @@ def dashboard_application(
                         effective_until=date(2026, 7, 19),
                     ),
                 )
+                session.add(
+                    Target(
+                        user_id=user_id,
+                        metric_name=metric,
+                        target_value=7 if user_id == first.id else 9,
+                        week_start=date(2026, 7, 6),
+                        effective_from=date(2026, 7, 6),
+                        effective_until=date(2026, 7, 12),
+                    ),
+                )
         session.commit()
         first_id, second_id = first.id, second.id
 
@@ -273,7 +285,7 @@ def assert_empty_selected_dashboard(response: httpx.Response) -> None:
     """Assert a selected scope with no valid users cannot expose aggregates."""
     assert response.status_code == 200
     assert "Select at least one user to view data." in response.text
-    assert TARGET_DECISION_NOTICE not in response.text
+    assert TARGET_CALCULATION_NOTICE not in response.text
     assert 'data-users-summary>Select users</span>' in response.text
     assert response.text.count('class="week-metric-card dashboard-metric-card"') == 6
     for metric, _label in TARGET_FIELDS:
@@ -284,7 +296,8 @@ def assert_empty_selected_dashboard(response: httpx.Response) -> None:
         assert 'data-percentage="none"' in card
         assert 'class="metric-remaining"' not in card
         assert 'class="week-metric-percentage"' not in card
-    assert 'role="progressbar"' not in response.text
+    assert response.text.count('role="progressbar"') == 6
+    assert response.text.count("No target") >= 6
     assert "No activity to display." in response.text
     assert 'class="dashboard-chart-group"' not in response.text
     assert 'data-country=' not in response.text
@@ -380,8 +393,8 @@ def test_current_week_company_targets_are_summed_and_progress_is_safe(
     assert "Goal exceeded by 26" in response.text
     assert 'data-metric="companies_contacted"' in response.text
     assert 'data-target="0"' in response.text
-    assert "No target set" in response.text
-    assert TARGET_DECISION_NOTICE not in response.text
+    assert "No target" in response.text
+    assert TARGET_CALCULATION_NOTICE not in response.text
 
 
 def test_selected_user_filters_actuals_meetings_and_target(
@@ -428,7 +441,7 @@ def test_multiple_and_duplicate_user_ids_use_each_user_once(
     assert 'data-target="2"' in metric_card(duplicate, "total_activities")
 
 
-def test_period_and_selected_users_filter_together_without_historical_targets(
+def test_period_and_selected_users_filter_together_with_prorated_targets(
     dashboard_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
     application, _, first_id, second_id = dashboard_application
@@ -449,13 +462,16 @@ def test_period_and_selected_users_filter_together_without_historical_targets(
     )
 
     assert 'data-actual="7"' in metric_card(previous, "total_activities")
+    assert 'data-target="7"' in metric_card(previous, "total_activities")
     assert 'data-actual="29"' in metric_card(month, "total_activities")
+    assert 'data-target="11"' in metric_card(month, "total_activities")
     assert 'data-actual="20"' in metric_card(custom, "total_activities")
+    assert 'data-target="0.3"' in metric_card(custom, "total_activities")
     for response in (previous, month, custom):
         assert response.status_code == 200
-        assert TARGET_DECISION_NOTICE in response.text
+        assert TARGET_CALCULATION_NOTICE in response.text
         assert "Select at least one user to view data." not in response.text
-        assert 'role="progressbar"' not in response.text
+        assert response.text.count('role="progressbar"') == 6
 
 
 def test_unknown_and_malformed_user_ids_are_safe(
@@ -833,7 +849,7 @@ def test_dashboard_preset_boundaries(
     assert (selected.start_date, selected.end_date) == (expected_start, expected_end)
 
 
-def test_previous_week_and_month_filter_actuals_without_target_comparison(
+def test_previous_week_and_month_use_saved_and_prorated_targets(
     dashboard_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
     application, _, _, _ = dashboard_application
@@ -841,13 +857,199 @@ def test_previous_week_and_month_filter_actuals_without_target_comparison(
     assert 'data-metric="total_activities"' in previous.text
     assert 'data-actual="16"' in previous.text
     assert 'data-actual="19"' not in previous.text
-    assert TARGET_DECISION_NOTICE in previous.text
-    assert 'role="progressbar"' not in previous.text
+    assert 'data-target="16"' in metric_card(previous, "total_activities")
+    assert 'data-percentage="100"' in metric_card(previous, "total_activities")
+    assert TARGET_CALCULATION_NOTICE in previous.text
+    assert previous.text.count('role="progressbar"') == 6
 
     month = get_dashboard(application, "/dashboard?period=current-month")
     assert 'data-metric="total_activities"' in month.text
     assert 'data-actual="49"' in month.text
     assert 'data-actual="148"' not in month.text
+    assert 'data-target="20"' in metric_card(month, "total_activities")
+    assert 'data-percentage="245"' in metric_card(month, "total_activities")
+    assert "Goal exceeded by 29" in metric_card(month, "total_activities")
+
+
+def test_custom_targets_prorate_one_and_multiple_overlapping_weeks(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, _, _, _ = dashboard_application
+    one_day = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-07-13&to=2026-07-13",
+    )
+    two_weeks = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-07-12&to=2026-07-13",
+    )
+
+    one_day_card = metric_card(one_day, "total_activities")
+    assert 'data-target="0.6"' in one_day_card
+    assert 'data-percentage="1750"' in one_day_card
+    assert "Goal exceeded by 9.4" in one_day_card
+
+    two_week_card = metric_card(two_weeks, "total_activities")
+    assert 'data-target="2.9"' in two_week_card
+    assert 'data-percentage="665"' in two_week_card
+    assert "Goal exceeded by 16.1" in two_week_card
+
+
+def test_month_prorates_partial_first_and_last_weeks(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_id, _ = dashboard_application
+    with Session(engine) as session:
+        session.add(
+            Target(
+                user_id=first_id,
+                metric_name="total_activities",
+                target_value=14,
+                week_start=date(2026, 6, 29),
+                effective_from=date(2026, 6, 29),
+                effective_until=date(2026, 7, 5),
+            ),
+        )
+        session.add(
+            Target(
+                user_id=first_id,
+                metric_name="total_activities",
+                target_value=21,
+                week_start=date(2026, 7, 27),
+                effective_from=date(2026, 7, 27),
+                effective_until=date(2026, 8, 2),
+            ),
+        )
+        session.commit()
+
+    response = get_dashboard(
+        application,
+        f"/dashboard?period=current-month&user_scope=selected&user_id={first_id}",
+    )
+    card = metric_card(response, "total_activities")
+    # 14 * 5/7 + 7 + 2 + 21 * 5/7 = 34.
+    assert 'data-target="34"' in card
+    assert 'data-actual="20"' in card
+    assert 'data-remaining="14"' in card
+    assert 'data-percentage="59"' in card
+    assert "14 remaining" in card
+
+
+def test_proration_crosses_month_and_iso_year_boundaries(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_id, _ = dashboard_application
+    with Session(engine) as session:
+        for week_start in (date(2025, 12, 29), date(2026, 6, 29)):
+            session.add(
+                Target(
+                    user_id=first_id,
+                    metric_name="total_activities",
+                    target_value=14,
+                    week_start=week_start,
+                    effective_from=week_start,
+                    effective_until=week_start + timedelta(days=6),
+                ),
+            )
+        session.commit()
+
+    iso_year = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2025-12-31&to=2026-01-02"
+        f"&user_scope=selected&user_id={first_id}",
+    )
+    month_boundary = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-06-30&to=2026-07-01"
+        f"&user_scope=selected&user_id={first_id}",
+    )
+    assert 'data-target="6"' in metric_card(iso_year, "total_activities")
+    assert 'data-target="4"' in metric_card(month_boundary, "total_activities")
+    assert 'data-actual="102"' in metric_card(
+        month_boundary,
+        "total_activities",
+    )
+
+
+def test_user_without_target_does_not_inherit_another_users_target(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_id, _ = dashboard_application
+    with Session(engine) as session:
+        no_target_user = User(
+            name="No Target User",
+            email="no-target@example.com",
+            password_hash=hash_password(TEST_PASSWORD),
+        )
+        session.add(no_target_user)
+        session.flush()
+        assert no_target_user.id is not None
+        no_target_id = no_target_user.id
+        add_outreach(
+            session,
+            user_id=no_target_id,
+            activity_date=date(2026, 7, 15),
+            total=11,
+            companies=1,
+        )
+        session.commit()
+
+    only_no_target = get_dashboard(
+        application,
+        f"/dashboard?user_scope=selected&user_id={no_target_id}",
+    )
+    with_target = get_dashboard(
+        application,
+        "/dashboard?user_scope=selected"
+        f"&user_id={first_id}&user_id={no_target_id}",
+    )
+    all_users = get_dashboard(application)
+
+    assert 'data-target="0"' in metric_card(only_no_target, "total_activities")
+    assert 'data-actual="11"' in metric_card(only_no_target, "total_activities")
+    assert "No target" in metric_card(only_no_target, "total_activities")
+    assert 'data-target="2"' in metric_card(with_target, "total_activities")
+    assert 'data-actual="21"' in metric_card(with_target, "total_activities")
+    assert 'data-target="4"' in metric_card(all_users, "total_activities")
+    assert 'data-actual="41"' in metric_card(all_users, "total_activities")
+
+
+def test_prorated_remaining_and_zero_target_progress_states(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_id, _ = dashboard_application
+    with Session(engine) as session:
+        session.add(
+            Target(
+                user_id=first_id,
+                metric_name="total_activities",
+                target_value=14,
+                week_start=date(2026, 6, 29),
+                effective_from=date(2026, 6, 29),
+                effective_until=date(2026, 7, 5),
+            ),
+        )
+        session.commit()
+
+    remaining = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-07-02&to=2026-07-02"
+        f"&user_scope=selected&user_id={first_id}",
+    )
+    remaining_card = metric_card(remaining, "total_activities")
+    assert 'data-target="2"' in remaining_card
+    assert 'data-remaining="2"' in remaining_card
+    assert 'data-percentage="0"' in remaining_card
+    assert 'data-bar-percentage="0"' in remaining_card
+    assert "2 remaining" in remaining_card
+
+    zero_target = get_dashboard(application)
+    zero_card = metric_card(zero_target, "companies_contacted")
+    assert 'data-target="0"' in zero_card
+    assert 'data-percentage="none"' in zero_card
+    assert 'data-progress-state="neutral"' in zero_card
+    assert 'data-bar-percentage="0"' in zero_card
+    assert "No target" in zero_card
 
 
 def test_custom_range_and_validation_preserve_dates(
@@ -861,7 +1063,8 @@ def test_custom_range_and_validation_preserve_dates(
     assert custom.status_code == 200
     assert custom.text.count("1 Jul – 1 Jul 2026") == 1
     assert 'data-actual="3"' in custom.text
-    assert TARGET_DECISION_NOTICE in custom.text
+    assert TARGET_CALCULATION_NOTICE in custom.text
+    assert 'data-target="0"' in metric_card(custom, "total_activities")
     assert 'data-custom-applied="true"' in custom.text
     assert "Edit dates" in custom.text
     custom_dates_tag = re.search(

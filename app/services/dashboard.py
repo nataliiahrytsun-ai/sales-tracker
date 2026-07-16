@@ -4,6 +4,7 @@ from calendar import monthrange
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 from math import ceil
 
 from sqlmodel import Session, select
@@ -19,7 +20,6 @@ from app.models import (
 )
 from app.services.activity_metrics import aggregate_activity_actuals
 from app.services.meetings import meeting_date_bounds
-from app.services.my_week import WeekMetric, build_week_metric
 from app.services.targets import TARGET_FIELDS, TARGET_METRICS, current_week_bounds
 
 CURRENT_WEEK = "current-week"
@@ -141,12 +141,100 @@ class CommentGroup:
     comments: tuple[DashboardComment, ...]
 
 
+def _display_decimal(value: Decimal) -> str:
+    """Format an aggregate target compactly without changing its precision."""
+    if value == value.to_integral_value():
+        return str(int(value))
+    rounded = value.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    return format(rounded, "f").rstrip("0").rstrip(".")
+
+
+@dataclass(frozen=True)
+class DashboardMetric:
+    """One exact-period actual compared with prorated weekly targets."""
+
+    key: str
+    label: str
+    actual: int
+    target: Decimal
+    remaining: Decimal
+    exceeded_by: Decimal
+    percentage: int | None
+    bar_percentage: int
+    progress_state: str
+
+    @property
+    def target_text(self) -> str:
+        return _display_decimal(self.target)
+
+    @property
+    def remaining_text(self) -> str:
+        return _display_decimal(self.remaining)
+
+    @property
+    def exceeded_by_text(self) -> str:
+        return _display_decimal(self.exceeded_by)
+
+    @property
+    def percentage_text(self) -> str:
+        return "No target" if self.percentage is None else f"{self.percentage}%"
+
+
+def _build_dashboard_metric(
+    *,
+    key: str,
+    label: str,
+    actual: int,
+    target: Decimal,
+) -> DashboardMetric:
+    """Build safe display values while retaining the exact prorated target."""
+    actual_decimal = Decimal(actual)
+    remaining = max(target - actual_decimal, Decimal(0))
+    exceeded_by = max(actual_decimal - target, Decimal(0))
+    if target == 0:
+        return DashboardMetric(
+            key=key,
+            label=label,
+            actual=actual,
+            target=target,
+            remaining=remaining,
+            exceeded_by=exceeded_by,
+            percentage=None,
+            bar_percentage=0,
+            progress_state="neutral",
+        )
+
+    ratio = actual_decimal / target
+    percentage = int(
+        (ratio * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP),
+    )
+    if ratio < Decimal("0.5"):
+        progress_state = "orange"
+    elif ratio < Decimal("0.8"):
+        progress_state = "amber"
+    elif ratio < 1:
+        progress_state = "light-green"
+    else:
+        progress_state = "green"
+    return DashboardMetric(
+        key=key,
+        label=label,
+        actual=actual,
+        target=target,
+        remaining=remaining,
+        exceeded_by=exceeded_by,
+        percentage=percentage,
+        bar_percentage=min(percentage, 100),
+        progress_state=progress_state,
+    )
+
+
 @dataclass(frozen=True)
 class DashboardSummary:
     """All privacy-safe company aggregates for one selected period."""
 
     selected_period: DashboardFilter
-    metrics: tuple[WeekMetric, ...]
+    metrics: tuple[DashboardMetric, ...]
     activity_buckets: tuple[ActivityBucket, ...]
     countries: tuple[BreakdownItem, ...]
     blockers: tuple[BreakdownItem, ...]
@@ -154,10 +242,6 @@ class DashboardSummary:
     comments: tuple[DashboardComment, ...]
     has_activity: bool
     has_selected_users: bool
-
-    @property
-    def show_targets(self) -> bool:
-        return self.selected_period.is_current_week
 
     @property
     def activity_label_stride(self) -> int:
@@ -318,14 +402,29 @@ def _company_records(
 def _company_targets(
     session: Session,
     *,
+    start_date: date,
+    end_date: date,
     user_ids: tuple[int, ...] | None,
-) -> dict[str, int]:
-    totals = {metric: 0 for metric in TARGET_METRICS}
-    query = select(Target).where(Target.metric_name.in_(TARGET_METRICS))
+) -> dict[str, Decimal]:
+    """Prorate every weekly target by its inclusive period overlap."""
+    totals = {metric: Decimal(0) for metric in TARGET_METRICS}
+    first_week_start = start_date - timedelta(days=start_date.weekday())
+    last_week_start = end_date - timedelta(days=end_date.weekday())
+    query = select(Target).where(
+        Target.week_start >= first_week_start,
+        Target.week_start <= last_week_start,
+        Target.metric_name.in_(TARGET_METRICS),
+    )
     if user_ids is not None:
         query = query.where(Target.user_id.in_(user_ids))
     for target in session.exec(query).all():
-        totals[target.metric_name] += int(target.target_value)
+        week_end = target.week_start + timedelta(days=6)
+        overlap_start = max(start_date, target.week_start)
+        overlap_end = min(end_date, week_end)
+        overlap_days = (overlap_end - overlap_start).days + 1
+        totals[target.metric_name] += (
+            Decimal(str(target.target_value)) * Decimal(overlap_days) / Decimal(7)
+        )
     return totals
 
 
@@ -574,17 +673,18 @@ def get_dashboard_summary(
         user_ids=selected_user_ids,
     )
     actuals = aggregate_activity_actuals(outreach, meetings)
-    targets = (
-        _company_targets(session, user_ids=selected_user_ids)
-        if selected_period.is_current_week
-        else {}
+    targets = _company_targets(
+        session,
+        start_date=selected_period.start_date,
+        end_date=selected_period.end_date,
+        user_ids=selected_user_ids,
     )
     metrics = tuple(
-        build_week_metric(
+        _build_dashboard_metric(
             key=metric,
             label=label,
             actual=actuals[metric],
-            target=targets.get(metric, 0),
+            target=targets[metric],
         )
         for metric, label in TARGET_FIELDS
     )
@@ -612,8 +712,9 @@ __all__ = [
     "CURRENT_MONTH",
     "CURRENT_WEEK",
     "CUSTOM_RANGE",
-    "DashboardComment",
     "DashboardFilter",
+    "DashboardComment",
+    "DashboardMetric",
     "DashboardSummary",
     "DashboardUserFilter",
     "DashboardUserOption",

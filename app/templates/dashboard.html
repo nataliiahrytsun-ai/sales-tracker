@@ -155,10 +155,9 @@
         <h2 id="company-metrics-heading" class="dashboard-section-title">Company metrics</h2>
         {% if not summary.has_selected_users %}
           <p class="dashboard-metrics-helper" role="status">Select at least one user to view data.</p>
-        {% elif not summary.show_targets %}
-          {# Product decision notice: remove or replace after historical target behavior is confirmed. #}
+        {% elif not summary.selected_period.is_current_week %}
           <p class="dashboard-metrics-helper">
-            Targets are currently shown only for Current week.
+            Targets are calculated from the weekly goals that overlap the selected period.
           </p>
         {% endif %}
         <div class="dashboard-metric-grid">
@@ -167,42 +166,50 @@
               class="week-metric-card dashboard-metric-card"
               data-metric="{{ metric.key }}"
               data-actual="{{ metric.actual }}"
-              data-target="{{ metric.target }}"
-              data-remaining="{{ metric.remaining }}"
+              data-target="{{ metric.target_text }}"
+              data-remaining="{{ metric.remaining_text }}"
               data-percentage="{{ metric.percentage if metric.percentage is not none else 'none' }}"
               data-progress-state="{{ metric.progress_state }}"
               data-bar-percentage="{{ metric.bar_percentage }}"
             >
               <h3>{{ metric.label }}</h3>
-              {% if summary.show_targets and metric.target > 0 %}
+              {% if metric.target > 0 %}
                 <div class="metric-primary-row">
-                  <p class="week-metric-primary" aria-label="Actual {{ metric.actual }} of company target {{ metric.target }}">
-                    <strong>{{ metric.actual }}</strong> of {{ metric.target }}
+                  <p class="week-metric-primary" aria-label="Actual {{ metric.actual }} of company target {{ metric.target_text }}">
+                    <strong>{{ metric.actual }}</strong> of {{ metric.target_text }}
                   </p>
                   <span class="week-metric-percentage">{{ metric.percentage_text }}</span>
                 </div>
                 <p class="metric-remaining">
                   {% if metric.actual > metric.target %}
-                    Goal exceeded by {{ metric.actual - metric.target }}
+                    Goal exceeded by {{ metric.exceeded_by_text }}
                   {% else %}
-                    {{ metric.remaining }} remaining
+                    {{ metric.remaining_text }} remaining
                   {% endif %}
                 </p>
                 <div
                   class="week-progress"
                   role="progressbar"
-                  aria-label="{{ metric.label }}: actual {{ metric.actual }}, company target {{ metric.target }}, remaining {{ metric.remaining }}, {{ metric.percentage_text }}"
+                  aria-label="{{ metric.label }}: actual {{ metric.actual }}, company target {{ metric.target_text }}, remaining {{ metric.remaining_text }}, {{ metric.percentage_text }}"
                   aria-valuemin="0"
-                  aria-valuemax="{{ metric.aria_max }}"
-                  aria-valuenow="{{ metric.aria_value }}"
+                  aria-valuemax="100"
+                  aria-valuenow="{{ metric.bar_percentage }}"
                 >
                   <span class="week-progress-fill week-progress-fill-{{ metric.progress_state }}" style="width: {{ metric.bar_percentage }}%"></span>
                 </div>
-              {% elif summary.show_targets %}
-                <p class="dashboard-actual">Actual <strong>{{ metric.actual }}</strong></p>
-                <p class="week-no-target">No target set</p>
               {% else %}
                 <p class="dashboard-actual">Actual <strong>{{ metric.actual }}</strong></p>
+                <p class="week-no-target">No target</p>
+                <div
+                  class="week-progress"
+                  role="progressbar"
+                  aria-label="{{ metric.label }}: actual {{ metric.actual }}, no target"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-valuenow="0"
+                >
+                  <span class="week-progress-fill week-progress-fill-neutral" style="width: 0%"></span>
+                </div>
               {% endif %}
             </article>
           {% endfor %}
