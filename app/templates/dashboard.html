@@ -21,68 +21,134 @@
 
       <div class="report-navigation-row dashboard-navigation-row">
         <a class="back-link" href="{{ url_for('home') }}">Back to Home</a>
-        <form
-          class="dashboard-filter{% if selected_period_key == 'custom' %} dashboard-filter-custom{% endif %}"
-          method="get"
-          action="{{ url_for('dashboard_page') }}"
-          data-dashboard-filter
-          data-initial-period="{{ selected_period_key }}"
-          data-initial-from="{{ from_value }}"
-          data-initial-to="{{ to_value }}"
-          data-today="{{ today_value }}"
-        >
-      <div class="field-group dashboard-period-field">
-        <label for="dashboard-period">Period</label>
-        <select id="dashboard-period" name="period" data-period-select>
-          {% for value, label in period_options %}
-            <option value="{{ value }}"{% if selected_period_key == value %} selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
       </div>
-      <div class="dashboard-custom-dates" data-custom-dates{% if selected_period_key != 'custom' %} hidden{% endif %}>
-        <div class="field-group">
-          <label for="dashboard-from">From</label>
-          <input id="dashboard-from" name="from" type="date" value="{{ from_value }}" data-from>
+      <form
+        class="dashboard-filter{% if selected_period_key == 'custom' %} dashboard-filter-custom{% endif %}"
+        method="get"
+        action="{{ url_for('dashboard_page') }}"
+        data-dashboard-filter
+        data-initial-period="{{ selected_period_key }}"
+        data-initial-from="{{ from_value }}"
+        data-initial-to="{{ to_value }}"
+        data-initial-user-scope="{{ selected_user_scope }}"
+        data-initial-user-ids="{{ selected_user_ids | sort | join(',') }}"
+        data-custom-applied="{% if selected_period_key == 'custom' and summary %}true{% else %}false{% endif %}"
+        data-today="{{ today_value }}"
+      >
+        <div class="dashboard-filter-bar">
+          <div class="dashboard-period-group">
+            <div class="field-group dashboard-period-field">
+              <label for="dashboard-period">Period</label>
+              <div class="dashboard-period-select-control">
+                <select id="dashboard-period" name="period" data-period-select>
+                  {% for value, label in period_options %}
+                    <option value="{{ value }}"{% if selected_period_key == value %} selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                <span class="dashboard-control-arrow" aria-hidden="true">&#9662;</span>
+              </div>
+            </div>
+          </div>
+          <div
+            class="dashboard-custom-applied"
+            data-custom-applied-summary
+            {% if selected_period_key != 'custom' or not summary %}hidden{% endif %}
+          >
+            <button class="dashboard-edit-dates" type="button" data-edit-dates>Edit dates</button>
+          </div>
+          <div class="dashboard-custom-dates" data-custom-dates{% if selected_period_key != 'custom' or summary %} hidden{% endif %}>
+            <div class="dashboard-custom-date-fields">
+              <div class="field-group">
+                <label for="dashboard-from">From</label>
+                <input id="dashboard-from" name="from" type="date" value="{{ from_value }}" data-from>
+              </div>
+              <div class="field-group">
+                <label for="dashboard-to">To</label>
+                <input id="dashboard-to" name="to" type="date" value="{{ to_value }}" max="{{ today_value }}" data-to>
+              </div>
+            </div>
+            <button class="button button-primary dashboard-custom-apply" type="submit" data-apply disabled>Apply</button>
+            <p class="dashboard-date-validation" role="alert" data-date-validation hidden></p>
+          </div>
+          <fieldset class="dashboard-users-fieldset">
+            <legend class="visually-hidden">Users</legend>
+            <input type="hidden" name="user_scope" value="{{ selected_user_scope }}" data-user-scope>
+            <div class="dashboard-users-control-row">
+              <span id="dashboard-users-label" class="dashboard-filter-label">Users</span>
+              <div class="dashboard-users-dropdown" data-users-dropdown>
+                <button
+                  class="dashboard-users-trigger"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="dashboard-users-panel"
+                  aria-haspopup="true"
+                  aria-labelledby="dashboard-users-label dashboard-users-summary"
+                  data-users-trigger
+                >
+                  <span id="dashboard-users-summary" data-users-summary>{% if selected_user_scope == 'selected' and not selected_user_ids %}Select users{% else %}{{ user_filter_summary }}{% endif %}</span>
+                  <span class="dashboard-control-arrow" aria-hidden="true">&#9662;</span>
+                </button>
+                <div
+                  id="dashboard-users-panel"
+                  class="dashboard-users-panel"
+                  data-users-panel
+                  hidden
+                >
+                  <div class="dashboard-user-option dashboard-user-option-all">
+                    <input
+                      id="dashboard-users-all"
+                      type="checkbox"
+                      data-all-users
+                      {% if selected_user_scope == 'all' %}checked{% endif %}
+                    >
+                    <label for="dashboard-users-all">All users</label>
+                  </div>
+                  <div class="dashboard-user-options" data-user-options>
+                    {% for option in user_options %}
+                      <div class="dashboard-user-option">
+                        <input
+                          id="dashboard-user-{{ option.user_id }}"
+                          name="user_id"
+                          type="checkbox"
+                          value="{{ option.user_id }}"
+                          data-user-checkbox
+                          {% if selected_user_scope == 'all' or option.user_id in selected_user_ids %}checked{% endif %}
+                        >
+                        <label for="dashboard-user-{{ option.user_id }}">{{ option.label }}</label>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+          <a class="dashboard-reset-filters" href="{{ url_for('dashboard_page') }}?period=current-week&amp;user_scope=all">Reset filters</a>
         </div>
-        <div class="field-group">
-          <label for="dashboard-to">To</label>
-          <input id="dashboard-to" name="to" type="date" value="{{ to_value }}" max="{{ today_value }}" data-to>
-        </div>
-      </div>
-      <div class="dashboard-filter-actions">
-        <button class="button button-primary" type="submit" data-apply disabled>Apply</button>
-        <button
-          class="button button-secondary"
-          type="submit"
-          name="reset"
-          value="true"
-          data-reset
-          {% if selected_period_key == 'current-week' and not from_value and not to_value %}disabled{% endif %}
-        >Reset</button>
-      </div>
-      {% if filter_error %}
-        <p class="alert dashboard-filter-error" role="alert">{{ filter_error }}</p>
-      {% endif %}
-        </form>
-      </div>
+        {% if filter_error %}
+          <p class="alert dashboard-filter-error" role="alert">{{ filter_error }}</p>
+        {% endif %}
+      </form>
     </div>
 
     {% if summary %}
-      {% if not summary.has_activity %}
+      <div class="dashboard-results">
+      {% if summary.has_selected_users and not summary.has_activity %}
         <div class="week-empty-state" role="status">
           <h2>No company activity recorded for this period</h2>
           <p>The dashboard will update when meeting or daily outreach records are available.</p>
         </div>
       {% endif %}
 
-      {% if not summary.show_targets %}
-        <p class="dashboard-target-note">
-          Historical Targets are unavailable because target history is not stored yet. Weekly Targets are not scaled to this period.
-        </p>
-      {% endif %}
-
       <section aria-labelledby="company-metrics-heading">
         <h2 id="company-metrics-heading" class="dashboard-section-title">Company metrics</h2>
+        {% if not summary.has_selected_users %}
+          <p class="dashboard-metrics-helper" role="status">Select at least one user to view data.</p>
+        {% elif not summary.show_targets %}
+          {# Product decision notice: remove or replace after historical target behavior is confirmed. #}
+          <p class="dashboard-metrics-helper">
+            Targets are currently shown only for Current week.
+          </p>
+        {% endif %}
         <div class="dashboard-metric-grid">
           {% for metric in summary.metrics %}
             <article
@@ -136,6 +202,9 @@
           <h2 id="daily-activity-heading">Activity by day</h2>
           <p class="report-section-note">Outreach and meetings shown separately.</p>
         </div>
+        {% if not summary.has_selected_users %}
+          <p class="dashboard-card-note">No activity to display.</p>
+        {% else %}
         <div class="dashboard-chart-legend" aria-label="Chart legend">
           <span><i class="dashboard-chart-key dashboard-chart-key-outreach" aria-hidden="true"></i>Outreach activities</span>
           <span><i class="dashboard-chart-key dashboard-chart-key-meetings" aria-hidden="true"></i>Meetings held</span>
@@ -197,6 +266,7 @@
             </tbody>
           </table>
         </div>
+        {% endif %}
       </section>
 
       <section class="dashboard-breakdown-grid" aria-label="Company aggregate analysis">
@@ -230,7 +300,6 @@
 
         <article class="dashboard-analysis-card">
           <h2>Daily outreach mood</h2>
-          <p class="dashboard-card-note">Missing mood is excluded, not treated as neutral.</p>
           {% if summary.moods %}
             <div class="dashboard-breakdown-list">
               {% for item in summary.moods %}
@@ -241,8 +310,10 @@
               {% endfor %}
             </div>
           {% else %}<p class="dashboard-card-note">No Daily outreach mood for this period.</p>{% endif %}
+          <p class="dashboard-card-note dashboard-mood-note">Missing mood is excluded, not treated as neutral.</p>
         </article>
       </section>
+      </div>
     {% endif %}
   </section>
   <script src="{{ url_for('static', path='/js/dashboard_filter.js') }}" defer></script>

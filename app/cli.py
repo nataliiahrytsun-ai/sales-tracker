@@ -40,6 +40,17 @@ def create_user(
     if not name:
         print("User was not created: name is required.", file=sys.stderr)
         return 1
+    existing_names = session.exec(select(User.name)).all()
+    if any(
+        existing_name.strip().casefold() == name.casefold()
+        for existing_name in existing_names
+    ):
+        print(
+            "This name is already in use. Please choose a distinguishable "
+            "public name.",
+            file=sys.stderr,
+        )
+        return 1
 
     password = secret_prompt("Password: ")
     password_confirmation = secret_prompt("Confirm password: ")

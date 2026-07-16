@@ -30,7 +30,7 @@ def test_create_user_stores_only_argon2_hash(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Successful creation persists an active user and no plaintext password."""
-    answers = iter(["  local@example.com  ", "Local Admin"])
+    answers = iter(["  local@example.com  ", "  Local Admin  "])
     passwords = iter(["local-test-password", "local-test-password"])
 
     with Session(cli_engine) as session:
@@ -119,6 +119,45 @@ def test_create_user_rejects_duplicate_before_password_prompt(
     assert captured.out == ""
     assert "email already exists" in captured.err
     assert "existing@example.com" not in captured.err
+
+
+def test_create_user_rejects_case_insensitive_duplicate_public_name(
+    cli_engine: Engine,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A public name collision is rejected before requesting a password."""
+    with Session(cli_engine) as session:
+        session.add(
+            User(
+                name="Anna",
+                email="anna@example.com",
+                password_hash=hash_password("existing-password"),
+            ),
+        )
+        session.commit()
+
+    answers = iter(["different@example.com", "  ANNA  "])
+
+    def unexpected_secret_prompt(_message: str) -> str:
+        raise AssertionError("Password must not be requested for a duplicate name")
+
+    with Session(cli_engine) as session:
+        result = cli.create_user(
+            session,
+            prompt=lambda _message: next(answers),
+            secret_prompt=unexpected_secret_prompt,
+        )
+
+    with Session(cli_engine) as session:
+        assert len(session.exec(select(User)).all()) == 1
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert captured.out == ""
+    assert (
+        "This name is already in use. Please choose a distinguishable public name."
+        in captured.err
+    )
 
 
 def test_main_dispatches_exact_create_user_subcommand(

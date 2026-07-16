@@ -8,7 +8,14 @@ from math import ceil
 from sqlmodel import Session, select
 
 from app.countries import COUNTRY_NAMES_BY_CODE
-from app.models import DailyOutreach, OutreachCountry, PipelineMeeting, Target, UserMood
+from app.models import (
+    DailyOutreach,
+    OutreachCountry,
+    PipelineMeeting,
+    Target,
+    User,
+    UserMood,
+)
 from app.services.activity_metrics import aggregate_activity_actuals
 from app.services.meetings import meeting_date_bounds
 from app.services.my_week import WeekMetric, build_week_metric
@@ -25,6 +32,8 @@ PERIOD_OPTIONS = (
     (CUSTOM_RANGE, "Custom range"),
 )
 PERIOD_LABELS = dict(PERIOD_OPTIONS)
+USER_SCOPE_ALL = "all"
+USER_SCOPE_SELECTED = "selected"
 
 
 @dataclass(frozen=True)
@@ -50,6 +59,26 @@ class DashboardFilter:
         if self.start_date.year == self.end_date.year:
             return f"{start} – {end} {self.end_date.year}"
         return f"{start} {self.start_date.year} – {end} {self.end_date.year}"
+
+
+@dataclass(frozen=True)
+class DashboardUserOption:
+    """One safe user-filter option shown to authenticated users."""
+
+    user_id: int
+    label: str
+
+
+@dataclass(frozen=True)
+class DashboardUserFilter:
+    """Normalized user scope used by routes and aggregate queries."""
+
+    scope: str
+    user_ids: tuple[int, ...]
+
+    @property
+    def includes_all(self) -> bool:
+        return self.scope == USER_SCOPE_ALL
 
 
 @dataclass(frozen=True)
@@ -93,6 +122,7 @@ class DashboardSummary:
     blockers: tuple[BreakdownItem, ...]
     moods: tuple[BreakdownItem, ...]
     has_activity: bool
+    has_selected_users: bool
 
     @property
     def show_targets(self) -> bool:
@@ -147,37 +177,91 @@ def resolve_dashboard_filter(
     )
 
 
+def get_dashboard_user_options(session: Session) -> tuple[DashboardUserOption, ...]:
+    """Return every user once, sorted and labelled without exposing email."""
+    users = list(session.exec(select(User)).all())
+    ordered = sorted(
+        users,
+        key=lambda user: (user.name.casefold(), user.name, user.id or 0),
+    )
+    return tuple(
+        DashboardUserOption(
+            user_id=user.id,
+            label=user.name,
+        )
+        for user in ordered
+        if user.id is not None
+    )
+
+
+def normalize_dashboard_user_filter(
+    *,
+    user_scope: str | None,
+    user_ids: list[str] | tuple[str, ...],
+    existing_user_ids: set[int],
+) -> tuple[DashboardUserFilter | None, str | None]:
+    """Normalize reusable GET user parameters against existing database IDs."""
+    scope = user_scope or USER_SCOPE_ALL
+    if scope not in {USER_SCOPE_ALL, USER_SCOPE_SELECTED}:
+        return None, "Select a valid user scope."
+    if scope == USER_SCOPE_ALL:
+        return DashboardUserFilter(scope=scope, user_ids=()), None
+
+    parsed_ids: set[int] = set()
+    for raw_user_id in user_ids:
+        try:
+            parsed_id = int(raw_user_id)
+        except (TypeError, ValueError):
+            continue
+        if parsed_id in existing_user_ids:
+            parsed_ids.add(parsed_id)
+    return (
+        DashboardUserFilter(
+            scope=scope,
+            user_ids=tuple(sorted(parsed_ids)),
+        ),
+        None,
+    )
+
+
 def _company_records(
     session: Session,
     *,
     start_date: date,
     end_date: date,
+    user_ids: tuple[int, ...] | None,
 ) -> tuple[list[DailyOutreach], list[PipelineMeeting]]:
-    outreach = list(
-        session.exec(
-            select(DailyOutreach).where(
-                DailyOutreach.activity_date >= start_date,
-                DailyOutreach.activity_date <= end_date,
-            ),
-        ).all(),
+    outreach_query = select(DailyOutreach).where(
+        DailyOutreach.activity_date >= start_date,
+        DailyOutreach.activity_date <= end_date,
     )
     start_time, end_time = meeting_date_bounds(start_date, end_date)
+    meeting_query = select(PipelineMeeting).where(
+        PipelineMeeting.occurred_at >= start_time,
+        PipelineMeeting.occurred_at < end_time,
+    )
+    if user_ids is not None:
+        outreach_query = outreach_query.where(DailyOutreach.user_id.in_(user_ids))
+        meeting_query = meeting_query.where(PipelineMeeting.user_id.in_(user_ids))
+    outreach = list(
+        session.exec(outreach_query).all(),
+    )
     meetings = list(
-        session.exec(
-            select(PipelineMeeting).where(
-                PipelineMeeting.occurred_at >= start_time,
-                PipelineMeeting.occurred_at < end_time,
-            ),
-        ).all(),
+        session.exec(meeting_query).all(),
     )
     return outreach, meetings
 
 
-def _company_targets(session: Session) -> dict[str, int]:
+def _company_targets(
+    session: Session,
+    *,
+    user_ids: tuple[int, ...] | None,
+) -> dict[str, int]:
     totals = {metric: 0 for metric in TARGET_METRICS}
-    for target in session.exec(
-        select(Target).where(Target.metric_name.in_(TARGET_METRICS)),
-    ).all():
+    query = select(Target).where(Target.metric_name.in_(TARGET_METRICS))
+    if user_ids is not None:
+        query = query.where(Target.user_id.in_(user_ids))
+    for target in session.exec(query).all():
         totals[target.metric_name] += int(target.target_value)
     return totals
 
@@ -327,15 +411,26 @@ def get_dashboard_summary(
     session: Session,
     *,
     selected_period: DashboardFilter,
+    user_filter: DashboardUserFilter | None = None,
 ) -> DashboardSummary:
     """Build company aggregates without exposing employee or record details."""
+    selected_user_ids = (
+        None
+        if user_filter is None or user_filter.includes_all
+        else user_filter.user_ids
+    )
     outreach, meetings = _company_records(
         session,
         start_date=selected_period.start_date,
         end_date=selected_period.end_date,
+        user_ids=selected_user_ids,
     )
     actuals = aggregate_activity_actuals(outreach, meetings)
-    targets = _company_targets(session) if selected_period.is_current_week else {}
+    targets = (
+        _company_targets(session, user_ids=selected_user_ids)
+        if selected_period.is_current_week
+        else {}
+    )
     metrics = tuple(
         build_week_metric(
             key=metric,
@@ -356,6 +451,11 @@ def get_dashboard_summary(
         blockers=_relative_breakdown(blockers),
         moods=_mood_breakdown(outreach),
         has_activity=bool(outreach or meetings),
+        has_selected_users=(
+            user_filter is None
+            or user_filter.includes_all
+            or bool(user_filter.user_ids)
+        ),
     )
 
 
@@ -365,8 +465,14 @@ __all__ = [
     "CUSTOM_RANGE",
     "DashboardFilter",
     "DashboardSummary",
+    "DashboardUserFilter",
+    "DashboardUserOption",
     "PERIOD_OPTIONS",
     "PREVIOUS_WEEK",
+    "USER_SCOPE_ALL",
+    "USER_SCOPE_SELECTED",
+    "get_dashboard_user_options",
     "get_dashboard_summary",
+    "normalize_dashboard_user_filter",
     "resolve_dashboard_filter",
 ]

@@ -15,7 +15,10 @@ from app.models import User
 from app.services.dashboard import (
     CURRENT_WEEK,
     PERIOD_OPTIONS,
+    USER_SCOPE_ALL,
+    get_dashboard_user_options,
     get_dashboard_summary,
+    normalize_dashboard_user_filter,
     resolve_dashboard_filter,
 )
 from app.services.outreach import current_local_date
@@ -35,21 +38,48 @@ def dashboard_page(
     period: Annotated[str, Query()] = CURRENT_WEEK,
     from_value: Annotated[str, Query(alias="from")] = "",
     to_value: Annotated[str, Query(alias="to")] = "",
+    user_scope: Annotated[str | None, Query()] = None,
+    user_id: Annotated[list[str] | None, Query()] = None,
     reset: Annotated[bool, Query()] = False,
 ) -> Response:
     """Render privacy-safe aggregates for the selected company period."""
     if reset:
         period, from_value, to_value = CURRENT_WEEK, "", ""
-    selected_period, error = resolve_dashboard_filter(
+        user_scope, user_id = USER_SCOPE_ALL, []
+    user_options = get_dashboard_user_options(session)
+    selected_users, user_error = normalize_dashboard_user_filter(
+        user_scope=user_scope,
+        user_ids=user_id or [],
+        existing_user_ids={option.user_id for option in user_options},
+    )
+    selected_period, period_error = resolve_dashboard_filter(
         today=today,
         period=period,
         from_value=from_value,
         to_value=to_value,
     )
+    error = period_error or user_error
+    if selected_users is None or selected_users.includes_all:
+        user_filter_summary = "All users"
+    elif not selected_users.user_ids:
+        user_filter_summary = "Select users"
+    elif len(selected_users.user_ids) == 1:
+        selected_user_id = selected_users.user_ids[0]
+        user_filter_summary = next(
+            option.label
+            for option in user_options
+            if option.user_id == selected_user_id
+        )
+    else:
+        user_filter_summary = f"{len(selected_users.user_ids)} users selected"
     summary = (
         None
-        if selected_period is None
-        else get_dashboard_summary(session, selected_period=selected_period)
+        if selected_period is None or selected_users is None
+        else get_dashboard_summary(
+            session,
+            selected_period=selected_period,
+            user_filter=selected_users,
+        )
     )
     return templates.TemplateResponse(
         request=request,
@@ -62,6 +92,14 @@ def dashboard_page(
             "from_value": from_value,
             "to_value": to_value,
             "today_value": today.isoformat(),
+            "user_options": user_options,
+            "selected_user_scope": (
+                selected_users.scope if selected_users else (user_scope or USER_SCOPE_ALL)
+            ),
+            "selected_user_ids": (
+                set(selected_users.user_ids) if selected_users else set()
+            ),
+            "user_filter_summary": user_filter_summary,
             "filter_error": error,
         },
         status_code=400 if error else 200,
