@@ -217,6 +217,10 @@ label {
   font-weight: 650;
 }
 
+.field-label {
+  font-weight: 650;
+}
+
 input,
 select,
 textarea {
@@ -384,6 +388,173 @@ textarea {
 
 .targets-form .button {
   width: 100%;
+}
+
+.targets-week-selector {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.targets-week-selector .field-group {
+  width: min(100%, 24rem);
+}
+
+.target-week-picker {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.target-week-trigger {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #aeb8c8;
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.target-week-trigger:hover {
+  border-color: var(--primary);
+}
+
+.target-week-trigger:focus-visible {
+  border-color: var(--primary);
+  outline: 3px solid rgb(45 99 210 / 20%);
+  outline-offset: 1px;
+}
+
+.target-week-trigger span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.target-week-calendar-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.target-week-calendar {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  width: min(100%, 22rem);
+  min-width: min(100%, 18rem);
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--surface);
+  box-shadow: 0 0.75rem 2rem rgb(29 45 77 / 16%);
+}
+
+.target-week-calendar-header {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) 2.25rem;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.target-week-calendar-header button {
+  min-height: 2.25rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.35rem;
+  cursor: pointer;
+}
+
+.target-week-calendar-header button:hover,
+.target-week-calendar-header button:focus-visible {
+  background: var(--background);
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.target-week-calendar-weekdays,
+.target-week-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.2rem;
+}
+
+.target-week-calendar-weekdays {
+  margin-bottom: 0.25rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.target-week-calendar-day {
+  min-width: 0;
+  min-height: 2rem;
+  padding: 0.2rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.target-week-calendar-day:hover,
+.target-week-calendar-day:focus-visible {
+  background: var(--background);
+  outline: 2px solid var(--primary);
+  outline-offset: 0;
+}
+
+.target-week-calendar-day.is-outside-month {
+  color: var(--muted);
+}
+
+.target-week-calendar-day[aria-selected="true"] {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.target-week-calendar-help {
+  margin: 0.55rem 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.targets-card .report-period-summary strong,
+.targets-card .target-week-number {
+  font-size: 0.88rem;
+}
+
+.targets-card .target-week-number {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.targets-card .target-week-range {
+  color: var(--muted);
+  font-weight: 400;
 }
 
 .my-week-page {

@@ -211,6 +211,7 @@ def dashboard_application(
                         user_id=user_id,
                         metric_name=metric,
                         target_value=value,
+                        week_start=date(2026, 7, 13),
                         effective_from=date(2026, 7, 13),
                         effective_until=date(2026, 7, 19),
                     ),

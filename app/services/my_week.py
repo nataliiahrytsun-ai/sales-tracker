@@ -113,7 +113,11 @@ def get_my_week_summary(
     actuals = aggregate_activity_actuals(outreach_records, meetings)
     targets = {
         target.metric_name: int(target.target_value)
-        for target in get_user_targets(session, user_id=user_id)
+        for target in get_user_targets(
+            session,
+            user_id=user_id,
+            week_start=week_start,
+        )
     }
     metrics = tuple(
         build_week_metric(

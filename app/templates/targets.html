@@ -9,9 +9,13 @@
       <div class="report-heading-row">
         <h1 id="targets-heading">Weekly targets</h1>
         <div class="report-period-summary" role="status">
-          <strong>Current week</strong>
+          {% if week_presentation.relative_label %}
+            <strong>{{ week_presentation.relative_label }}</strong>
+            <span class="report-period-separator" aria-hidden="true">&middot;</span>
+          {% endif %}
+          <span class="target-week-number">{{ week_presentation.week_label }}</span>
           <span class="report-period-separator" aria-hidden="true">&middot;</span>
-          <span>{{ week_start.day }} {{ week_start.strftime('%b') }}{% if week_start.year != week_end.year %} {{ week_start.year }}{% endif %} – {{ week_end.day }} {{ week_end.strftime('%b') }} {{ week_end.year }}</span>
+          <span class="target-week-range">{{ week_presentation.date_range }}</span>
         </div>
       </div>
       <div class="report-navigation-row report-navigation-spaced">
@@ -27,7 +31,65 @@
       <div class="alert" role="alert">{{ errors.form }}</div>
     {% endif %}
 
-    <form class="targets-form" method="post" action="{{ url_for('save_targets') }}">
+    {% if is_past_week %}
+      <p class="report-section-note">Past weekly targets are read-only.</p>
+    {% endif %}
+
+    <form
+      class="targets-form"
+      method="post"
+      action="{{ url_for('save_targets') }}"
+      data-target-week-form
+      data-week-url="{{ url_for('targets_page') }}"
+    >
+      <div class="targets-week-selector">
+        <div class="field-group">
+          <span id="target-week-label" class="field-label">Calendar week</span>
+          <input type="hidden" name="week" value="{{ selected_week.value }}" data-target-week-value>
+          <div
+            class="target-week-picker"
+            data-week-picker
+            data-selected-date="{{ selected_week.start_date.isoformat() }}"
+          >
+            <button
+              id="target-week"
+              class="target-week-trigger"
+              type="button"
+              aria-labelledby="target-week-label target-week-trigger-text"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+              aria-controls="target-week-calendar"
+              data-week-trigger
+              {% if errors.week %}aria-invalid="true" aria-describedby="target-week-error"{% endif %}
+            >
+              <span id="target-week-trigger-text" data-week-trigger-text>{{ week_presentation.picker_label }}</span>
+              <svg class="target-week-calendar-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M7 2v3M17 2v3M3.5 9h17M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path>
+              </svg>
+            </button>
+            <div
+              id="target-week-calendar"
+              class="target-week-calendar"
+              role="dialog"
+              aria-label="Choose a date for the calendar week"
+              data-week-calendar
+              hidden
+            >
+              <div class="target-week-calendar-header">
+                <button type="button" aria-label="Previous month" data-calendar-previous>&lsaquo;</button>
+                <strong data-calendar-month></strong>
+                <button type="button" aria-label="Next month" data-calendar-next>&rsaquo;</button>
+              </div>
+              <div class="target-week-calendar-weekdays" aria-hidden="true">
+                <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+              </div>
+              <div class="target-week-calendar-grid" role="grid" data-calendar-grid></div>
+              <p class="target-week-calendar-help">Choose any date. Its Monday–Sunday week will open.</p>
+            </div>
+          </div>
+          {% if errors.week %}<p class="field-error" id="target-week-error">{{ errors.week }}</p>{% endif %}
+        </div>
+      </div>
       <div class="targets-grid">
         {% for field_name, field_label in target_fields %}
           {% set field_error = errors.get(field_name) %}
@@ -42,6 +104,7 @@
               inputmode="numeric"
               value="{{ values|attr(field_name) }}"
               required
+              {% if is_past_week %}readonly{% endif %}
               {% if field_error %}aria-invalid="true" aria-describedby="{{ field_name }}_error"{% endif %}
             >
             {% if field_error %}
@@ -50,7 +113,10 @@
           </div>
         {% endfor %}
       </div>
-      <button class="button button-primary" type="submit">Save weekly targets</button>
+      {% if not is_past_week %}
+        <button class="button button-primary" type="submit">Save weekly targets</button>
+      {% endif %}
     </form>
   </section>
+  <script src="{{ url_for('static', path='/js/targets_week.js') }}" defer></script>
 {% endblock %}

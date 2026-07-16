@@ -121,6 +121,7 @@ def test_model_columns_match_implementation_plan() -> None:
             "user_id",
             "metric_name",
             "target_value",
+            "week_start",
             "effective_from",
             "effective_until",
         },
@@ -154,6 +155,7 @@ def test_model_relationships_round_trip(db_engine: Engine) -> None:
             user_id=user.id,
             metric_name="total_activities",
             target_value=50,
+            week_start=date(2026, 6, 29),
             effective_from=date(2026, 7, 1),
         )
         session.add(meeting)
