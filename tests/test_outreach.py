@@ -160,7 +160,11 @@ def test_authenticated_user_can_open_today_outreach_form(
         )
         assert "Countries selected" in response.text
         assert "Companies contacted" in response.text
-        assert "Count each company only once per day." in response.text
+        assert "Enter the number of companies contacted in each country." in (
+            response.text
+        )
+        assert "The total is calculated automatically." in response.text
+        assert "Count each company only once per day." not in response.text
         assert 'aria-describedby="positive_replies_error"' in response.text
         assert 'id="positive_replies_error"></p>' in response.text
         assert 'data-country-row data-country-code=' not in response.text
@@ -753,6 +757,8 @@ def test_outreach_form_has_responsive_dynamic_country_controls() -> None:
     assert "window.setTimeout" in javascript
     assert "Math.max(0, current - 1)" in javascript
     assert 'name="unique_companies"' not in template
-    assert "Count each company only once per day." in template
+    assert "Enter the number of companies contacted in each country." in template
+    assert "The total is calculated automatically." in template
+    assert "Count each company only once per day." not in template
     assert "Country total" not in template
     assert "Country total does not match unique companies." not in template
