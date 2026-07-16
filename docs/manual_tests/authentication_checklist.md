@@ -2,6 +2,9 @@
 
 Record each test as **Pass**, **Fail**, or **Blocked**.
 
+Browser retest recorded on 2026-07-16 in Chrome. Viewport: mobile 375 x 812;
+other sizes were not recorded.
+
 | Test | Status | Evidence |
 | --- | --- | --- |
 | Login succeeds with a valid active user | Pass | Real Uvicorn server returned `303` to `/`, then authenticated `/` returned `200`. |
@@ -14,9 +17,11 @@ Record each test as **Pass**, **Fail**, or **Blocked**.
 | Session cookie has a finite lifetime | Pass | Login response contains the configured `Max-Age`; the default is 1,209,600 seconds (14 days). |
 | Stored password value is a hash and not plaintext | Pass | Stored value used the Argon2 format and differed from the test password. |
 | Insecure production session configuration fails clearly | Pass | Startup rejected both a missing secret and `SALES_TRACKER_SESSION_COOKIE_SECURE=false`, naming the relevant environment variable. |
-| Change password form is usable | Blocked | Manually verify the three empty password fields, visible validation messages, keyboard focus, and responsive layout. |
-| Temporary password forces replacement | Blocked | Log in with a CLI-created user and verify every private page redirects to Change password while Logout remains available. |
-| Successful password change restores access | Blocked | Verify the new password opens the application, the old password fails, and password fields remain empty after validation errors. |
+| Change password form is usable | Pass | Chrome retest confirmed the fields, validation messages, focus, and usability. |
+| Temporary password forces replacement | Pass | Chrome retest confirmed forced password change for a user created through the CLI. |
+| Successful password change restores access | Pass | Chrome retest confirmed the new password works, the old password fails, and password fields clear after validation errors. |
+| Password change completes successfully | Pass | Chrome retest confirmed password change. |
+| Authentication mobile layout at 375 x 812 | Pass | Chrome retest confirmed the authentication screens remain usable without layout issues. |
 
 ## Password Management Headless Checks
 

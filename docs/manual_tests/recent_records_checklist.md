@@ -2,6 +2,8 @@
 
 Record each test as **Pass**, **Fail**, or **Blocked**.
 
+Browser retest recorded on 2026-07-16 in Chrome.
+
 The built-in browser runtime was not started because it is unstable in this
 environment. HTTP and database behavior is covered by focused automated tests.
 
@@ -11,6 +13,7 @@ environment. HTTP and database behavior is covered by focused automated tests.
 | Open Outreach history from Home | Pass | View / edit outreach links directly to the private `/outreach/recent` page. |
 | History pages do not show a Meetings / Daily outreach switch | Pass | Structural coverage verifies neither template links to the other history page. |
 | Back to Home is available on both history pages | Pass | Both templates contain a clear Home link. |
+| Empty history state is clear | Pass | Chrome retest confirmed the empty state on recent-record pages. |
 | Default Meetings period is today plus the previous six calendar days | Pass | Focused integration coverage checks both seven-day boundaries and ownership. |
 | From/To filters Meetings and allows an older range without a maximum | Pass | Focused integration coverage selects records older than 30 days. |
 | Meetings are sorted newest first | Pass | Focused integration coverage verifies rendered order. |
@@ -33,8 +36,8 @@ environment. HTTP and database behavior is covered by focused automated tests.
 | Future outreach date is rejected | Pass | Focused integration coverage verifies an HTTP 400 response and no persisted row. |
 | Owned Meetings older than 30 days can be viewed, edited, and deleted | Pass | Focused integration coverage verifies all three operations while retaining ownership checks. |
 | Owned Outreach older than 30 days can be viewed and edited | Pass | Focused integration coverage verifies GET and POST for an older past date. |
-| Recent records desktop layout | Blocked | Requires visual verification in a stable user-controlled browser. |
-| Recent records mobile layout | Blocked | Requires visual verification around 375–376 px in a stable user-controlled browser. |
+| Recent records desktop layout | Pass | Chrome retest confirmed the desktop layout. |
+| Recent records mobile layout | Pass | Chrome retest confirmed the layout at 375 x 812. |
 
 ## Automated Test Record
 
@@ -44,6 +47,4 @@ environment. HTTP and database behavior is covered by focused automated tests.
 
 ## Unresolved Manual Checks
 
-Desktop and mobile visual verification remain **Blocked**. The built-in browser
-runtime was intentionally not used; repeat these checks in a stable
-user-controlled browser.
+No blocked manual checks remain in this checklist.

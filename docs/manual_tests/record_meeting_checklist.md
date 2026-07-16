@@ -3,6 +3,9 @@
 Executed on 2026-07-14. Record each test as **Pass**, **Fail**, or
 **Blocked**.
 
+Browser retest recorded on 2026-07-16 in Chrome. Viewports: desktop (size not
+recorded) and mobile 375 x 812.
+
 The available non-browser checks used a local Uvicorn server, a migrated clean
 SQLite test database, and an HTTP client. The built-in browser runtime was not
 started again because repeated Codex closures made browser-based checks
@@ -12,18 +15,20 @@ unreliable.
 | --- | --- | --- |
 | Open Record meeting from Home | Pass | Authenticated `GET /` returned 200 and contained the `/meetings/new` action. |
 | Anonymous `GET /meetings/new` redirects to `/login` | Pass | Direct HTTP request returned 303 with `Location: /login`. |
-| Meeting form is usable on a desktop viewport | Blocked | Requires a visual browser check. The built-in browser runtime repeatedly closed Codex and was intentionally not restarted. Next action: repeat in a stable browser environment. |
-| Meeting form is usable on a mobile-sized viewport | Blocked | Requires a visual browser check. The built-in browser runtime repeatedly closed Codex and was intentionally not restarted. Next action: repeat in a stable browser environment at a mobile-sized viewport. |
+| Meeting form is usable on a desktop viewport | Pass | Chrome retest confirmed the desktop layout is usable. |
+| Meeting form is usable on a mobile-sized viewport | Pass | Chrome retest confirmed the layout is usable at 375 x 812. |
 | Save a meeting using only the three required selections | Pass | HTTP submission returned 303; the saved row contained the three selections and all optional fields remained `NULL`. |
 | Save all optional fields with the documented selector values | Pass | HTTP submission persisted mood, blocker, country, company, next-step date, and note with the submitted values. |
-| Search and select a country by English name | Blocked | Verify the searchable selector quickly finds Brazil and Poland, displays the English name, and remains optional. |
-| Selected country survives errors and editing | Blocked | Verify a selected country remains visible after another validation error and when reopening Edit meeting. |
+| Search and select a country by English name | Pass | Chrome retest confirmed Brazil and Poland are found with the correct display names. |
+| Country search and selection | Pass | Chrome retest confirmed country search and selection. |
+| Selected country survives errors and editing | Pass | Chrome retest confirmed the selected country remains after a validation error and displays correctly when Edit is reopened. |
 | Invalid or missing selections show clear form errors | Pass | Invalid HTTP submission returned 400 and displayed the required customer-engagement error. Automated coverage also checks all required and invalid selector errors. |
 | Safe entered values remain in the form after validation failure | Pass | Company and note values remained in the returned HTML after the 400 response. |
 | Successful save shows confirmation and allows another entry | Pass | Confirmation HTML contained `Meeting saved successfully` and `Record another meeting`. |
 | Undo removes the meeting that was just saved | Pass | Owner `POST /meetings/{id}/undo` returned 303 and the row was absent afterward. |
 | A user cannot undo another user's meeting | Pass | HTTP request against another user's seeded meeting returned 404 and did not remove it. |
 | A submitted `user_id` cannot change record ownership | Pass | A forged `user_id=2` was ignored; the row was stored for the authenticated user (`user_id=1`). |
+| Meeting form has no horizontal overflow | Pass | Chrome retest confirmed no horizontal overflow at 375 x 812. |
 
 ## Additional Headless Checks
 
@@ -48,7 +53,4 @@ unreliable.
 
 ## Unresolved Manual Checks
 
-The two browser-dependent visual checks remain **Blocked**. Because Milestone 1
-requires every manual check to pass, this record-meeting slice must not be
-reported as fully manual-gate complete until desktop and mobile visual checks
-can be rerun successfully in a stable browser environment.
+No blocked manual checks remain in this checklist.

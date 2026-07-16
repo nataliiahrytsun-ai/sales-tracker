@@ -3,6 +3,9 @@
 Executed on 2026-07-14. Record each test as **Pass**, **Fail**, or
 **Blocked**.
 
+Browser retest recorded on 2026-07-16 in Chrome. Viewports: desktop (size not
+recorded), tablet 768 x 1024, and mobile 375 x 667 and 375 x 812.
+
 Available non-browser checks used a local Uvicorn server, a clean migrated
 SQLite database, and a real HTTP client. The built-in browser runtime was not
 started because prior visual checks repeatedly closed Codex.
@@ -10,27 +13,34 @@ started because prior visual checks repeatedly closed Codex.
 | Test | Status | Evidence |
 | --- | --- | --- |
 | Open Update today's outreach from Home | Pass | Authenticated Home returned 200 and exposed the `/outreach/today` action; following it returned the private form. |
-| Outreach form is usable on a desktop viewport | Blocked | Requires a visual browser check. Next action: repeat in a stable browser environment at a desktop viewport. |
-| Outreach form is usable on a tablet viewport | Blocked | Requires a visual browser check around the existing 48rem breakpoint. |
-| Outreach form is usable on a mobile-sized viewport | Blocked | Requires a visual browser check. Next action: repeat in a stable browser environment around 376 px. Structural tests cover single-column mobile grids and overflow-safe sizing. |
-| Search finds Germany by its English name | Blocked | Requires a manual browser check of the local searchable country selector. |
-| Search finds Brazil by its English name | Blocked | Requires a manual browser check of the local searchable country selector. |
-| Add several arbitrary countries | Blocked | Verify that only added countries appear as compact rows. |
-| Add the same country twice | Blocked | Verify the inline `This country is already added` message, focus movement, and brief row highlight. |
-| Change a country count with + and − | Blocked | Verify keyboard and pointer operation and that the value never goes below zero. |
-| Enter an exact country count manually | Blocked | Verify non-negative whole-number input and live total refresh. |
-| Remove an added country | Blocked | Verify the row disappears and remains deleted after saving. |
-| Country summaries update live | Blocked | Verify Countries selected and Companies contacted update after add, remove, manual input, +, and −; an empty breakdown must show 0 for both. |
-| Country summaries stay aligned | Blocked | Verify each label and value share one horizontal row, both cards match in height on desktop, and stacked mobile cards keep their internal horizontal alignment. |
-| Company-count guidance is clear | Blocked | Verify `Count each company only once per day.` appears with the two compact, equally aligned summaries. |
-| Saved countries reappear when the record is reopened | Blocked | Verify names and counts after create and update. |
-| Country controls do not cause horizontal scrolling | Blocked | Check desktop, tablet, and mobile, including a long country name. |
+| Outreach form is usable on a desktop viewport | Pass | Chrome retest confirmed the desktop layout is usable. |
+| Outreach form is usable on a tablet viewport | Pass | Chrome retest confirmed the layout at 768 x 1024. |
+| Outreach form is usable on a mobile-sized viewport | Pass | Chrome retest confirmed the layout at 375 x 812. |
+| Search finds Germany by its English name | Pass | Chrome retest confirmed search across multiple specific countries. |
+| Search finds Brazil by its English name | Pass | Chrome retest confirmed search across multiple specific countries. |
+| Country search | Pass | Chrome retest confirmed country search. |
+| Add several arbitrary countries | Pass | Chrome retest confirmed countries can be added and removed. |
+| Add the same country twice | Pass | Chrome retest confirmed a clear duplicate message, visible focus/highlight, and no duplicate row. |
+| Duplicate country feedback | Pass | Chrome retest confirmed a clear message and no duplicate row. |
+| Change a country count with + and − | Pass | Chrome retest confirmed decreasing from zero does not produce a negative value. |
+| Plus/minus controls | Pass | Chrome retest confirmed plus/minus controls. |
+| Enter an exact country count manually | Pass | Chrome retest confirmed exact manual country-count input. |
+| Remove an added country | Pass | Chrome retest confirmed the country remains removed after Save and reopening Edit. |
+| Remove a country in the form | Pass | Chrome retest confirmed an added country can be removed. |
+| Country summaries update live | Pass | Chrome retest confirmed updates for an empty breakdown, manual count input, and adding or removing countries. |
+| Companies contacted automatic total | Pass | Chrome retest confirmed Companies contacted is calculated automatically from the country counts. |
+| Country summaries stay aligned | Pass | Chrome retest confirmed the country summary cards remain aligned. |
+| Company-count guidance is clear | Pass | Chrome retest confirmed the complete text `Enter the number of companies contacted in each country. The total is calculated automatically.` at 375 x 667 and 375 x 812, with no old uniqueness wording, clipping, or horizontal scrolling. |
+| Saved countries reappear when the record is reopened | Pass | Chrome retest confirmed saved countries appear after reopening Edit. |
+| Country controls do not cause horizontal scrolling | Pass | Chrome retest confirmed a long country name causes no horizontal overflow. |
+| Outreach has no horizontal overflow | Pass | Chrome retest confirmed no horizontal overflow on desktop, tablet, or at 375 x 812. |
 | Save a new outreach record | Pass | HTTP POST returned 303 and created one row for the authenticated user and application-local date. |
 | Reopen and change today's record | Pass | GET reloaded stored values; a second POST updated the same row instead of creating a duplicate. |
 | Validation errors are clear and preserve safe values | Pass | Invalid counters returned 400 with field errors, and the submitted note remained safely escaped in the form. |
-| Positive replies validation is clear | Blocked | Verify a missing or lower Replies received value shows `Positive replies cannot exceed replies received.` and preserves both inputs. |
-| Reply fields do not shift | Blocked | Verify Replies received and Positive replies remain aligned and following fields do not jump when the reserved error row appears or clears. |
+| Positive replies validation is clear | Pass | Chrome retest confirmed positive-replies validation. |
+| Reply fields do not shift | Pass | Chrome retest confirmed reply fields remain stable after validation errors. |
 | Successful save shows confirmation | Pass | Redirected form displayed `Today's outreach was saved.` after both create and update. |
+| Country controls work with the keyboard | Pass | Chrome retest confirmed selection with Arrow Up, Arrow Down, and Enter, with visible focus/highlight. |
 
 ## Additional Headless Checks
 
@@ -57,6 +67,4 @@ started because prior visual checks repeatedly closed Codex.
 
 ## Unresolved Manual Checks
 
-Desktop and mobile visual layout checks remain **Blocked**. The daily outreach
-workflow must not be reported as fully manual-gate complete until those checks
-pass in a stable browser environment.
+None.
