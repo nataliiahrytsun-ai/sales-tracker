@@ -1,5 +1,6 @@
 """Company-wide aggregated dashboard calculations."""
 
+from calendar import monthrange
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -182,7 +183,8 @@ def resolve_dashboard_filter(
         start_date = week_start - timedelta(days=7)
         end_date = week_start - timedelta(days=1)
     elif period == CURRENT_MONTH:
-        start_date, end_date = today.replace(day=1), today
+        start_date = today.replace(day=1)
+        end_date = today.replace(day=monthrange(today.year, today.month)[1])
     else:
         try:
             start_date = date.fromisoformat(from_value)

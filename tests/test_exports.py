@@ -109,8 +109,24 @@ def export_application(
             ),
             PipelineMeeting(
                 user_id=first.id,
+                occurred_at=datetime(2026, 7, 31, 12, tzinfo=UTC),
+                company_name="Month-end company",
+                customer_engagement=CustomerEngagement.MEDIUM,
+                need_identified=NeedIdentified.YES,
+                outcome=PipelineOutcome.FOLLOW_UP,
+            ),
+            PipelineMeeting(
+                user_id=first.id,
                 occurred_at=datetime(2026, 6, 30, 12, tzinfo=UTC),
                 company_name="Outside company",
+                customer_engagement=CustomerEngagement.LOW,
+                need_identified=NeedIdentified.NO,
+                outcome=PipelineOutcome.NO_FIT,
+            ),
+            PipelineMeeting(
+                user_id=first.id,
+                occurred_at=datetime(2026, 8, 1, 12, tzinfo=UTC),
+                company_name="After month company",
                 customer_engagement=CustomerEngagement.LOW,
                 need_identified=NeedIdentified.NO,
                 outcome=PipelineOutcome.NO_FIT,
@@ -157,9 +173,21 @@ def export_application(
             ),
             DailyOutreach(
                 user_id=first.id,
+                activity_date=date(2026, 7, 31),
+                total_activities=31,
+                unique_companies=8,
+            ),
+            DailyOutreach(
+                user_id=first.id,
                 activity_date=date(2026, 6, 30),
                 total_activities=99,
                 unique_companies=99,
+            ),
+            DailyOutreach(
+                user_id=first.id,
+                activity_date=date(2026, 8, 1),
+                total_activities=101,
+                unique_companies=20,
             ),
         )
         session.add_all(outreach_records)
@@ -384,6 +412,7 @@ def test_export_filenames_use_normalized_user_scope(
                 "Previous company",
                 "'=FORMULA(1)",
                 "Second company",
+                "Month-end company",
             ],
         ),
         (
@@ -406,7 +435,7 @@ def test_pipeline_export_period_filters_are_inclusive(
     ("query", "expected_totals"),
     (
         ("period=previous-week", ["7"]),
-        ("period=current-month", ["3", "7", "10", "20"]),
+        ("period=current-month", ["3", "7", "10", "20", "31"]),
         (
             "period=custom&from=2026-07-13&to=2026-07-14",
             ["10", "20"],
@@ -421,6 +450,58 @@ def test_outreach_export_period_filters_are_inclusive(
     application, _, _, _ = export_application
     response = request_export(application, f"/exports/outreach.csv?{query}")
     assert [row["total_activities"] for row in csv_rows(response)] == expected_totals
+
+
+def test_current_month_pipeline_export_matches_dashboard_full_month_range(
+    export_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, _, first_id, second_id = export_application
+    query = (
+        "period=current-month&user_scope=selected"
+        f"&user_id={first_id}&user_id={second_id}"
+    )
+    dashboard = request_export(application, f"/dashboard?{query}")
+    response = request_export(application, f"/exports/pipeline.csv?{query}")
+
+    assert "31 Jul 2026" in dashboard.text
+    assert (
+        "period=current-month&amp;user_scope=selected"
+        f"&amp;user_id={first_id}&amp;user_id={second_id}"
+    ) in dashboard.text
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="pipeline_export-user_second-export-user_'
+        '2026-07-01_2026-07-31.csv"'
+    )
+    companies = [row["company_name"] for row in csv_rows(response)]
+    assert "Month-end company" in companies
+    assert "Outside company" not in companies
+    assert "After month company" not in companies
+
+
+def test_current_month_outreach_export_matches_dashboard_full_month_range(
+    export_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, _, first_id, second_id = export_application
+    query = (
+        "period=current-month&user_scope=selected"
+        f"&user_id={first_id}&user_id={second_id}"
+    )
+    dashboard = request_export(application, f"/dashboard?{query}")
+    response = request_export(application, f"/exports/outreach.csv?{query}")
+
+    assert "31 Jul 2026" in dashboard.text
+    assert (
+        "period=current-month&amp;user_scope=selected"
+        f"&amp;user_id={first_id}&amp;user_id={second_id}"
+    ) in dashboard.text
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="outreach_export-user_second-export-user_'
+        '2026-07-01_2026-07-31.csv"'
+    )
+    totals = [row["total_activities"] for row in csv_rows(response)]
+    assert "31" in totals
+    assert "99" not in totals
+    assert "101" not in totals
 
 
 def test_user_filters_multiple_duplicates_empty_and_unknown_are_safe(

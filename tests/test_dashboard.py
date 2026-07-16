@@ -788,7 +788,9 @@ def test_activity_chart_groups_long_periods_by_calendar_week(
         assert month_values == [
             (date(2026, 7, 1), date(2026, 7, 5), 3, 0),
             (date(2026, 7, 6), date(2026, 7, 12), 16, 1),
-            (date(2026, 7, 13), date(2026, 7, 15), 30, 3),
+            (date(2026, 7, 13), date(2026, 7, 19), 30, 3),
+            (date(2026, 7, 20), date(2026, 7, 26), 0, 0),
+            (date(2026, 7, 27), date(2026, 7, 31), 0, 0),
         ]
 
         short_custom, error = resolve_dashboard_filter(
@@ -817,7 +819,7 @@ def test_activity_chart_groups_long_periods_by_calendar_week(
     (
         (CURRENT_WEEK, date(2026, 7, 13), date(2026, 7, 19)),
         (PREVIOUS_WEEK, date(2026, 7, 6), date(2026, 7, 12)),
-        (CURRENT_MONTH, date(2026, 7, 1), date(2026, 7, 15)),
+        (CURRENT_MONTH, date(2026, 7, 1), date(2026, 7, 31)),
     ),
 )
 def test_dashboard_preset_boundaries(
