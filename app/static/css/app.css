@@ -1290,17 +1290,16 @@ textarea {
 
 .dashboard-data-table th,
 .dashboard-data-table td {
-  padding: 0.55rem 0.65rem;
+  padding: 0.5rem;
   border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-data-table th {
   color: var(--muted);
-  font-size: 0.76rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 
 .dashboard-card-note {
@@ -2111,6 +2110,16 @@ textarea {
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
+  }
+
+  .dashboard-comments .report-section-heading {
+    display: grid;
+    align-items: start;
+    gap: 0.5rem;
+  }
+
+  .dashboard-comment-grouping {
+    align-items: stretch;
   }
 
   .dashboard-page > * {

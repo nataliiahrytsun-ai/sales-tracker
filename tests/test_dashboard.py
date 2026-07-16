@@ -341,6 +341,32 @@ def test_current_week_aggregates_all_users_without_private_details(
         assert private_value not in response.text
 
 
+@pytest.mark.parametrize("grouping", ("employee", "date", "source"))
+def test_comment_grouping_preserves_records_and_marks_active_control(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+    grouping: str,
+) -> None:
+    application, _, _, _ = dashboard_application
+    response = get_dashboard(application, f"/dashboard?comment_group={grouping}")
+
+    assert response.status_code == 200
+    assert response.text.count("Private outreach note") == 1
+    assert response.text.count("Foreign private note") == 1
+    assert response.text.count("Do not expose meeting note") == 3
+    active_link = re.search(
+        rf'<a[^>]+class="dashboard-group-button is-active"[^>]*'
+        rf'href="[^"]*comment_group={grouping}"[^>]*aria-current="true"',
+        response.text,
+    )
+    assert active_link is not None
+
+    outreach_row_start = response.text.index(
+        'data-comment-source="daily-outreach"',
+    )
+    outreach_row_end = response.text.index("</tr>", outreach_row_start)
+    assert ">—</td>" in response.text[outreach_row_start:outreach_row_end]
+
+
 def test_current_week_company_targets_are_summed_and_progress_is_safe(
     dashboard_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
@@ -665,7 +691,7 @@ def test_activity_country_blocker_and_mood_aggregates_use_required_sources(
     assert 'data-country="BR"' in response.text
     assert "Brazil" in response.text
     assert 'data-blocker="No response"' in response.text
-    assert "Meeting-only blocker" not in response.text
+    assert 'data-blocker="Meeting-only blocker"' not in response.text
     assert 'data-mood="difficult"' in response.text
     assert 'data-mood="okay"' not in response.text
     assert 'data-mood="good"' in response.text
