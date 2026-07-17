@@ -248,3 +248,61 @@ document.querySelectorAll("[data-grouped-chart]").forEach((chart) => {
     );
   });
 });
+
+document.querySelectorAll("[data-expand-toggle]").forEach((toggle) => {
+  const list = document.getElementById(toggle.getAttribute("aria-controls"));
+  if (!list) return;
+  const rows = Array.from(list.querySelectorAll("[data-expandable-row]"));
+  const label = toggle.dataset.label;
+  const grid = toggle.closest(".dashboard-analysis-grid");
+
+  const isDesktop = () => window.matchMedia("(min-width: 64rem)").matches;
+  const cards = () => (
+    grid ? Array.from(grid.querySelectorAll(".dashboard-analysis-card")) : []
+  );
+  const clearCardBaseline = () => {
+    cards().forEach((card) => {
+      card.style.removeProperty("min-height");
+    });
+    if (grid) delete grid.dataset.collapsedCardHeight;
+  };
+  const captureCardBaseline = () => {
+    if (!grid || !isDesktop() || grid.dataset.collapsedCardHeight) return;
+    const baseline = Math.max(
+      ...cards().map((card) => card.getBoundingClientRect().height),
+    );
+    grid.dataset.collapsedCardHeight = String(baseline);
+    cards().forEach((card) => {
+      card.style.minHeight = `${baseline}px`;
+    });
+  };
+
+  const syncGridExpansion = () => {
+    if (!grid) return;
+    const hasExpandedCard = Array.from(
+      grid.querySelectorAll("[data-expand-toggle]"),
+    ).some((control) => control.getAttribute("aria-expanded") === "true");
+    if (!isDesktop()) {
+      clearCardBaseline();
+      grid.classList.remove("has-expanded-card");
+      return;
+    }
+    grid.classList.toggle("has-expanded-card", hasExpandedCard);
+    if (!hasExpandedCard) clearCardBaseline();
+  };
+
+  toggle.addEventListener("click", () => {
+    const expanded = toggle.getAttribute("aria-expanded") === "true";
+    if (!expanded) captureCardBaseline();
+    rows.forEach((row) => {
+      row.hidden = expanded;
+    });
+    toggle.setAttribute("aria-expanded", String(!expanded));
+    toggle.textContent = expanded ? "View all" : "Show less";
+    toggle.setAttribute(
+      "aria-label",
+      `${expanded ? "View all" : "Show less"} ${label}`,
+    );
+    syncGridExpansion();
+  });
+});

@@ -353,122 +353,191 @@
         </dl>
       </section>
 
-      <section class="dashboard-analysis-grid" aria-label="Company aggregate analysis">
-        <article class="dashboard-analysis-card dashboard-analysis-section dashboard-countries-section">
-          <div class="dashboard-analysis-heading">
-            <h2 class="dashboard-section-heading">Countries</h2>
-          </div>
-          {% if summary.countries %}
-            <div class="dashboard-ranked-header" aria-hidden="true">
-              <span>Country</span><span>Companies</span>
-            </div>
-            <div class="dashboard-breakdown-list">
-              {% for item in summary.countries %}
-                <div class="dashboard-breakdown-item" data-country="{{ item.key }}">
-                  <span>{{ item.label }}</span><strong>{{ item.value }}</strong>
-                  <span class="dashboard-bar" aria-hidden="true"><span class="dashboard-bar-fill" style="width: {{ item.bar_percentage }}%"></span></span>
+      <article
+        class="dashboard-analysis-card dashboard-mood-summary-card"
+        aria-labelledby="mood-summary-heading"
+      >
+        <div class="report-section-heading">
+          <h2 id="mood-summary-heading" class="dashboard-section-heading">Mood summary</h2>
+        </div>
+        {% if summary.mood_summary.has_recorded_mood %}
+          {% set mood = namespace(difficult_count=0, difficult_percentage=0, okay_count=0, okay_percentage=0, good_count=0, good_percentage=0) %}
+          {% for item in summary.mood_summary.distribution %}
+            {% if item.key == 'difficult' %}
+              {% set mood.difficult_count = item.value %}
+              {% set mood.difficult_percentage = item.share_percentage %}
+            {% elif item.key == 'okay' %}
+              {% set mood.okay_count = item.value %}
+              {% set mood.okay_percentage = item.share_percentage %}
+            {% elif item.key == 'good' %}
+              {% set mood.good_count = item.value %}
+              {% set mood.good_percentage = item.share_percentage %}
+            {% endif %}
+          {% endfor %}
+          <div class="dashboard-mood-summary-layout">
+            <section class="dashboard-mood-average" aria-labelledby="average-mood-heading">
+              <h3 id="average-mood-heading">Average mood</h3>
+              <p class="dashboard-mood-average-value">{{ summary.mood_summary.average_text }} <span>/ 3</span></p>
+              <p class="dashboard-mood-recorded-count">{{ summary.mood_summary.recorded_count }} recorded</p>
+              <p class="dashboard-mood-scale">1 Difficult · 2 Okay · 3 Good</p>
+            </section>
+
+            <section class="dashboard-mood-distribution" aria-labelledby="mood-distribution-heading">
+              <h3 id="mood-distribution-heading">Mood distribution</h3>
+              <div class="dashboard-mood-content">
+                <div
+                  class="dashboard-mood-donut"
+                  style="--mood-difficult-percentage: {{ mood.difficult_percentage }}; --mood-okay-percentage: {{ mood.okay_percentage }}"
+                  role="img"
+                  aria-label="Mood distribution: {{ summary.mood_summary.recorded_count }} recorded mood entries"
+                >
+                  <div class="dashboard-mood-total">
+                    <strong>{{ summary.mood_summary.recorded_count }}</strong>
+                    <span>recorded</span>
+                  </div>
                 </div>
-              {% endfor %}
-            </div>
-          {% else %}<p class="dashboard-card-note">No country activity for this period.</p>{% endif %}
+                <div class="dashboard-mood-legend" aria-label="Mood distribution legend">
+                  {% for mood_key, mood_label, count, percentage in [
+                    ('difficult', 'Difficult', mood.difficult_count, mood.difficult_percentage),
+                    ('okay', 'Okay', mood.okay_count, mood.okay_percentage),
+                    ('good', 'Good', mood.good_count, mood.good_percentage)
+                  ] %}
+                    <div
+                      class="dashboard-mood-legend-item dashboard-mood-legend-{{ mood_key }}"
+                      data-mood-legend="{{ mood_key }}"
+                      {% if count > 0 %}data-mood="{{ mood_key }}"{% endif %}
+                    >
+                      <span>{{ mood_label }}</span>
+                      <strong>{{ count }} <small>{{ percentage }}%</small></strong>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            </section>
+
+            <section class="dashboard-mood-trend" aria-labelledby="daily-mood-trend-heading">
+              <div class="dashboard-mood-trend-heading">
+                <h3 id="daily-mood-trend-heading">Daily mood trend</h3>
+                <div class="dashboard-mood-trend-legend" aria-label="Mood trend legend">
+                  <span class="dashboard-mood-trend-key-current">Current period</span>
+                </div>
+              </div>
+              <div class="dashboard-mood-trend-viewport" tabindex="0" aria-label="Daily mood trend">
+                <svg
+                  class="dashboard-mood-trend-chart"
+                  viewBox="0 0 {{ summary.mood_summary.chart_width }} 152"
+                  width="100%"
+                  height="152"
+                  role="img"
+                  aria-labelledby="daily-mood-trend-heading"
+                >
+                  {% for score, label, y in [(3, 'Good', 18), (2, 'Okay', 67), (1, 'Difficult', 116)] %}
+                    <line class="dashboard-mood-grid-line" x1="48" y1="{{ y }}" x2="{{ summary.mood_summary.chart_width - 12 }}" y2="{{ y }}"></line>
+                    <text class="dashboard-mood-axis-label" x="0" y="{{ y + 4 }}">{{ label }}</text>
+                  {% endfor %}
+                  {% set plot = namespace(previous_x=none, previous_y=none) %}
+                  {% for point in summary.mood_summary.trend %}
+                    {% if point.average is not none %}
+                      {% if point.connects_to_previous %}
+                        <line class="dashboard-mood-current-line" x1="{{ plot.previous_x }}" y1="{{ plot.previous_y }}" x2="{{ point.x }}" y2="{{ point.y }}"></line>
+                      {% endif %}
+                      <circle
+                        class="dashboard-mood-current-point"
+                        cx="{{ point.x }}"
+                        cy="{{ point.y }}"
+                        r="4"
+                        role="img"
+                        aria-label="{{ point.accessible_label }}"
+                        data-mood-date="{{ point.date.isoformat() }}"
+                        data-mood-average="{{ point.display_average }}"
+                        data-mood-count="{{ point.recorded_count }}"
+                      ><title>{{ point.accessible_label }}</title></circle>
+                      {% set plot.previous_x = point.x %}
+                      {% set plot.previous_y = point.y %}
+                    {% endif %}
+                    {% if point.show_date_label %}
+                      <text class="dashboard-mood-date-label" x="{{ point.x }}" y="145" text-anchor="middle">{{ point.date.strftime('%b') }} {{ point.date.day }}</text>
+                    {% endif %}
+                  {% endfor %}
+                </svg>
+              </div>
+            </section>
+          </div>
+          <p class="dashboard-card-note dashboard-mood-note">Missing mood is excluded, not treated as neutral.</p>
+        {% else %}
+          <p class="dashboard-card-note dashboard-mood-empty">No recorded mood for this period.</p>
+        {% endif %}
+      </article>
+
+      <section class="dashboard-analysis-grid" aria-label="Countries and blockers">
+        <article class="dashboard-analysis-card dashboard-analysis-section dashboard-countries-section">
+          <header class="dashboard-analysis-heading">
+            <h2 class="dashboard-section-heading">Countries</h2>
+          </header>
+          <div class="dashboard-analysis-body">
+            {% if summary.countries %}
+              <div class="dashboard-ranked-header" aria-hidden="true">
+                <span>Country</span><span>Companies</span><span>Share</span>
+              </div>
+              <div id="dashboard-country-list" class="dashboard-ranked-list dashboard-breakdown-list">
+                {% for item in summary.countries %}
+                  <div
+                    class="dashboard-ranked-item dashboard-breakdown-item"
+                    data-country="{{ item.key }}"
+                    data-share="{{ item.share_percentage }}"
+                    data-bar-percentage="{{ item.bar_percentage }}"
+                    {% if loop.index > 3 %}data-expandable-row hidden{% endif %}
+                  >
+                    <span class="dashboard-ranked-label"><span>{{ item.label }}</span><span class="dashboard-bar" aria-hidden="true"><span class="dashboard-bar-fill" style="width: {{ item.bar_percentage }}%"></span></span></span>
+                    <strong>{{ item.value }}</strong>
+                    <span class="dashboard-ranked-share">{{ item.share_percentage }}%</span>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p class="dashboard-card-note">No country activity for this period.</p>
+            {% endif %}
+          </div>
+          {% if summary.countries | length > 3 %}
+            <footer class="dashboard-analysis-footer">
+              <button class="dashboard-view-all" type="button" data-expand-toggle data-label="Countries" aria-controls="dashboard-country-list" aria-expanded="false" aria-label="View all Countries">View all</button>
+            </footer>
+          {% endif %}
         </article>
 
         <article class="dashboard-analysis-card dashboard-analysis-section dashboard-blockers-section">
-          <div class="dashboard-analysis-heading">
+          <header class="dashboard-analysis-heading">
             <h2 class="dashboard-section-heading">Blockers</h2>
-          </div>
-          {% if not summary.blockers %}<p class="dashboard-card-note">No Daily outreach blockers for this period.</p>{% endif %}
-          <div class="dashboard-ranked-header" aria-hidden="true">
-            <span>Blocker</span><span>Count</span>
-          </div>
-          <div class="dashboard-blocker-list">
-            {% set blocker_rows = namespace(items=[]) %}
-            {% for blocker_key in [
-              'No budget',
-              'No decision-maker',
-              'No urgency',
-              'Competitor',
-              'Technical limitation',
-              'Procurement/legal delay',
-              'No response',
-              'Other'
-            ] %}
-              {% set blocker = namespace(item=none) %}
-              {% for item in summary.blockers %}
-                {% if item.key == blocker_key %}{% set blocker.item = item %}{% endif %}
-              {% endfor %}
-              {% set blocker_rows.items = blocker_rows.items + [(blocker_key, blocker.item.value if blocker.item else 0)] %}
-            {% endfor %}
-            {% for blocker_key, blocker_count in blocker_rows.items | sort(attribute=1, reverse=true) if blocker_count > 0 %}
-              <div
-                class="dashboard-blocker-item"
-                data-blocker="{{ blocker_key }}"
-                data-blocker-count="{{ blocker_count }}"
-              >
-                <span>{{ blocker_key }}</span><strong>{{ blocker_count }}</strong>
+          </header>
+          <div class="dashboard-analysis-body">
+            {% if summary.blockers %}
+              <div class="dashboard-ranked-header" aria-hidden="true">
+                <span>Blocker</span><span>Companies</span><span>Share</span>
               </div>
-            {% endfor %}
-            {% for blocker_key, blocker_count in blocker_rows.items if blocker_count == 0 %}
-              <div
-                class="dashboard-blocker-item is-zero"
-                data-blocker="{{ blocker_key }}"
-                data-blocker-count="0"
-              >
-                <span>{{ blocker_key }}</span><strong>0</strong>
+              <div id="dashboard-blocker-list" class="dashboard-ranked-list dashboard-blocker-list">
+                {% for item in summary.blockers %}
+                  <div
+                    class="dashboard-ranked-item dashboard-blocker-item"
+                    data-blocker="{{ item.key }}"
+                    data-blocker-count="{{ item.value }}"
+                    data-share="{{ item.share_percentage }}"
+                    {% if loop.index > 3 %}data-expandable-row hidden{% endif %}
+                  >
+                    <span>{{ item.label }}</span>
+                    <strong>{{ item.value }}</strong>
+                    <span class="dashboard-ranked-share">{{ item.share_percentage }}%</span>
+                  </div>
+                {% endfor %}
               </div>
-            {% endfor %}
-          </div>
-        </article>
-
-        <article class="dashboard-analysis-card dashboard-analysis-section dashboard-mood-section">
-          <div class="dashboard-analysis-heading">
-            <h2 class="dashboard-section-heading">Mood distribution</h2>
-          </div>
-          {% set mood = namespace(difficult_count=0, difficult_percentage=0, okay_count=0, okay_percentage=0, good_count=0, good_percentage=0, total=0) %}
-          {% for item in summary.moods %}
-            {% set mood.total = mood.total + item.value %}
-            {% if item.key == 'difficult' %}
-              {% set mood.difficult_count = item.value %}
-              {% set mood.difficult_percentage = item.bar_percentage %}
-            {% elif item.key == 'okay' %}
-              {% set mood.okay_count = item.value %}
-              {% set mood.okay_percentage = item.bar_percentage %}
-            {% elif item.key == 'good' %}
-              {% set mood.good_count = item.value %}
-              {% set mood.good_percentage = item.bar_percentage %}
+            {% else %}
+              <p class="dashboard-card-note">No Daily Outreach blockers for this period.</p>
             {% endif %}
-          {% endfor %}
-          {% if not summary.moods %}<p class="dashboard-card-note">No Daily outreach mood for this period.</p>{% endif %}
-          <div class="dashboard-mood-content">
-            <div
-              class="dashboard-mood-donut{% if mood.total == 0 %} is-empty{% endif %}"
-              style="--mood-difficult-percentage: {{ mood.difficult_percentage }}; --mood-okay-percentage: {{ mood.okay_percentage }}"
-              role="img"
-              aria-label="Mood distribution: {{ mood.total }} recorded mood entries"
-            >
-              <div class="dashboard-mood-total">
-                <strong>{{ mood.total }}</strong>
-                <span>recorded</span>
-              </div>
-            </div>
-            <div class="dashboard-mood-legend" aria-label="Mood distribution legend">
-              {% for mood_key, mood_label, count, percentage in [
-                ('difficult', 'Difficult', mood.difficult_count, mood.difficult_percentage),
-                ('okay', 'Okay', mood.okay_count, mood.okay_percentage),
-                ('good', 'Good', mood.good_count, mood.good_percentage)
-              ] %}
-                <div
-                  class="dashboard-mood-legend-item dashboard-mood-legend-{{ mood_key }}"
-                  data-mood-legend="{{ mood_key }}"
-                  {% if count > 0 %}data-mood="{{ mood_key }}"{% endif %}
-                >
-                  <span>{{ mood_label }}</span>
-                  <strong>{{ count }} <small>{{ percentage }}%</small></strong>
-                </div>
-              {% endfor %}
-            </div>
           </div>
-          <p class="dashboard-card-note dashboard-mood-note">Missing mood is excluded, not treated as neutral.</p>
+          {% if summary.blockers | length > 3 %}
+            <footer class="dashboard-analysis-footer">
+              <button class="dashboard-view-all" type="button" data-expand-toggle data-label="Blockers" aria-controls="dashboard-blocker-list" aria-expanded="false" aria-label="View all Blockers">View all</button>
+            </footer>
+          {% endif %}
         </article>
       </section>
 

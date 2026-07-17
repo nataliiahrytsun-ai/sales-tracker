@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Generator
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 import re
 
@@ -32,6 +33,8 @@ from app.services.dashboard import (
     CURRENT_WEEK,
     CUSTOM_RANGE,
     PREVIOUS_WEEK,
+    USER_SCOPE_SELECTED,
+    DashboardUserFilter,
     get_dashboard_summary,
     resolve_dashboard_filter,
 )
@@ -332,12 +335,11 @@ def assert_empty_selected_dashboard(response: httpx.Response) -> None:
     assert "No activity to display." in response.text
     assert 'class="dashboard-chart-group"' not in response.text
     assert 'data-country=' not in response.text
-    assert response.text.count('data-blocker=') == 8
-    assert response.text.count('data-blocker-count="0"') == 8
+    assert 'data-blocker=' not in response.text
     assert 'data-mood=' not in response.text
     assert "No country activity for this period." in response.text
-    assert "No Daily outreach blockers for this period." in response.text
-    assert "No Daily outreach mood for this period." in response.text
+    assert "No Daily Outreach blockers for this period." in response.text
+    assert response.text.count("No recorded mood for this period.") == 1
     assert "Outreach activities: 10" not in response.text
     assert "Outreach activities: 20" not in response.text
 
@@ -1341,6 +1343,7 @@ def test_analysis_grid_preserves_values_empty_states_and_responsive_markup(
         template.index('id="daily-activity-heading"'),
         template.index('id="pipeline-conversion-heading"'),
         template.index('id="outreach-conversion-heading"'),
+        template.index('id="mood-summary-heading"'),
         template.index('class="dashboard-analysis-grid"'),
         template.index('id="comments-overview-heading"'),
     ]
@@ -1351,15 +1354,17 @@ def test_analysis_grid_preserves_values_empty_states_and_responsive_markup(
     ):
         heading_tag = template.split(f'id="{heading}"', 1)[1].split(">", 1)[0]
         assert "dashboard-section-heading" in heading_tag
-    for heading in ("Countries", "Blockers", "Mood distribution"):
+    for heading in ("Countries", "Blockers", "Mood summary"):
         heading_tag = template.split(f">{heading}</h2>", 1)[0].rsplit("<h2", 1)[1]
         assert "dashboard-section-heading" in heading_tag
 
     assert 'class="dashboard-analysis-grid"' in response.text
-    assert response.text.count("dashboard-analysis-section") == 3
+    assert response.text.count("dashboard-analysis-section") == 2
     assert '>Countries</h2>' in response.text
     assert '>Blockers</h2>' in response.text
-    assert '>Mood distribution</h2>' in response.text
+    assert '>Mood summary</h2>' in response.text
+    assert '>Mood distribution</h3>' in response.text
+    assert '>Daily mood trend</h3>' in response.text
     assert "Country" in response.text
     assert "Companies" in response.text
     countries_section = response.text.split(">Countries</h2>", 1)[1].split(
@@ -1371,7 +1376,7 @@ def test_analysis_grid_preserves_values_empty_states_and_responsive_markup(
     assert "<table" not in countries_section
     assert re.search(
         r'data-country="BR"[\s\S]*?<span>Brazil</span>'
-        r'[\s\S]*?<strong>5</strong>[\s\S]*?width: 100%',
+        r'[\s\S]*?width: 100%[\s\S]*?<strong>5</strong>',
         response.text,
     )
     assert re.search(
@@ -1382,27 +1387,13 @@ def test_analysis_grid_preserves_values_empty_states_and_responsive_markup(
         "</article>",
         1,
     )[0]
-    standard_blockers = (
-        "No budget",
-        "No decision-maker",
-        "No urgency",
-        "Competitor",
-        "Technical limitation",
-        "Procurement/legal delay",
-        "No response",
-        "Other",
-    )
     rendered_blockers = re.findall(r'data-blocker="([^"]+)"', blockers_section)
-    assert rendered_blockers == [
-        "No response",
-        *standard_blockers[:-2],
-        "Other",
-    ]
-    assert blockers_section.count('data-blocker-count="0"') == 7
+    assert rendered_blockers == ["No response"]
+    assert 'data-blocker-count="0"' not in blockers_section
     assert 'data-blocker-count="2"' in blockers_section
     assert "No blocker" not in blockers_section
     assert "dashboard-bar" not in blockers_section
-    assert blockers_section.count("dashboard-blocker-item") == 8
+    assert blockers_section.count("dashboard-blocker-item") == 1
 
     assert response.text.count('class="dashboard-mood-donut') == 1
     assert 'aria-label="Mood distribution: 2 recorded mood entries"' in response.text
@@ -1424,7 +1415,7 @@ def test_analysis_grid_preserves_values_empty_states_and_responsive_markup(
         )
 
 
-def test_blockers_render_positive_counts_descending_then_zeroes_in_form_order(
+def test_blockers_render_only_positive_counts_descending_with_stable_ties(
     dashboard_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
     application, engine, first_user_id, second_user_id = dashboard_application
@@ -1456,20 +1447,12 @@ def test_blockers_render_positive_counts_descending_then_zeroes_in_form_order(
         "No response",
         "Technical limitation",
         "Other",
-        "No budget",
-        "No decision-maker",
-        "No urgency",
-        "Procurement/legal delay",
     ]
     assert re.findall(r'data-blocker-count="(\d+)"', blockers_section) == [
         "2",
         "2",
         "1",
         "1",
-        "0",
-        "0",
-        "0",
-        "0",
     ]
     assert "No blocker" not in blockers_section
 
@@ -1478,18 +1461,15 @@ def test_blockers_render_positive_counts_descending_then_zeroes_in_form_order(
         "/dashboard?period=custom&from=2026-05-01&to=2026-05-02",
     )
     assert "No country activity for this period." in empty.text
-    assert "No Daily outreach blockers for this period." in empty.text
-    assert "No Daily outreach mood for this period." in empty.text
-    assert 'class="dashboard-mood-donut is-empty"' in empty.text
-    assert 'aria-label="Mood distribution: 0 recorded mood entries"' in empty.text
-    assert empty.text.count("data-mood-legend=") == 3
-    assert empty.text.count("<strong>0 <small>0%</small></strong>") == 3
+    assert "No Daily Outreach blockers for this period." in empty.text
+    assert empty.text.count("No recorded mood for this period.") == 1
+    assert 'class="dashboard-mood-donut' not in empty.text
+    assert "data-mood-legend=" not in empty.text
     empty_blockers = empty.text.split(">Blockers</h2>", 1)[1].split(
         "</article>",
         1,
     )[0]
-    assert empty_blockers.count('data-blocker-count="0"') == 8
-    assert empty_blockers.count(" is-zero") == 8
+    assert 'data-blocker-count="0"' not in empty_blockers
 
     css = Path("app/static/css/app.css").read_text(encoding="utf-8")
     mobile_css = css.split("@media (max-width: 47.999rem)", 1)[1].split(
@@ -1506,48 +1486,40 @@ def test_blockers_render_positive_counts_descending_then_zeroes_in_form_order(
         1,
     )[0]
     assert "grid-template-columns: minmax(0, 1fr)" in analysis_css
-    assert "align-items: start" in analysis_css
+    assert "align-items: stretch" in analysis_css
     tablet_css = css.split("@media (min-width: 48rem)", 1)[1].split(
         "@media (min-width: 64rem)",
         1,
     )[0]
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in tablet_css
-    assert ".dashboard-countries-section" in tablet_css
-    assert "grid-column: 1 / -1" in tablet_css
     desktop_css = css.split("@media (min-width: 64rem)", 1)[1]
-    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in desktop_css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in desktop_css
     assert "align-items: start" in desktop_css
-    assert "min-height: 26rem" not in desktop_css
-    assert ".dashboard-analysis-grid > .dashboard-mood-section" not in tablet_css
-    desktop_mood_css = desktop_css.split(
-        ".dashboard-analysis-grid > .dashboard-mood-section {",
-        1,
+    desktop_card_css = desktop_css.split(
+        ".dashboard-analysis-grid .dashboard-analysis-card {", 1,
     )[1].split("}", 1)[0]
-    assert "display: flex" in desktop_mood_css
-    assert "align-self: stretch" in desktop_mood_css
-    assert "flex-direction: column" in desktop_mood_css
-    assert "align-self: stretch" not in tablet_css
+    assert "min-height:" not in desktop_card_css
+    assert "align-self: stretch" in desktop_card_css
+    assert "min-height: 26rem" not in desktop_css
+    assert ".dashboard-mood-summary-layout" in tablet_css
+    assert ".dashboard-mood-summary-layout" in desktop_css
     assert "--mood-difficult-color: #71809a" in css
     assert "--mood-good-color: #78a967" in css
     assert "var(--mood-difficult-color)" in css
     assert "var(--mood-good-color)" in css
     mood_note_css = css.split(".dashboard-mood-note {", 1)[1].split("}", 1)[0]
-    assert "margin-top: auto" in mood_note_css
+    assert "border-top: 1px solid var(--border)" in mood_note_css
     mood_content_css = css.split(".dashboard-mood-content {", 1)[1].split(
         "}",
         1,
     )[0]
-    assert "margin-top: 0.75rem" in mood_content_css
-    assert "margin-top: 0.5rem" in mobile_css.split(
-        ".dashboard-mood-content {",
-        1,
-    )[1].split("}", 1)[0]
-    blocker_item_css = css.split(".dashboard-blocker-item {", 1)[1].split(
+    assert "grid-template-columns: auto minmax(7.5rem, 1fr)" in mood_content_css
+    ranked_item_css = css.split(".dashboard-ranked-item {", 1)[1].split(
         "}",
         1,
     )[0]
-    assert "border-bottom: 1px solid var(--border)" in blocker_item_css
-    assert "grid-template-columns: minmax(0, 1fr) auto" in blocker_item_css
+    assert "border-bottom: 1px solid var(--border)" in ranked_item_css
+    assert "grid-template-columns:" in ranked_item_css
     assert response.text.count('data-country="BR"') == 1
     assert response.text.count('data-blocker="No response"') == 1
     assert response.text.count("data-mood-legend=") == 3
@@ -2255,7 +2227,7 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
         "display: flex",
         "height: auto",
         "padding: 0.85rem",
-        "align-self: start",
+        "align-self: stretch",
     ):
         assert declaration in breakdown_card_css
     visually_hidden_css = css.split(".visually-hidden {", 1)[1].split(
@@ -2295,3 +2267,383 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert "max-width: 68rem" in dashboard_page_css
     assert "margin-inline: auto" in dashboard_page_css
     assert "margin-top: -0.5rem" in dashboard_page_css
+
+
+def test_mood_average_daily_trend_filters_rounding_and_missing_rules(
+    tmp_path: Path,
+) -> None:
+    """All mood views use filled outreach user-days and retain daily gaps."""
+    engine = create_db_engine(
+        f"sqlite:///{(tmp_path / 'mood-summary.db').as_posix()}",
+    )
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        users = [
+            User(
+                name=f"Mood User {index}",
+                email=f"mood-{index}@example.com",
+                password_hash=hash_password(TEST_PASSWORD),
+            )
+            for index in range(1, 5)
+        ]
+        session.add_all(users)
+        session.flush()
+        user_ids = tuple(user.id for user in users if user.id is not None)
+        assert len(user_ids) == 4
+        for user_id, mood in zip(
+            user_ids,
+            (
+                UserMood.DIFFICULT,
+                UserMood.OKAY,
+                UserMood.GOOD,
+                UserMood.GOOD,
+            ),
+            strict=True,
+        ):
+            add_outreach(
+                session,
+                user_id=user_id,
+                activity_date=date(2026, 7, 10),
+                total=1,
+                companies=1,
+                mood=mood,
+            )
+        add_outreach(
+            session,
+            user_id=user_ids[3],
+            activity_date=date(2026, 7, 11),
+            total=1,
+            companies=1,
+        )
+        for user_id, mood in (
+            (user_ids[1], UserMood.GOOD),
+            (user_ids[2], UserMood.OKAY),
+        ):
+            add_outreach(
+                session,
+                user_id=user_id,
+                activity_date=date(2026, 7, 12),
+                total=1,
+                companies=1,
+                mood=mood,
+            )
+        add_outreach(
+            session,
+            user_id=user_ids[0],
+            activity_date=date(2026, 7, 9),
+            total=1,
+            companies=1,
+            mood=UserMood.GOOD,
+        )
+        add_outreach(
+            session,
+            user_id=user_ids[0],
+            activity_date=date(2026, 7, 13),
+            total=1,
+            companies=1,
+            mood=UserMood.DIFFICULT,
+        )
+        add_meeting(
+            session,
+            user_id=user_ids[0],
+            occurred_at=datetime(2026, 7, 10, 12, tzinfo=UTC),
+        )
+        session.commit()
+
+        selected, error = resolve_dashboard_filter(
+            today=TEST_DATE,
+            period=CUSTOM_RANGE,
+            from_value="2026-07-10",
+            to_value="2026-07-12",
+        )
+        assert error is None and selected is not None
+        summary = get_dashboard_summary(session, selected_period=selected)
+        mood = summary.mood_summary
+        assert mood.recorded_count == 6
+        assert mood.average == Decimal(14) / Decimal(6)
+        assert mood.average_text == "2.3"
+        assert [point.date for point in mood.trend] == [
+            date(2026, 7, 10),
+            date(2026, 7, 11),
+            date(2026, 7, 12),
+        ]
+        assert mood.trend[0].average == Decimal("2.25")
+        assert mood.trend[0].display_average == "2.3"
+        assert mood.trend[0].recorded_count == 4
+        assert mood.trend[1].average is None
+        assert mood.trend[1].display_average is None
+        assert mood.trend[2].average == Decimal("2.5")
+        assert mood.trend[2].connects_to_previous
+
+        first_day, error = resolve_dashboard_filter(
+            today=TEST_DATE,
+            period=CUSTOM_RANGE,
+            from_value="2026-07-10",
+            to_value="2026-07-10",
+        )
+        assert error is None and first_day is not None
+
+        difficult_okay_good = get_dashboard_summary(
+            session,
+            selected_period=first_day,
+            user_filter=DashboardUserFilter(
+                scope=USER_SCOPE_SELECTED,
+                user_ids=user_ids[:3],
+            ),
+        ).mood_summary
+        assert difficult_okay_good.trend[0].average == Decimal(2)
+        assert difficult_okay_good.trend[0].display_average == "2"
+
+        difficult_good_good = get_dashboard_summary(
+            session,
+            selected_period=first_day,
+            user_filter=DashboardUserFilter(
+                scope=USER_SCOPE_SELECTED,
+                user_ids=(user_ids[0], user_ids[2], user_ids[3]),
+            ),
+        ).mood_summary
+        assert difficult_good_good.average == Decimal(7) / Decimal(3)
+        assert difficult_good_good.average_text == "2.3"
+        assert difficult_good_good.recorded_count == 3
+
+        only_missing_period, error = resolve_dashboard_filter(
+            today=TEST_DATE,
+            period=CUSTOM_RANGE,
+            from_value="2026-07-11",
+            to_value="2026-07-11",
+        )
+        assert error is None and only_missing_period is not None
+        only_missing = get_dashboard_summary(
+            session,
+            selected_period=only_missing_period,
+        ).mood_summary
+        assert only_missing.average is None
+        assert only_missing.average_text is None
+        assert only_missing.recorded_count == 0
+        assert only_missing.trend[0].average is None
+    engine.dispose()
+
+
+def test_country_blocker_shares_sorting_and_view_all_markup(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_user_id, second_user_id = dashboard_application
+    collapsed = get_dashboard(application)
+    assert "data-expand-toggle" not in collapsed.text
+
+    with Session(engine) as session:
+        additions = (
+            (first_user_id, date(2026, 7, 15), "Competitor", (("CA", 10), ("FR", 5))),
+            (second_user_id, date(2026, 7, 15), "No budget", (("IT", 4),)),
+            (first_user_id, date(2026, 7, 16), "Technical limitation", (("ES", 3),)),
+            (second_user_id, date(2026, 7, 16), "Other", (("GB", 2),)),
+        )
+        for user_id, activity_date, blocker, countries in additions:
+            add_outreach(
+                session,
+                user_id=user_id,
+                activity_date=activity_date,
+                total=1,
+                companies=sum(count for _code, count in countries),
+                blocker=blocker,
+                countries=countries,
+            )
+        session.commit()
+        selected, error = resolve_dashboard_filter(
+            today=TEST_DATE,
+            period=CURRENT_WEEK,
+        )
+        assert error is None and selected is not None
+        summary = get_dashboard_summary(session, selected_period=selected)
+
+    country_values = {
+        item.key: (item.value, item.share_percentage, item.bar_percentage)
+        for item in summary.countries
+    }
+    assert [item.key for item in summary.countries] == [
+        "CA", "BR", "FR", "IT", "ES", "AT", "GB", "DE",
+    ]
+    assert country_values["CA"] == (10, 31, 100)
+    assert country_values["BR"] == (5, 16, 50)
+    assert country_values["FR"] == (5, 16, 50)
+    assert country_values["DE"] == (1, 3, 10)
+    assert [item.key for item in summary.blockers] == [
+        "No response",
+        "No budget",
+        "Competitor",
+        "Technical limitation",
+        "Other",
+    ]
+    assert [item.share_percentage for item in summary.blockers] == [
+        33, 17, 17, 17, 17,
+    ]
+
+    response = get_dashboard(application)
+    countries = response.text.split(">Countries</h2>", 1)[1].split(
+        "</article>", 1,
+    )[0]
+    blockers = response.text.split(">Blockers</h2>", 1)[1].split(
+        "</article>", 1,
+    )[0]
+    assert countries.count("data-country=") == 8
+    assert countries.count("data-expandable-row hidden") == 5
+    country_rows = re.findall(
+        r'<div\s+class="dashboard-ranked-item dashboard-breakdown-item"[\s\S]*?>',
+        countries,
+    )
+    assert len(country_rows) == 8
+    assert sum(" hidden" not in row for row in country_rows) == 3
+    assert "data-expandable-row hidden" in country_rows[3]
+    assert blockers.count("data-blocker=") == 5
+    assert blockers.count("data-expandable-row hidden") == 2
+    assert countries.count("data-expand-toggle") == 1
+    assert blockers.count("data-expand-toggle") == 1
+    assert 'aria-expanded="false"' in countries
+    assert 'aria-expanded="false"' in blockers
+    assert "No blocker" not in blockers
+    assert 'data-blocker-count="0"' not in blockers
+
+
+def test_mood_template_accessibility_and_empty_state(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, _, _, _ = dashboard_application
+    response = get_dashboard(application)
+    mood_card = response.text.split('id="mood-summary-heading"', 1)[1].split(
+        "</article>", 1,
+    )[0]
+    assert "Average mood" in mood_card
+    assert "Mood distribution" in mood_card
+    assert "Daily mood trend" in mood_card
+    assert mood_card.count("data-mood-legend=") == 3
+    assert "Missing mood is excluded, not treated as neutral." in mood_card
+    assert "Current period" in mood_card
+    assert "Previous period" not in mood_card
+    assert 'aria-label="2026-07-13: average 3, 1 recorded entry"' in mood_card
+    assert 'aria-label="2026-07-14: average 1, 1 recorded entry"' in mood_card
+    assert 'data-mood-date="2026-07-15"' not in mood_card
+    assert mood_card.count("dashboard-mood-current-line") == 1
+
+    empty = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-05-01&to=2026-05-02",
+    )
+    assert empty.text.count("No recorded mood for this period.") == 1
+    empty_mood_card = empty.text.split('id="mood-summary-heading"', 1)[1].split(
+        "</article>", 1,
+    )[0]
+    assert "dashboard-mood-trend-chart" not in empty_mood_card
+    assert "dashboard-mood-donut" not in empty_mood_card
+
+
+def test_long_mood_trend_uses_compact_proportional_dates_and_retains_gaps(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    """Long periods keep daily records without requiring a wider chart."""
+    _, engine, _, _ = dashboard_application
+    with Session(engine) as session:
+        selected, error = resolve_dashboard_filter(
+            today=TEST_DATE,
+            period=CURRENT_MONTH,
+        )
+        assert error is None and selected is not None
+        mood = get_dashboard_summary(session, selected_period=selected).mood_summary
+
+    assert len(mood.trend) == 31
+    assert mood.chart_width == 640
+    assert mood.trend[0].date == date(2026, 7, 1)
+    assert mood.trend[-1].date == date(2026, 7, 31)
+    assert mood.trend[0].show_date_label
+    assert mood.trend[-1].show_date_label
+    assert sum(point.show_date_label for point in mood.trend) <= 10
+    assert mood.trend[0].x == 48
+    assert mood.trend[-1].x == 628
+    assert all(
+        earlier.x < later.x
+        for earlier, later in zip(mood.trend, mood.trend[1:])
+    )
+    assert mood.trend[14].average is None
+    assert mood.trend[14].y is None
+    assert mood.trend[14].recorded_count == 0
+    recorded = [point for point in mood.trend if point.average is not None]
+    assert [(point.date, point.display_average) for point in recorded] == [
+        (date(2026, 7, 13), "3"),
+        (date(2026, 7, 14), "1"),
+    ]
+
+
+def test_redesigned_analysis_layout_and_view_all_script_contract() -> None:
+    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+    script = Path("app/static/js/dashboard_filter.js").read_text(encoding="utf-8")
+
+    assert template.index("mood-summary-heading") < template.index(
+        'class="dashboard-analysis-grid"',
+    ) < template.index("comments-overview-heading")
+    assert template.count("dashboard-mood-summary-card") == 1
+    assert 'aria-label="Countries and blockers"' in template
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
+    mobile_css = css.split("@media (max-width: 47.999rem)", 1)[1].split(
+        "@media (hover: hover)", 1,
+    )[0]
+    assert "grid-template-columns: minmax(0, 1fr)" in mobile_css
+    mobile_card_css = mobile_css.split(
+        ".dashboard-analysis-grid .dashboard-analysis-card {", 1,
+    )[1].split("}", 1)[0]
+    assert "min-height: 0" in mobile_card_css
+    analysis_grid_css = css.split(
+        ".dashboard-analysis-grid {\n  margin-top:", 1,
+    )[1].split("}", 1)[0]
+    assert "align-items: stretch" in analysis_grid_css
+    analysis_card_css = css.split(
+        ".dashboard-analysis-grid .dashboard-analysis-card {", 1,
+    )[1].split("}", 1)[0]
+    assert "display: flex" in analysis_card_css
+    assert "flex-direction: column" in analysis_card_css
+    assert "align-self: stretch" in analysis_card_css
+    assert "height: auto" in analysis_card_css
+    analysis_body_css = css.split(
+        ".dashboard-analysis-body {", 1,
+    )[1].split("}", 1)[0]
+    assert "flex: 1 1 auto" in analysis_body_css
+    expanded_grid_css = css.split(
+        ".dashboard-analysis-grid.has-expanded-card {", 1,
+    )[1].split("}", 1)[0]
+    assert "align-items: start" in expanded_grid_css
+    hidden_row_css = css.split(
+        ".dashboard-ranked-item[hidden] {", 1,
+    )[1].split("}", 1)[0]
+    assert "display: none !important" in hidden_row_css
+    assert "fixed" not in analysis_card_css
+    desktop_css = css.split("@media (min-width: 64rem)", 1)[1]
+    desktop_grid_css = desktop_css.split(
+        ".dashboard-analysis-grid {", 1,
+    )[1].split("}", 1)[0]
+    assert "align-items: start" in desktop_grid_css
+    desktop_card_css = desktop_css.split(
+        ".dashboard-analysis-grid .dashboard-analysis-card {", 1,
+    )[1].split("}", 1)[0]
+    assert "min-height:" not in desktop_card_css
+    assert "align-self: stretch" in desktop_card_css
+    trend_viewport_css = css.split(
+        ".dashboard-mood-trend-viewport {", 1,
+    )[1].split("}", 1)[0]
+    assert "overflow: hidden" in trend_viewport_css
+    assert "overflow-x: auto" not in trend_viewport_css
+    assert "max-width: 100%" in css.split(
+        ".dashboard-mood-trend-viewport {", 1,
+    )[1].split("}", 1)[0]
+    assert 'width="100%"' in template
+    assert "viewBox=\"0 0 {{ summary.mood_summary.chart_width }} 152\"" in template
+    assert "loop.index > 3" in template
+    assert "length > 3" in template
+    assert 'document.querySelectorAll("[data-expand-toggle]")' in script
+    assert 'toggle.setAttribute("aria-expanded", String(!expanded))' in script
+    assert 'row.hidden = expanded' in script
+    assert 'toggle.textContent = expanded ? "View all" : "Show less"' in script
+    assert 'grid.classList.toggle("has-expanded-card", hasExpandedCard)' in script
+    assert "captureCardBaseline" in script
+    assert "clearCardBaseline" in script
+    assert "window.location" not in script.split(
+        'document.querySelectorAll("[data-expand-toggle]")', 1,
+    )[1]

@@ -22,7 +22,7 @@ from app.models import (
     UserMood,
 )
 from app.services.activity_metrics import aggregate_activity_actuals
-from app.services.meetings import meeting_date_bounds
+from app.services.meetings import BLOCKER_OPTIONS, meeting_date_bounds
 from app.services.targets import TARGET_FIELDS, TARGET_METRICS, current_week_bounds
 
 CURRENT_WEEK = "current-week"
@@ -123,6 +123,48 @@ class BreakdownItem:
     label: str
     value: int
     bar_percentage: int
+    share_percentage: int
+
+
+@dataclass(frozen=True)
+class MoodTrendPoint:
+    """One calendar day in the outreach-only mood trend."""
+
+    date: date
+    average: Decimal | None
+    recorded_count: int
+    display_average: str | None
+    x: int
+    y: int | None
+    show_date_label: bool
+    connects_to_previous: bool
+
+    @property
+    def accessible_label(self) -> str:
+        """Describe a plotted point without hiding its exact source count."""
+        if self.average is None or self.display_average is None:
+            return f"{self.date.isoformat()}: no recorded mood"
+        noun = "entry" if self.recorded_count == 1 else "entries"
+        return (
+            f"{self.date.isoformat()}: average {self.display_average}, "
+            f"{self.recorded_count} recorded {noun}"
+        )
+
+
+@dataclass(frozen=True)
+class MoodSummary:
+    """Outreach-only average, distribution, and exact daily mood series."""
+
+    average: Decimal | None
+    average_text: str | None
+    recorded_count: int
+    distribution: tuple[BreakdownItem, ...]
+    trend: tuple[MoodTrendPoint, ...]
+    chart_width: int
+
+    @property
+    def has_recorded_mood(self) -> bool:
+        return self.recorded_count > 0
 
 
 @dataclass(frozen=True)
@@ -289,10 +331,15 @@ class DashboardSummary:
     activity_buckets: tuple[ActivityBucket, ...]
     countries: tuple[BreakdownItem, ...]
     blockers: tuple[BreakdownItem, ...]
-    moods: tuple[BreakdownItem, ...]
+    mood_summary: MoodSummary
     comments: tuple[DashboardComment, ...]
     has_activity: bool
     has_selected_users: bool
+
+    @property
+    def moods(self) -> tuple[BreakdownItem, ...]:
+        """Retain the existing distribution access name for callers."""
+        return self.mood_summary.distribution
 
     @property
     def activity_label_stride(self) -> int:
@@ -655,17 +702,30 @@ def _relative_breakdown(
         {key: value for key, value in counts.items() if value > 0},
     )
     maximum = max(positive_counts.values(), default=0)
+    total = sum(positive_counts.values())
     return tuple(
         BreakdownItem(
             key=key,
             label=(labels or {}).get(key, key),
             value=value,
-            bar_percentage=round(value / maximum * 100) if maximum else 0,
+            bar_percentage=_rounded_percentage(value, maximum),
+            share_percentage=_rounded_percentage(value, total),
         )
         for key, value in sorted(
             positive_counts.items(),
-            key=lambda item: (-item[1], (labels or {}).get(item[0], item[0])),
+            key=lambda item: -item[1],
         )
+    )
+
+
+def _rounded_percentage(numerator: int, denominator: int) -> int:
+    """Round a whole-number share consistently with product rate displays."""
+    if denominator == 0:
+        return 0
+    return int(
+        (
+            Decimal(numerator) / Decimal(denominator) * Decimal(100)
+        ).quantize(Decimal("1"), rounding=ROUND_HALF_UP),
     )
 
 
@@ -680,7 +740,7 @@ def _country_breakdown(
     for country in session.exec(
         select(OutreachCountry).where(
             OutreachCountry.outreach_daily_id.in_(outreach_ids),
-        ),
+        ).order_by(OutreachCountry.id),
     ).all():
         counts[country.country_code] += country.companies_contacted
     return _relative_breakdown(counts, labels=COUNTRY_NAMES_BY_CODE)
@@ -698,11 +758,110 @@ def _mood_breakdown(outreach: list[DailyOutreach]) -> tuple[BreakdownItem, ...]:
             key=mood.value.lower(),
             label=mood.value,
             value=counts[mood.value],
-            bar_percentage=(round(counts[mood.value] / total * 100) if total else 0),
+            bar_percentage=_rounded_percentage(counts[mood.value], total),
+            share_percentage=_rounded_percentage(counts[mood.value], total),
         )
         for mood in UserMood
         if counts[mood.value] > 0
     )
+
+
+MOOD_SCORES = {
+    UserMood.DIFFICULT: Decimal(1),
+    UserMood.OKAY: Decimal(2),
+    UserMood.GOOD: Decimal(3),
+}
+
+
+def _mood_display(value: Decimal) -> str:
+    """Apply ROUND_HALF_UP once for a compact one-decimal mood value."""
+    rounded = value.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    return format(rounded, "f").rstrip("0").rstrip(".")
+
+
+def _mood_summary(
+    selected_period: DashboardFilter,
+    outreach: list[DailyOutreach],
+) -> MoodSummary:
+    """Build all mood analytics from the same filled outreach user-days."""
+    recorded = [record for record in outreach if record.user_mood is not None]
+    scores = [MOOD_SCORES[record.user_mood] for record in recorded]
+    average = sum(scores, Decimal(0)) / len(scores) if scores else None
+    daily_scores: dict[date, list[Decimal]] = {}
+    for record in recorded:
+        daily_scores.setdefault(record.activity_date, []).append(
+            MOOD_SCORES[record.user_mood],
+        )
+
+    duration = (selected_period.end_date - selected_period.start_date).days + 1
+    chart_width = 640
+    label_stride = max(1, ceil(duration / 9))
+    trend: list[MoodTrendPoint] = []
+    has_previous_point = False
+    for index in range(duration):
+        point_date = selected_period.start_date + timedelta(days=index)
+        day_scores = daily_scores.get(point_date, [])
+        daily_average = (
+            sum(day_scores, Decimal(0)) / len(day_scores)
+            if day_scores
+            else None
+        )
+        trend.append(
+            MoodTrendPoint(
+                date=point_date,
+                average=daily_average,
+                recorded_count=len(day_scores),
+                display_average=(
+                    _mood_display(daily_average)
+                    if daily_average is not None
+                    else None
+                ),
+                x=(
+                    48
+                    if duration == 1
+                    else round(48 + (chart_width - 60) * index / (duration - 1))
+                ),
+                y=(
+                    int(18 + (Decimal(3) - daily_average) * Decimal(49))
+                    if daily_average is not None
+                    else None
+                ),
+                show_date_label=(
+                    index % label_stride == 0 or index == duration - 1
+                ),
+                connects_to_previous=bool(day_scores) and has_previous_point,
+            ),
+        )
+        has_previous_point = has_previous_point or bool(day_scores)
+
+    return MoodSummary(
+        average=average,
+        average_text=_mood_display(average) if average is not None else None,
+        recorded_count=len(recorded),
+        distribution=_mood_breakdown(outreach),
+        trend=tuple(trend),
+        chart_width=chart_width,
+    )
+
+
+def _blocker_breakdown(outreach: list[DailyOutreach]) -> tuple[BreakdownItem, ...]:
+    """Return only real positive blockers in stable approved category order."""
+    counts = Counter(
+        record.blocker_tag
+        for record in outreach
+        if record.blocker_tag not in {None, "", "No blocker"}
+    )
+    option_order = {
+        value: index
+        for index, (value, _label) in enumerate(BLOCKER_OPTIONS)
+    }
+    ordered_counts = Counter()
+    for key, value in sorted(
+        counts.items(),
+        key=lambda item: (option_order.get(item[0], len(option_order)),),
+    ):
+        ordered_counts[key] = value
+    return _relative_breakdown(ordered_counts)
 
 
 def _pipeline_conversion_summary(
@@ -871,9 +1030,6 @@ def get_dashboard_summary(
         )
         for metric, label in TARGET_FIELDS
     )
-    blockers = Counter(
-        record.blocker_tag for record in outreach if record.blocker_tag is not None
-    )
     return DashboardSummary(
         selected_period=selected_period,
         metrics=metrics,
@@ -881,8 +1037,8 @@ def get_dashboard_summary(
         outreach_conversions=_outreach_conversion_summary(outreach),
         activity_buckets=_activity_buckets(selected_period, outreach, meetings),
         countries=_country_breakdown(session, outreach),
-        blockers=_relative_breakdown(blockers),
-        moods=_mood_breakdown(outreach),
+        blockers=_blocker_breakdown(outreach),
+        mood_summary=_mood_summary(selected_period, outreach),
         comments=_dashboard_comments(session, outreach, meetings),
         has_activity=bool(outreach or meetings),
         has_selected_users=(
@@ -901,6 +1057,8 @@ __all__ = [
     "DashboardComment",
     "DashboardMetric",
     "DashboardSummary",
+    "MoodSummary",
+    "MoodTrendPoint",
     "DashboardUserFilter",
     "DashboardUserOption",
     "OutreachConversionMetric",
