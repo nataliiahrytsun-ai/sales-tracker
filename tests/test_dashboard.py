@@ -332,7 +332,8 @@ def assert_empty_selected_dashboard(response: httpx.Response) -> None:
     assert "No activity to display." in response.text
     assert 'class="dashboard-chart-group"' not in response.text
     assert 'data-country=' not in response.text
-    assert 'data-blocker=' not in response.text
+    assert response.text.count('data-blocker=') == 8
+    assert response.text.count('data-blocker-count="0"') == 8
     assert 'data-mood=' not in response.text
     assert "No country activity for this period." in response.text
     assert "No Daily outreach blockers for this period." in response.text
@@ -823,7 +824,7 @@ def test_conversion_sections_share_compact_responsive_mini_metrics(
     template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
     assert "Company metrics" not in template
     assert "Activity &amp; target progress" in template
-    assert template.count('class="dashboard-section-heading"') == 3
+    assert template.count("dashboard-section-heading") == 8
     assert template.count("dashboard-conversion-card") == 3
     activity_heading = template.index('id="company-metrics-heading"')
     activity_section = template.rfind("<section", 0, activity_heading)
@@ -1251,8 +1252,224 @@ def test_activity_country_blocker_and_mood_aggregates_use_required_sources(
     assert 'data-mood="difficult"' in response.text
     assert 'data-mood="okay"' not in response.text
     assert 'data-mood="good"' in response.text
-    assert "Daily outreach mood" in response.text
-    assert "Daily outreach blockers" in response.text
+    assert "Mood distribution" in response.text
+    assert "Blockers" in response.text
+
+
+def test_analysis_grid_preserves_values_empty_states_and_responsive_markup(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, _, _, _ = dashboard_application
+    response = get_dashboard(application)
+    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+
+    section_positions = [
+        template.index('id="company-metrics-heading"'),
+        template.index('id="daily-activity-heading"'),
+        template.index('id="pipeline-conversion-heading"'),
+        template.index('id="outreach-conversion-heading"'),
+        template.index('class="dashboard-analysis-grid"'),
+        template.index('id="comments-overview-heading"'),
+    ]
+    assert section_positions == sorted(section_positions)
+    for heading in (
+        "daily-activity-heading",
+        "comments-overview-heading",
+    ):
+        heading_tag = template.split(f'id="{heading}"', 1)[1].split(">", 1)[0]
+        assert "dashboard-section-heading" in heading_tag
+    for heading in ("Countries", "Blockers", "Mood distribution"):
+        heading_tag = template.split(f">{heading}</h2>", 1)[0].rsplit("<h2", 1)[1]
+        assert "dashboard-section-heading" in heading_tag
+
+    assert 'class="dashboard-analysis-grid"' in response.text
+    assert response.text.count("dashboard-analysis-section") == 3
+    assert '>Countries</h2>' in response.text
+    assert '>Blockers</h2>' in response.text
+    assert '>Mood distribution</h2>' in response.text
+    assert "Country" in response.text
+    assert "Companies" in response.text
+    countries_section = response.text.split(">Countries</h2>", 1)[1].split(
+        "</article>",
+        1,
+    )[0]
+    assert "Replies" not in countries_section
+    assert "Positive" not in countries_section
+    assert "<table" not in countries_section
+    assert re.search(
+        r'data-country="BR"[\s\S]*?<span>Brazil</span>'
+        r'[\s\S]*?<strong>5</strong>[\s\S]*?width: 100%',
+        response.text,
+    )
+    assert re.search(
+        r'data-blocker="No response"[\s\S]*?<strong>2</strong>',
+        response.text,
+    )
+    blockers_section = response.text.split(">Blockers</h2>", 1)[1].split(
+        "</article>",
+        1,
+    )[0]
+    standard_blockers = (
+        "No budget",
+        "No decision-maker",
+        "No urgency",
+        "Competitor",
+        "Technical limitation",
+        "Procurement/legal delay",
+        "No response",
+        "Other",
+    )
+    rendered_blockers = re.findall(r'data-blocker="([^"]+)"', blockers_section)
+    assert rendered_blockers == [
+        "No response",
+        *standard_blockers[:-2],
+        "Other",
+    ]
+    assert blockers_section.count('data-blocker-count="0"') == 7
+    assert 'data-blocker-count="2"' in blockers_section
+    assert "No blocker" not in blockers_section
+    assert "dashboard-bar" not in blockers_section
+    assert blockers_section.count("dashboard-blocker-item") == 8
+
+    assert response.text.count('class="dashboard-mood-donut') == 1
+    assert 'aria-label="Mood distribution: 2 recorded mood entries"' in response.text
+    assert "--mood-difficult-percentage: 50" in response.text
+    assert "--mood-okay-percentage: 0" in response.text
+    assert ">recorded</span>" in response.text
+    assert response.text.count("data-mood-legend=") == 3
+    for mood, count, percentage in (
+        ("difficult", 1, 50),
+        ("okay", 0, 0),
+        ("good", 1, 50),
+    ):
+        legend_item = response.text.split(
+            f'data-mood-legend="{mood}"',
+            1,
+        )[1].split("</div>", 1)[0]
+        assert f"<strong>{count} <small>{percentage}%</small></strong>" in (
+            legend_item
+        )
+
+
+def test_blockers_render_positive_counts_descending_then_zeroes_in_form_order(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_user_id, second_user_id = dashboard_application
+    with Session(engine) as session:
+        for user_id, activity_date, blocker in (
+            (first_user_id, date(2026, 7, 15), "Competitor"),
+            (second_user_id, date(2026, 7, 15), "Competitor"),
+            (first_user_id, date(2026, 7, 16), "Technical limitation"),
+            (second_user_id, date(2026, 7, 16), "Other"),
+        ):
+            add_outreach(
+                session,
+                user_id=user_id,
+                activity_date=activity_date,
+                total=1,
+                companies=1,
+                blocker=blocker,
+            )
+        session.commit()
+
+    response = get_dashboard(application)
+    blockers_section = response.text.split(">Blockers</h2>", 1)[1].split(
+        "</article>",
+        1,
+    )[0]
+    rendered_blockers = re.findall(r'data-blocker="([^"]+)"', blockers_section)
+    assert rendered_blockers == [
+        "Competitor",
+        "No response",
+        "Technical limitation",
+        "Other",
+        "No budget",
+        "No decision-maker",
+        "No urgency",
+        "Procurement/legal delay",
+    ]
+    assert re.findall(r'data-blocker-count="(\d+)"', blockers_section) == [
+        "2",
+        "2",
+        "1",
+        "1",
+        "0",
+        "0",
+        "0",
+        "0",
+    ]
+    assert "No blocker" not in blockers_section
+
+    empty = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-05-01&to=2026-05-02",
+    )
+    assert "No country activity for this period." in empty.text
+    assert "No Daily outreach blockers for this period." in empty.text
+    assert "No Daily outreach mood for this period." in empty.text
+    assert 'class="dashboard-mood-donut is-empty"' in empty.text
+    assert 'aria-label="Mood distribution: 0 recorded mood entries"' in empty.text
+    assert empty.text.count("data-mood-legend=") == 3
+    assert empty.text.count("<strong>0 <small>0%</small></strong>") == 3
+    empty_blockers = empty.text.split(">Blockers</h2>", 1)[1].split(
+        "</article>",
+        1,
+    )[0]
+    assert empty_blockers.count('data-blocker-count="0"') == 8
+    assert empty_blockers.count(" is-zero") == 8
+
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+    mobile_css = css.split("@media (max-width: 47.999rem)", 1)[1].split(
+        "@media (hover: hover)",
+        1,
+    )[0]
+    assert ".dashboard-analysis-grid" in mobile_css
+    assert "grid-template-columns: minmax(0, 1fr)" in mobile_css
+    analysis_css = css.split(
+        ".dashboard-analysis-grid {\n  margin-top:",
+        1,
+    )[1].split(
+        "}",
+        1,
+    )[0]
+    assert "grid-template-columns: minmax(0, 1fr)" in analysis_css
+    assert "align-items: start" in analysis_css
+    tablet_css = css.split("@media (min-width: 48rem)", 1)[1].split(
+        "@media (min-width: 64rem)",
+        1,
+    )[0]
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in tablet_css
+    assert ".dashboard-countries-section" in tablet_css
+    assert "grid-column: 1 / -1" in tablet_css
+    desktop_css = css.split("@media (min-width: 64rem)", 1)[1]
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in desktop_css
+    assert "align-items: start" in desktop_css
+    assert ".dashboard-blockers-section," in desktop_css
+    assert ".dashboard-mood-section" in desktop_css
+    assert "min-height: 26rem" in desktop_css
+    assert ".dashboard-blockers-section," not in tablet_css
+    assert "--mood-difficult-color: #718096" in css
+    assert "--mood-good-color: #6aa89d" in css
+    assert "var(--mood-difficult-color)" in css
+    assert "var(--mood-good-color)" in css
+    mood_content_css = css.split(".dashboard-mood-content {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    assert "margin-top: 0.75rem" in mood_content_css
+    assert "margin-top: 0.5rem" in mobile_css.split(
+        ".dashboard-mood-content {",
+        1,
+    )[1].split("}", 1)[0]
+    blocker_item_css = css.split(".dashboard-blocker-item {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    assert "border-bottom: 1px solid var(--border)" in blocker_item_css
+    assert "grid-template-columns: minmax(0, 1fr) auto" in blocker_item_css
+    assert response.text.count('data-country="BR"') == 1
+    assert response.text.count('data-blocker="No response"') == 1
+    assert response.text.count("data-mood-legend=") == 3
 
 
 def test_aggregate_breakdown_values_and_separate_daily_series(
@@ -1703,7 +1920,17 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
         "dashboard-filter",
     )
     results_css = css.split(".dashboard-results {", 1)[1].split("}", 1)[0]
-    assert "margin-top: 1rem" in results_css
+    assert "margin-top: 0.85rem" in results_css
+    dashboard_topbar_css = css.split(".dashboard-topbar {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    assert "gap: 0.35rem" in dashboard_topbar_css
+    dashboard_navigation_css = css.split(".dashboard-navigation-row {", 1)[
+        1
+    ].split("}", 1)[0]
+    assert "margin-top: 0.5rem" in dashboard_navigation_css
+    assert "margin-bottom: 0.75rem" in dashboard_navigation_css
     target_helper_css = css.split(
         ".dashboard-metrics-helper {",
         1,
@@ -1746,7 +1973,7 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
         ".dashboard-filter > *",
         ".dashboard-period-group > *",
         ".dashboard-metric-grid > *",
-        ".dashboard-breakdown-grid > *",
+        ".dashboard-analysis-grid > *",
     ):
         assert selector in shrink_safe_children
     assert "max-width: 100%" in shrink_safe_children
@@ -1797,9 +2024,9 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert "grid-template-columns: minmax(0, 1fr)" in mobile_dashboard_css
     assert ".dashboard-metric-card" in mobile_dashboard_css
     assert ".dashboard-grouped-chart" in mobile_dashboard_css
-    assert ".dashboard-breakdown-grid" in mobile_dashboard_css
+    assert ".dashboard-analysis-grid" in mobile_dashboard_css
     assert ".dashboard-metric-grid > *" in mobile_dashboard_css
-    assert ".dashboard-breakdown-grid > *" in mobile_dashboard_css
+    assert ".dashboard-analysis-grid > *" in mobile_dashboard_css
     assert "width: 100%" in mobile_dashboard_css
     assert "box-sizing: border-box" in mobile_dashboard_css
     assert ".report-heading-row" in css
@@ -1840,7 +2067,7 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert "grid-template-columns: minmax(0, 1fr)" in tablet_css
     assert "min-height: 2.75rem" in css
     assert ".dashboard-metric-grid" in css
-    assert ".dashboard-breakdown-grid" in css
+    assert ".dashboard-analysis-grid" in css
     assert 'class="metric-primary-row"' in template
     assert 'class="metric-remaining"' in template
     primary_row = template.split('class="metric-primary-row"', 1)[1].split(
@@ -1891,6 +2118,16 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert "overflow-wrap: anywhere" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in tablet_css
     assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in desktop_css
+    grouped_chart_css = css.split(".dashboard-grouped-chart {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    assert "height: 9.75rem" in grouped_chart_css
+    tablet_grouped_chart_css = tablet_css.split(
+        ".dashboard-grouped-chart {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "height: 8.75rem" in tablet_grouped_chart_css
     assert "applyButton.disabled = !datesAreValid()" in script
     assert "if (!isCustom()) applyPresetPeriod()" in script
     assert "checkedUsers().length === 0" not in script
@@ -1930,14 +2167,14 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert "appearance: none" in css
     assert ".dashboard-control-arrow" in css
     breakdown_card_css = css.split(
-        ".dashboard-breakdown-grid .dashboard-analysis-card {",
+        ".dashboard-analysis-grid .dashboard-analysis-card {",
         1,
     )[1].split("}", 1)[0]
     for declaration in (
         "display: flex",
-        "height: 100%",
+        "height: auto",
         "padding: 0.85rem",
-        "align-self: stretch",
+        "align-self: start",
     ):
         assert declaration in breakdown_card_css
     visually_hidden_css = css.split(".visually-hidden {", 1)[1].split(
@@ -1976,3 +2213,4 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert "width: 100%" in dashboard_page_css
     assert "max-width: 68rem" in dashboard_page_css
     assert "margin-inline: auto" in dashboard_page_css
+    assert "margin-top: -0.5rem" in dashboard_page_css
