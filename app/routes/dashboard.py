@@ -114,6 +114,7 @@ def dashboard_page(
             grouping: (
                 f"{request.url_for('dashboard_page')}?"
                 f"{urlencode([*comment_params, ('comment_group', grouping)])}"
+                "#comments-overview"
             )
             for grouping in ("employee", "date", "source")
         }

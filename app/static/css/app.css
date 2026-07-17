@@ -1260,28 +1260,12 @@ textarea {
 .dashboard-group-button:hover,
 .dashboard-group-button:focus-visible,
 .dashboard-group-button.is-active {
-  border-color: var(--accent);
-  outline: none;
+  border-color: var(--primary);
 }
 
 .dashboard-group-button.is-active {
-  background: var(--accent-soft);
-}
-
-.dashboard-comment-groups,
-.dashboard-comment-group {
-  display: grid;
-  min-width: 0;
-  gap: 0.65rem;
-}
-
-.dashboard-comment-group + .dashboard-comment-group {
-  margin-top: 0.5rem;
-}
-
-.dashboard-comment-group h3 {
-  margin: 0;
-  font-size: 1rem;
+  background: var(--background);
+  color: var(--primary);
 }
 
 .dashboard-table-wrap {
@@ -1290,10 +1274,40 @@ textarea {
   overflow-x: auto;
 }
 
+.dashboard-comments-table-wrap {
+  min-width: 0;
+  overscroll-behavior-inline: contain;
+}
+
 .dashboard-data-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.88rem;
+}
+
+.dashboard-comments-table {
+  min-width: 46rem;
+  table-layout: fixed;
+}
+
+.dashboard-comments-column-date {
+  width: 12%;
+}
+
+.dashboard-comments-column-employee {
+  width: 18%;
+}
+
+.dashboard-comments-column-source {
+  width: 14%;
+}
+
+.dashboard-comments-column-outcome {
+  width: 18%;
+}
+
+.dashboard-comments-column-comment {
+  width: 38%;
 }
 
 .dashboard-data-table th,
@@ -1308,6 +1322,23 @@ textarea {
 .dashboard-data-table th {
   color: var(--muted);
   font-weight: 600;
+}
+
+.dashboard-comments-table th,
+.dashboard-comments-table td {
+  padding-block: 0.4rem;
+}
+
+.dashboard-comments-table td:last-child {
+  overflow-wrap: anywhere;
+}
+
+.dashboard-comments-group-row th {
+  padding-block: 0.45rem;
+  border-top: 1px solid var(--border);
+  background: var(--background);
+  color: var(--text);
+  font-weight: 700;
 }
 
 .dashboard-mini-metric-grid {

@@ -907,7 +907,8 @@ def test_comment_grouping_preserves_records_and_marks_active_control(
     assert response.text.count("Do not expose meeting note") == 3
     active_link = re.search(
         rf'<a[^>]+class="dashboard-group-button is-active"[^>]*'
-        rf'href="[^"]*comment_group={grouping}"[^>]*aria-current="true"',
+        rf'href="[^"]*comment_group={grouping}'
+        rf'#comments-overview"[^>]*aria-current="true"',
         response.text,
     )
     assert active_link is not None

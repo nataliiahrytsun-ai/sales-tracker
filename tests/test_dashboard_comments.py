@@ -4,8 +4,9 @@ import asyncio
 from collections.abc import Generator
 from datetime import UTC, date, datetime
 from html import unescape
+from pathlib import Path
 import re
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import SplitResult, parse_qs, urlsplit
 
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
@@ -155,13 +156,24 @@ def get_dashboard(application: FastAPI, url: str = "/dashboard") -> httpx.Respon
     return asyncio.run(scenario())
 
 
-def grouping_query(response: httpx.Response, label: str) -> dict[str, list[str]]:
+def grouping_url(response: httpx.Response, label: str) -> SplitResult:
     match = re.search(
         rf'<a[^>]+href="([^"]+)"[^>]*>{re.escape(label)}</a>',
         response.text,
     )
     assert match is not None
-    return parse_qs(urlsplit(unescape(match.group(1))).query)
+    return urlsplit(unescape(match.group(1)))
+
+
+def grouping_query(response: httpx.Response, label: str) -> dict[str, list[str]]:
+    return parse_qs(grouping_url(response, label).query)
+
+
+def comments_section(response: httpx.Response) -> str:
+    marker = response.text.index('id="comments-overview"')
+    start = response.text.rfind("<section", 0, marker)
+    end = response.text.index("</section>", marker)
+    return response.text[start:end]
 
 
 def test_comments_default_invalid_fallback_sources_and_safe_rendering(
@@ -173,9 +185,18 @@ def test_comments_default_invalid_fallback_sources_and_safe_rendering(
         get_dashboard(application, "/dashboard?comment_group=invalid"),
     ):
         assert response.status_code == 200
+        section = comments_section(response)
         assert response.text.count('aria-current="true"') == 1
-        assert ">Anna Employee</h3>" in response.text
-        assert ">Ben Employee</h3>" in response.text
+        assert section.count("<table") == 1
+        assert section.count("<thead>") == 1
+        assert section.count('scope="col"') == 5
+        assert section.count('colspan="5" scope="rowgroup"') == 2
+        assert ">Anna Employee</th>" in section
+        assert ">Ben Employee</th>" in section
+        assert "dashboard-comments-table-wrap" in section
+        assert 'id="comments-overview"' in section
+        for label in ("By employee", "By date", "By source"):
+            assert grouping_url(response, label).fragment == "comments-overview"
         assert "Meeting" in response.text
         assert "Daily Outreach" in response.text
         assert "Follow-up" in response.text
@@ -192,14 +213,50 @@ def test_comments_group_by_date_and_source(
 ) -> None:
     application, _, _, _ = comments_application
     by_date = get_dashboard(application, "/dashboard?comment_group=date")
-    assert by_date.text.index(">2026-07-15</h3>") < by_date.text.index(
-        ">2026-07-14</h3>",
+    by_date_section = comments_section(by_date)
+    assert by_date_section.index(">2026-07-15</th>") < by_date_section.index(
+        ">2026-07-14</th>",
     )
-    assert 'comment_group=date"' in by_date.text
+    assert by_date.text.count("data-comment-source=") == 3
+    assert 'comment_group=date#comments-overview"' in by_date.text
     by_source = get_dashboard(application, "/dashboard?comment_group=source")
-    assert ">Meeting</h3>" in by_source.text
-    assert ">Daily Outreach</h3>" in by_source.text
-    assert 'comment_group=source"' in by_source.text
+    assert ">Meeting</th>" in by_source.text
+    assert ">Daily Outreach</th>" in by_source.text
+    assert by_source.text.count("data-comment-source=") == 3
+    assert 'comment_group=source#comments-overview"' in by_source.text
+
+
+def test_comments_table_has_fixed_columns_and_local_mobile_scroll() -> None:
+    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert "dashboard-comments-column-date" in template
+    assert "dashboard-comments-column-employee" in template
+    assert "dashboard-comments-column-source" in template
+    assert "dashboard-comments-column-outcome" in template
+    assert "dashboard-comments-column-comment" in template
+    wrapper_css = css.split(
+        ".dashboard-comments-table-wrap {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "min-width: 0" in wrapper_css
+    assert "overscroll-behavior-inline: contain" in wrapper_css
+    assert "overflow-x: auto" in css
+    table_css = css.split(".dashboard-comments-table {", 1)[1].split("}", 1)[0]
+    assert "min-width: 46rem" in table_css
+    assert "table-layout: fixed" in table_css
+    for selector, width in (
+        (".dashboard-comments-column-date", "12%"),
+        (".dashboard-comments-column-employee", "18%"),
+        (".dashboard-comments-column-source", "14%"),
+        (".dashboard-comments-column-outcome", "18%"),
+        (".dashboard-comments-column-comment", "38%"),
+    ):
+        rule = css.split(f"{selector} {{", 1)[1].split("}", 1)[0]
+        assert f"width: {width}" in rule
+    assert ".dashboard-comment-group {" not in css
+    assert "var(--accent)" not in css
+    assert "var(--accent-soft)" not in css
 
 
 def test_grouping_links_preserve_period_dates_and_repeated_user_ids(
@@ -219,6 +276,7 @@ def test_grouping_links_preserve_period_dates_and_repeated_user_ids(
         "user_id": [str(first_id), str(second_id)],
         "comment_group": ["source"],
     }
+    assert grouping_url(custom, "By source").fragment == "comments-overview"
 
 
 def test_comment_period_user_filters_empty_state_and_reset(
@@ -241,5 +299,6 @@ def test_comment_period_user_filters_empty_state_and_reset(
         "/dashboard?period=previous-week&comment_group=source&reset=true",
     )
     assert grouping_query(reset, "By employee")["comment_group"] == ["employee"]
+    assert grouping_url(reset, "By employee").fragment == "comments-overview"
     assert 'data-initial-period="current-week"' in reset.text
     assert 'data-initial-user-scope="all"' in reset.text
