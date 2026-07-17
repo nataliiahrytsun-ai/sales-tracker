@@ -93,14 +93,17 @@ def add_meeting(
     occurred_at: datetime,
     company: str = "Private company",
     note: str = "Private meeting note",
+    engagement: CustomerEngagement = CustomerEngagement.HIGH,
+    need: NeedIdentified = NeedIdentified.YES,
+    outcome: PipelineOutcome = PipelineOutcome.FOLLOW_UP,
 ) -> None:
     session.add(
         PipelineMeeting(
             user_id=user_id,
             occurred_at=occurred_at,
-            customer_engagement=CustomerEngagement.HIGH,
-            need_identified=NeedIdentified.YES,
-            outcome=PipelineOutcome.FOLLOW_UP,
+            customer_engagement=engagement,
+            need_identified=need,
+            outcome=outcome,
             company_name=company,
             note=note,
             user_mood=UserMood.OKAY,
@@ -281,6 +284,20 @@ def metric_card(response: httpx.Response, metric: str) -> str:
     return response.text[start:end]
 
 
+def pipeline_conversion_section(response: httpx.Response) -> str:
+    marker = response.text.index("data-pipeline-conversions")
+    start = response.text.rfind("<section", 0, marker)
+    end = response.text.index("</section>", start)
+    return response.text[start:end]
+
+
+def pipeline_rate(response: httpx.Response, metric: str) -> str:
+    section = pipeline_conversion_section(response)
+    start = section.index(f'data-pipeline-rate="{metric}"')
+    end = section.index("</tr>", start)
+    return section[start:end]
+
+
 def assert_empty_selected_dashboard(response: httpx.Response) -> None:
     """Assert a selected scope with no valid users cannot expose aggregates."""
     assert response.status_code == 200
@@ -310,6 +327,66 @@ def assert_empty_selected_dashboard(response: httpx.Response) -> None:
     assert "Outreach activities: 20" not in response.text
 
 
+def add_pipeline_conversion_records(
+    engine: Engine,
+    *,
+    first_id: int,
+    second_id: int,
+) -> None:
+    """Add known Pipeline inputs on one included and one excluded date."""
+    included = (
+        (
+            first_id,
+            CustomerEngagement.HIGH,
+            NeedIdentified.YES,
+            PipelineOutcome.FOLLOW_UP,
+        ),
+        (
+            first_id,
+            CustomerEngagement.HIGH,
+            NeedIdentified.NO,
+            PipelineOutcome.PROPOSAL_REQUESTED,
+        ),
+        (
+            first_id,
+            CustomerEngagement.LOW,
+            NeedIdentified.YES,
+            PipelineOutcome.NO_FIT,
+        ),
+        (
+            second_id,
+            CustomerEngagement.MEDIUM,
+            NeedIdentified.YES,
+            PipelineOutcome.OPPORTUNITY_IDENTIFIED,
+        ),
+        (
+            second_id,
+            CustomerEngagement.LOW,
+            NeedIdentified.NO,
+            PipelineOutcome.INTRODUCTION,
+        ),
+    )
+    with Session(engine) as session:
+        for user_id, engagement, need, outcome in included:
+            add_meeting(
+                session,
+                user_id=user_id,
+                occurred_at=datetime(2026, 7, 2, 12, tzinfo=UTC),
+                engagement=engagement,
+                need=need,
+                outcome=outcome,
+            )
+        add_meeting(
+            session,
+            user_id=first_id,
+            occurred_at=datetime(2026, 7, 3, 12, tzinfo=UTC),
+            engagement=CustomerEngagement.HIGH,
+            need=NeedIdentified.YES,
+            outcome=PipelineOutcome.OPPORTUNITY_IDENTIFIED,
+        )
+        session.commit()
+
+
 def test_dashboard_requires_authentication(
     dashboard_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
@@ -326,6 +403,152 @@ def test_dashboard_requires_authentication(
     response = asyncio.run(scenario())
     assert response.status_code == 303
     assert response.headers["location"] == "/login"
+
+
+def test_pipeline_conversion_known_rates_and_safe_html(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_id, second_id = dashboard_application
+    add_pipeline_conversion_records(
+        engine,
+        first_id=first_id,
+        second_id=second_id,
+    )
+
+    response = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-07-02&to=2026-07-02",
+    )
+    section = pipeline_conversion_section(response)
+
+    assert response.status_code == 200
+    assert 'data-total-meetings="5"' in section
+    expected = {
+        "high_engagement": (2, 40),
+        "need_identification": (3, 60),
+        "concrete_next_step": (4, 80),
+        "proposal": (1, 20),
+        "opportunity_identification": (1, 20),
+    }
+    for metric, (numerator, percentage) in expected.items():
+        row = pipeline_rate(response, metric)
+        assert f'data-numerator="{numerator}"' in row
+        assert 'data-denominator="5"' in row
+        assert f'data-percentage="{percentage}"' in row
+        assert f"{numerator} of 5" in row
+        assert f"{percentage}%" in row
+    assert "nan" not in section.lower()
+    assert "infinity" not in section.lower()
+    assert "performance" not in section.lower()
+
+
+def test_pipeline_conversion_filters_users_and_duplicate_ids(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_id, second_id = dashboard_application
+    add_pipeline_conversion_records(
+        engine,
+        first_id=first_id,
+        second_id=second_id,
+    )
+    base = "/dashboard?period=custom&from=2026-07-02&to=2026-07-02"
+    all_users = get_dashboard(application, base)
+    first_user = get_dashboard(
+        application,
+        f"{base}&user_scope=selected&user_id={first_id}",
+    )
+    multiple = get_dashboard(
+        application,
+        f"{base}&user_scope=selected&user_id={first_id}&user_id={second_id}",
+    )
+    duplicate = get_dashboard(
+        application,
+        f"{base}&user_scope=selected&user_id={first_id}&user_id={first_id}",
+    )
+
+    assert 'data-total-meetings="5"' in pipeline_conversion_section(all_users)
+    assert 'data-total-meetings="3"' in pipeline_conversion_section(first_user)
+    assert 'data-percentage="67"' in pipeline_rate(
+        first_user,
+        "high_engagement",
+    )
+    assert 'data-percentage="33"' in pipeline_rate(first_user, "proposal")
+    assert 'data-total-meetings="5"' in pipeline_conversion_section(multiple)
+    assert 'data-total-meetings="3"' in pipeline_conversion_section(duplicate)
+
+
+def test_pipeline_conversion_date_filter_excludes_other_dates(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_id, second_id = dashboard_application
+    add_pipeline_conversion_records(
+        engine,
+        first_id=first_id,
+        second_id=second_id,
+    )
+
+    included = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-07-02&to=2026-07-02",
+    )
+    next_day = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-07-03&to=2026-07-03",
+    )
+
+    assert 'data-total-meetings="5"' in pipeline_conversion_section(included)
+    assert 'data-total-meetings="1"' in pipeline_conversion_section(next_day)
+    assert 'data-numerator="1"' in pipeline_rate(
+        next_day,
+        "opportunity_identification",
+    )
+    assert 'data-percentage="100"' in pipeline_rate(
+        next_day,
+        "opportunity_identification",
+    )
+
+
+def test_pipeline_conversion_zero_denominator_is_safe(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    _, engine, _, _ = dashboard_application
+    selected, error = resolve_dashboard_filter(
+        today=TEST_DATE,
+        period=CUSTOM_RANGE,
+        from_value="2026-07-04",
+        to_value="2026-07-04",
+    )
+    assert error is None and selected is not None
+    with Session(engine) as session:
+        summary = get_dashboard_summary(session, selected_period=selected)
+
+    assert summary.pipeline_conversions.total_meetings == 0
+    assert len(summary.pipeline_conversions.metrics) == 5
+    assert all(
+        metric.denominator == 0
+        and metric.numerator == 0
+        and metric.percentage is None
+        and metric.percentage_text == "No data"
+        for metric in summary.pipeline_conversions.metrics
+    )
+
+
+def test_pipeline_conversion_empty_period_renders_no_data(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, _, _, _ = dashboard_application
+    response = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-07-04&to=2026-07-04",
+    )
+    section = pipeline_conversion_section(response)
+
+    assert response.status_code == 200
+    assert 'data-total-meetings="0"' in section
+    assert 'data-pipeline-rate="' not in section
+    assert '<p class="dashboard-card-note" role="status">No data</p>' in section
+    assert "division" not in section.lower()
+    assert "warning" not in section.lower()
 
 
 def test_current_week_aggregates_all_users_without_private_details(

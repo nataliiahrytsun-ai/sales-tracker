@@ -216,6 +216,54 @@
         </div>
       </section>
 
+      <section
+        class="dashboard-analysis-card"
+        aria-labelledby="pipeline-conversion-heading"
+        data-pipeline-conversions
+        data-total-meetings="{{ summary.pipeline_conversions.total_meetings }}"
+      >
+        <div class="report-section-heading">
+          <h2 id="pipeline-conversion-heading">Pipeline conversion metrics</h2>
+          {% if summary.pipeline_conversions.total_meetings %}
+            <p class="report-section-note">
+              Total meetings <strong>{{ summary.pipeline_conversions.total_meetings }}</strong>
+            </p>
+          {% endif %}
+        </div>
+        {% if summary.pipeline_conversions.total_meetings %}
+          <div class="dashboard-table-wrap">
+            <table class="dashboard-data-table">
+              <caption class="visually-hidden">
+                Pipeline conversion rates for the selected period and users
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Metric</th>
+                  <th scope="col">Meetings</th>
+                  <th scope="col">Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for metric in summary.pipeline_conversions.metrics %}
+                  <tr
+                    data-pipeline-rate="{{ metric.key }}"
+                    data-numerator="{{ metric.numerator }}"
+                    data-denominator="{{ metric.denominator }}"
+                    data-percentage="{{ metric.percentage }}"
+                  >
+                    <th scope="row">{{ metric.label }}</th>
+                    <td>{{ metric.numerator }} of {{ metric.denominator }}</td>
+                    <td>{{ metric.percentage_text }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="dashboard-card-note" role="status">No data</p>
+        {% endif %}
+      </section>
+
       <section class="dashboard-analysis-card dashboard-activity-card" aria-labelledby="daily-activity-heading">
         <div class="report-section-heading">
           <h2 id="daily-activity-heading">Activity by day</h2>

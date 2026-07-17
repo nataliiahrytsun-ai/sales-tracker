@@ -11,9 +11,12 @@ from sqlmodel import Session, select
 
 from app.countries import COUNTRY_NAMES_BY_CODE
 from app.models import (
+    CustomerEngagement,
     DailyOutreach,
+    NeedIdentified,
     OutreachCountry,
     PipelineMeeting,
+    PipelineOutcome,
     Target,
     User,
     UserMood,
@@ -141,6 +144,29 @@ class CommentGroup:
     comments: tuple[DashboardComment, ...]
 
 
+@dataclass(frozen=True)
+class PipelineConversionMetric:
+    """One pipeline conversion numerator against all filtered meetings."""
+
+    key: str
+    label: str
+    numerator: int
+    denominator: int
+    percentage: int | None
+
+    @property
+    def percentage_text(self) -> str:
+        return "No data" if self.percentage is None else f"{self.percentage}%"
+
+
+@dataclass(frozen=True)
+class PipelineConversionSummary:
+    """Pipeline meeting count and conversion rates for the exact filters."""
+
+    total_meetings: int
+    metrics: tuple[PipelineConversionMetric, ...]
+
+
 def _display_decimal(value: Decimal) -> str:
     """Format an aggregate target compactly without changing its precision."""
     if value == value.to_integral_value():
@@ -235,6 +261,7 @@ class DashboardSummary:
 
     selected_period: DashboardFilter
     metrics: tuple[DashboardMetric, ...]
+    pipeline_conversions: PipelineConversionSummary
     activity_buckets: tuple[ActivityBucket, ...]
     countries: tuple[BreakdownItem, ...]
     blockers: tuple[BreakdownItem, ...]
@@ -654,6 +681,86 @@ def _mood_breakdown(outreach: list[DailyOutreach]) -> tuple[BreakdownItem, ...]:
     )
 
 
+def _pipeline_conversion_summary(
+    meetings: list[PipelineMeeting],
+) -> PipelineConversionSummary:
+    """Calculate documented pipeline rates with one shared denominator."""
+    total_meetings = len(meetings)
+    concrete_next_step_outcomes = {
+        PipelineOutcome.FOLLOW_UP,
+        PipelineOutcome.INTRODUCTION,
+        PipelineOutcome.PROPOSAL_REQUESTED,
+        PipelineOutcome.MEETING_BOOKED,
+        PipelineOutcome.OPPORTUNITY_IDENTIFIED,
+    }
+    definitions = (
+        (
+            "high_engagement",
+            "High-engagement rate",
+            sum(
+                meeting.customer_engagement == CustomerEngagement.HIGH
+                for meeting in meetings
+            ),
+        ),
+        (
+            "need_identification",
+            "Need-identification rate",
+            sum(
+                meeting.need_identified == NeedIdentified.YES
+                for meeting in meetings
+            ),
+        ),
+        (
+            "concrete_next_step",
+            "Concrete-next-step rate",
+            sum(
+                meeting.outcome in concrete_next_step_outcomes
+                for meeting in meetings
+            ),
+        ),
+        (
+            "proposal",
+            "Proposal rate",
+            sum(
+                meeting.outcome == PipelineOutcome.PROPOSAL_REQUESTED
+                for meeting in meetings
+            ),
+        ),
+        (
+            "opportunity_identification",
+            "Opportunity identification rate",
+            sum(
+                meeting.outcome == PipelineOutcome.OPPORTUNITY_IDENTIFIED
+                for meeting in meetings
+            ),
+        ),
+    )
+    metrics = tuple(
+        PipelineConversionMetric(
+            key=key,
+            label=label,
+            numerator=numerator,
+            denominator=total_meetings,
+            percentage=(
+                int(
+                    (
+                        Decimal(numerator)
+                        / Decimal(total_meetings)
+                        * Decimal(100)
+                    ).quantize(Decimal("1"), rounding=ROUND_HALF_UP),
+                )
+                if total_meetings
+                else None
+            ),
+        )
+        for key, label, numerator in definitions
+    )
+    return PipelineConversionSummary(
+        total_meetings=total_meetings,
+        metrics=metrics,
+    )
+
+
 def get_dashboard_summary(
     session: Session,
     *,
@@ -694,6 +801,7 @@ def get_dashboard_summary(
     return DashboardSummary(
         selected_period=selected_period,
         metrics=metrics,
+        pipeline_conversions=_pipeline_conversion_summary(meetings),
         activity_buckets=_activity_buckets(selected_period, outreach, meetings),
         countries=_country_breakdown(session, outreach),
         blockers=_relative_breakdown(blockers),
@@ -720,6 +828,8 @@ __all__ = [
     "DashboardUserOption",
     "PERIOD_OPTIONS",
     "PREVIOUS_WEEK",
+    "PipelineConversionMetric",
+    "PipelineConversionSummary",
     "ResolvedDashboardFilters",
     "USER_SCOPE_ALL",
     "USER_SCOPE_SELECTED",
