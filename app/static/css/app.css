@@ -11,8 +11,8 @@
   --danger-background: #fff1f1;
   --danger-border: #e8a2a2;
   --danger-text: #8c2424;
-  --mood-difficult-color: #718096;
-  --mood-good-color: #6aa89d;
+  --mood-difficult-color: #71809a;
+  --mood-good-color: #78a967;
   --radius: 0.75rem;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
@@ -2753,8 +2753,9 @@ textarea {
     grid-column: auto;
   }
 
-  .dashboard-blockers-section,
-  .dashboard-mood-section {
-    min-height: 26rem;
+  .dashboard-analysis-grid > .dashboard-mood-section {
+    display: flex;
+    align-self: stretch;
+    flex-direction: column;
   }
 }

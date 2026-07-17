@@ -1,5 +1,29 @@
 "use strict";
 
+const removeCommentsFragmentAfterNativeScroll = () => {
+  if (window.location.hash === "#comments-overview") {
+    window.requestAnimationFrame(() => {
+      if (window.location.hash === "#comments-overview") {
+        window.history.replaceState(
+          null,
+          "",
+          window.location.pathname + window.location.search,
+        );
+      }
+    });
+  }
+};
+
+if (document.readyState === "loading") {
+  document.addEventListener(
+    "DOMContentLoaded",
+    removeCommentsFragmentAfterNativeScroll,
+    {once: true},
+  );
+} else {
+  removeCommentsFragmentAfterNativeScroll();
+}
+
 document.querySelectorAll("[data-dashboard-filter]").forEach((form) => {
   const period = form.querySelector("[data-period-select]");
   const customDates = form.querySelector("[data-custom-dates]");
@@ -16,6 +40,7 @@ document.querySelectorAll("[data-dashboard-filter]").forEach((form) => {
   const usersPanel = form.querySelector("[data-users-panel]");
   const usersSummary = form.querySelector("[data-users-summary]");
   const allUsers = form.querySelector("[data-all-users]");
+  const resetFilters = form.querySelector(".dashboard-reset-filters");
   const userCheckboxes = Array.from(
     form.querySelectorAll("[data-user-checkbox]"),
   );
@@ -75,12 +100,13 @@ document.querySelectorAll("[data-dashboard-filter]").forEach((form) => {
     }
   };
   const currentUrlAndParams = () => {
-    const url = new URL(window.location.href);
-    const params = new URLSearchParams(url.search);
+    const url = new URL(form.action, window.location.origin);
+    const params = new URLSearchParams(window.location.search);
     return {url, params};
   };
   const navigateWithParams = (url, params) => {
     url.search = params.toString();
+    url.hash = "";
     window.location.assign(url.toString());
   };
   const replaceUserParams = (params) => {
@@ -183,12 +209,20 @@ document.querySelectorAll("[data-dashboard-filter]").forEach((form) => {
   });
   fromInput.addEventListener("input", update);
   toInput.addEventListener("input", update);
+  resetFilters.addEventListener("click", () => {
+    const resetUrl = new URL(resetFilters.href, window.location.origin);
+    resetUrl.hash = "";
+    resetFilters.href = resetUrl.toString();
+  });
   form.addEventListener("submit", (event) => {
     update();
     if (isCustom() && !datesAreValid()) {
       event.preventDefault();
       return;
     }
+    const actionUrl = new URL(form.action, window.location.origin);
+    actionUrl.hash = "";
+    form.action = actionUrl.toString();
     if (isCustom()) {
       event.preventDefault();
       applyCustomRange();

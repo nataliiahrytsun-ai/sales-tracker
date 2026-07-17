@@ -1179,8 +1179,35 @@ def test_user_filter_navigation_preserves_applied_period_query_parameters(
         "const navigateWithParams",
         1,
     )[0]
-    assert "new URL(window.location.href)" in url_helper
-    assert "new URLSearchParams(url.search)" in url_helper
+    assert "new URL(form.action, window.location.origin)" in url_helper
+    assert "new URLSearchParams(window.location.search)" in url_helper
+    assert "window.location.href" not in url_helper
+
+    fragment_cleanup = script.split(
+        "const removeCommentsFragmentAfterNativeScroll",
+        1,
+    )[1].split(
+        'document.querySelectorAll("[data-dashboard-filter]")',
+        1,
+    )[0]
+    assert fragment_cleanup.count(
+        'window.location.hash === "#comments-overview"',
+    ) == 2
+    assert "window.requestAnimationFrame" in fragment_cleanup
+    assert 'document.addEventListener(\n    "DOMContentLoaded"' in fragment_cleanup
+    assert "window.history.replaceState(" in fragment_cleanup
+    assert "window.location.pathname + window.location.search" in fragment_cleanup
+    assert "scrollTo" not in fragment_cleanup
+    assert script.count('"#comments-overview"') == 2
+
+    navigation_logic = script.split("const navigateWithParams", 1)[1].split(
+        "const replaceUserParams",
+        1,
+    )[0]
+    assert 'url.hash = ""' in navigation_logic
+    assert navigation_logic.index('url.hash = ""') < navigation_logic.index(
+        "window.location.assign",
+    )
 
     users_logic = script.split("const replaceUserParams", 1)[1].split(
         "const update =",
@@ -1222,6 +1249,13 @@ def test_user_filter_navigation_preserves_applied_period_query_parameters(
     assert "replaceUserParams(params)" in custom_apply
 
     template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+    filter_form = template.split("data-dashboard-filter", 1)[0].rsplit(
+        "<form",
+        1,
+    )[1]
+    assert 'method="get"' in filter_form
+    assert 'action="{{ url_for(\'dashboard_page\') }}"' in filter_form
+    assert "#comments-overview" not in filter_form
     reset_link = template.split("dashboard-reset-filters", 1)[1].split(
         "</a>",
         1,
@@ -1230,6 +1264,45 @@ def test_user_filter_navigation_preserves_applied_period_query_parameters(
     assert "user_scope=all" in reset_link
     assert "from=" not in reset_link
     assert "to=" not in reset_link
+    assert "#comments-overview" not in reset_link
+    reset_logic = script.split('resetFilters.addEventListener("click"', 1)[
+        1
+    ].split('form.addEventListener("submit"', 1)[0]
+    assert 'resetUrl.hash = ""' in reset_logic
+    assert "resetFilters.href = resetUrl.toString()" in reset_logic
+    submit_logic = script.split('form.addEventListener("submit"', 1)[1].split(
+        "  update();\n  try",
+        1,
+    )[0]
+    assert 'actionUrl.hash = ""' in submit_logic
+    assert "form.action = actionUrl.toString()" in submit_logic
+
+    response = get_dashboard(
+        application,
+        f"/dashboard?period=custom&from=2026-07-13&to=2026-07-14"
+        f"&user_scope=selected&user_id={first_id}&comment_group=date",
+    )
+    filter_action = re.search(
+        r'<form(?=[^>]+data-dashboard-filter)[^>]+action="([^"]+)"',
+        response.text,
+    )
+    assert filter_action is not None
+    assert filter_action.group(1).endswith("/dashboard")
+    assert "#" not in filter_action.group(1)
+    reset_href = re.search(
+        r'<a[^>]+class="dashboard-reset-filters"[^>]+href="([^"]+)"',
+        response.text,
+    )
+    assert reset_href is not None
+    assert "#" not in reset_href.group(1)
+    for grouping in ("employee", "date", "source"):
+        assert re.search(
+            rf'href="[^"]*period=custom[^"]*user_scope=selected'
+            rf'[^"]*from=2026-07-13[^"]*to=2026-07-14'
+            rf'[^"]*user_id={first_id}[^"]*comment_group={grouping}'
+            r'#comments-overview"',
+            response.text,
+        )
 
 
 def test_activity_country_blocker_and_mood_aggregates_use_required_sources(
@@ -1444,14 +1517,22 @@ def test_blockers_render_positive_counts_descending_then_zeroes_in_form_order(
     desktop_css = css.split("@media (min-width: 64rem)", 1)[1]
     assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in desktop_css
     assert "align-items: start" in desktop_css
-    assert ".dashboard-blockers-section," in desktop_css
-    assert ".dashboard-mood-section" in desktop_css
-    assert "min-height: 26rem" in desktop_css
-    assert ".dashboard-blockers-section," not in tablet_css
-    assert "--mood-difficult-color: #718096" in css
-    assert "--mood-good-color: #6aa89d" in css
+    assert "min-height: 26rem" not in desktop_css
+    assert ".dashboard-analysis-grid > .dashboard-mood-section" not in tablet_css
+    desktop_mood_css = desktop_css.split(
+        ".dashboard-analysis-grid > .dashboard-mood-section {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "display: flex" in desktop_mood_css
+    assert "align-self: stretch" in desktop_mood_css
+    assert "flex-direction: column" in desktop_mood_css
+    assert "align-self: stretch" not in tablet_css
+    assert "--mood-difficult-color: #71809a" in css
+    assert "--mood-good-color: #78a967" in css
     assert "var(--mood-difficult-color)" in css
     assert "var(--mood-good-color)" in css
+    mood_note_css = css.split(".dashboard-mood-note {", 1)[1].split("}", 1)[0]
+    assert "margin-top: auto" in mood_note_css
     mood_content_css = css.split(".dashboard-mood-content {", 1)[1].split(
         "}",
         1,
@@ -2134,8 +2215,8 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert 'return "Select both From and To dates."' in script
     assert 'return "From cannot be later than To."' in script
     assert 'return "To cannot be in the future."' in script
-    assert "new URL(window.location.href)" in script
-    assert "new URLSearchParams(url.search)" in script
+    assert "new URL(form.action, window.location.origin)" in script
+    assert "new URLSearchParams(window.location.search)" in script
     assert 'form.dataset.customApplied !== "true"' in script
     assert 'editDatesButton.addEventListener("click"' in script
     assert "customDatesEditing = true" in script
