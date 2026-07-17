@@ -298,6 +298,20 @@ def pipeline_rate(response: httpx.Response, metric: str) -> str:
     return section[start:end]
 
 
+def outreach_conversion_section(response: httpx.Response) -> str:
+    marker = response.text.index("data-outreach-conversions")
+    start = response.text.rfind("<section", 0, marker)
+    end = response.text.index("</section>", start)
+    return response.text[start:end]
+
+
+def outreach_rate(response: httpx.Response, metric: str) -> str:
+    section = outreach_conversion_section(response)
+    start = section.index(f'data-outreach-rate="{metric}"')
+    end = section.index("</tr>", start)
+    return section[start:end]
+
+
 def assert_empty_selected_dashboard(response: httpx.Response) -> None:
     """Assert a selected scope with no valid users cannot expose aggregates."""
     assert response.status_code == 200
@@ -383,6 +397,61 @@ def add_pipeline_conversion_records(
             engagement=CustomerEngagement.HIGH,
             need=NeedIdentified.YES,
             outcome=PipelineOutcome.OPPORTUNITY_IDENTIFIED,
+        )
+        session.commit()
+
+
+def add_outreach_conversion_records(
+    engine: Engine,
+    *,
+    first_id: int,
+    second_id: int,
+) -> None:
+    """Add known Outreach inputs on included and excluded dates."""
+    with Session(engine) as session:
+        add_outreach(
+            session,
+            user_id=first_id,
+            activity_date=date(2026, 7, 2),
+            total=10,
+            companies=4,
+            replies=5,
+            positive=2,
+            booked=1,
+        )
+        add_outreach(
+            session,
+            user_id=second_id,
+            activity_date=date(2026, 7, 2),
+            total=30,
+            companies=6,
+            replies=3,
+            positive=1,
+            booked=3,
+        )
+        add_outreach(
+            session,
+            user_id=first_id,
+            activity_date=date(2026, 7, 3),
+            total=20,
+            companies=5,
+            replies=20,
+            positive=10,
+            booked=0,
+        )
+        add_outreach(
+            session,
+            user_id=second_id,
+            activity_date=date(2026, 7, 3),
+            total=10,
+            companies=5,
+        )
+        add_outreach(
+            session,
+            user_id=first_id,
+            activity_date=date(2026, 7, 4),
+            total=0,
+            companies=0,
         )
         session.commit()
 
@@ -549,6 +618,208 @@ def test_pipeline_conversion_empty_period_renders_no_data(
     assert '<p class="dashboard-card-note" role="status">No data</p>' in section
     assert "division" not in section.lower()
     assert "warning" not in section.lower()
+
+
+def test_outreach_conversion_known_rates_and_distinct_denominators(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_id, second_id = dashboard_application
+    add_outreach_conversion_records(
+        engine,
+        first_id=first_id,
+        second_id=second_id,
+    )
+
+    response = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-07-02&to=2026-07-02",
+    )
+    section = outreach_conversion_section(response)
+
+    assert response.status_code == 200
+    assert 'data-outreach-record-count="2"' in section
+    expected = {
+        "reply": (8, 40, 20),
+        "positive_reply": (3, 40, 8),
+        "meeting_booking": (4, 10, 40),
+    }
+    for metric, (numerator, denominator, percentage) in expected.items():
+        row = outreach_rate(response, metric)
+        assert f'data-numerator="{numerator}"' in row
+        assert f'data-denominator="{denominator}"' in row
+        assert f'data-percentage="{percentage}"' in row
+        assert f"{numerator} of {denominator}" in row
+        assert f"{percentage}%" in row
+    assert "nan" not in section.lower()
+    assert "infinity" not in section.lower()
+    assert "performance" not in section.lower()
+    assert "warning" not in section.lower()
+
+
+def test_outreach_conversion_filters_users_and_duplicate_ids(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_id, second_id = dashboard_application
+    add_outreach_conversion_records(
+        engine,
+        first_id=first_id,
+        second_id=second_id,
+    )
+    base = "/dashboard?period=custom&from=2026-07-02&to=2026-07-02"
+    all_users = get_dashboard(application, base)
+    first_user = get_dashboard(
+        application,
+        f"{base}&user_scope=selected&user_id={first_id}",
+    )
+    multiple = get_dashboard(
+        application,
+        f"{base}&user_scope=selected&user_id={first_id}&user_id={second_id}",
+    )
+    duplicate = get_dashboard(
+        application,
+        f"{base}&user_scope=selected&user_id={first_id}&user_id={first_id}",
+    )
+
+    assert 'data-outreach-record-count="2"' in outreach_conversion_section(
+        all_users,
+    )
+    assert 'data-percentage="20"' in outreach_rate(all_users, "reply")
+    assert 'data-outreach-record-count="1"' in outreach_conversion_section(
+        first_user,
+    )
+    assert 'data-percentage="50"' in outreach_rate(first_user, "reply")
+    assert 'data-percentage="25"' in outreach_rate(
+        first_user,
+        "meeting_booking",
+    )
+    assert 'data-outreach-record-count="2"' in outreach_conversion_section(
+        multiple,
+    )
+    assert 'data-outreach-record-count="1"' in outreach_conversion_section(
+        duplicate,
+    )
+    assert 'data-percentage="50"' in outreach_rate(duplicate, "reply")
+
+
+def test_outreach_conversion_date_filter_and_missing_values(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_id, second_id = dashboard_application
+    add_outreach_conversion_records(
+        engine,
+        first_id=first_id,
+        second_id=second_id,
+    )
+
+    first_day = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-07-02&to=2026-07-02",
+    )
+    second_day = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-07-03&to=2026-07-03",
+    )
+
+    assert 'data-numerator="8"' in outreach_rate(first_day, "reply")
+    assert 'data-numerator="20"' in outreach_rate(second_day, "reply")
+    assert 'data-denominator="30"' in outreach_rate(second_day, "reply")
+    assert 'data-percentage="67"' in outreach_rate(second_day, "reply")
+    assert 'data-numerator="10"' in outreach_rate(
+        second_day,
+        "positive_reply",
+    )
+    assert 'data-percentage="33"' in outreach_rate(
+        second_day,
+        "positive_reply",
+    )
+    assert 'data-numerator="0"' in outreach_rate(
+        second_day,
+        "meeting_booking",
+    )
+    assert 'data-percentage="0"' in outreach_rate(
+        second_day,
+        "meeting_booking",
+    )
+
+
+def test_outreach_conversion_zero_denominators_show_no_data(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_id, second_id = dashboard_application
+    add_outreach_conversion_records(
+        engine,
+        first_id=first_id,
+        second_id=second_id,
+    )
+    response = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-07-04&to=2026-07-04",
+    )
+    section = outreach_conversion_section(response)
+
+    assert response.status_code == 200
+    assert 'data-outreach-record-count="1"' in section
+    for metric in ("reply", "positive_reply", "meeting_booking"):
+        row = outreach_rate(response, metric)
+        assert 'data-numerator="0"' in row
+        assert 'data-denominator="0"' in row
+        assert 'data-percentage="none"' in row
+        assert "No data" in row
+    assert "nan" not in section.lower()
+    assert "infinity" not in section.lower()
+
+
+def test_outreach_conversion_empty_period_renders_no_data(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, _, _, _ = dashboard_application
+    response = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-07-05&to=2026-07-05",
+    )
+    section = outreach_conversion_section(response)
+
+    assert response.status_code == 200
+    assert 'data-outreach-record-count="0"' in section
+    assert 'data-outreach-rate="' not in section
+    assert '<p class="dashboard-card-note" role="status">No data</p>' in section
+    assert "warning" not in section.lower()
+
+
+def test_conversion_tables_share_compact_responsive_structure(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, _, _, _ = dashboard_application
+    response = get_dashboard(application)
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    for section in (
+        pipeline_conversion_section(response),
+        outreach_conversion_section(response),
+    ):
+        assert "dashboard-conversion-table-wrap" in section
+        assert "dashboard-conversion-table" in section
+        assert section.count("dashboard-conversion-column-") == 3
+        assert "<th scope=\"col\">Metric</th>" in section
+        assert "<th scope=\"col\">Result</th>" in section
+        assert "<th scope=\"col\">Rate</th>" in section
+
+    wrapper_css = css.split(
+        ".dashboard-conversion-table-wrap {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "max-width: 56.25rem" in wrapper_css
+    assert "margin-inline: auto" in wrapper_css
+    assert "width: 60%" in css.split(
+        ".dashboard-conversion-column-metric {",
+        1,
+    )[1].split("}", 1)[0]
+    shared_columns = css.split(
+        ".dashboard-conversion-column-result,",
+        1,
+    )[1].split("}", 1)[0]
+    assert "width: 20%" in shared_columns
+    assert "table-layout: fixed" in css
 
 
 def test_current_week_aggregates_all_users_without_private_details(

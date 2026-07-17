@@ -231,15 +231,20 @@
           {% endif %}
         </div>
         {% if summary.pipeline_conversions.total_meetings %}
-          <div class="dashboard-table-wrap">
-            <table class="dashboard-data-table">
+          <div class="dashboard-table-wrap dashboard-conversion-table-wrap">
+            <table class="dashboard-data-table dashboard-conversion-table">
               <caption class="visually-hidden">
                 Pipeline conversion rates for the selected period and users
               </caption>
+              <colgroup>
+                <col class="dashboard-conversion-column-metric">
+                <col class="dashboard-conversion-column-result">
+                <col class="dashboard-conversion-column-rate">
+              </colgroup>
               <thead>
                 <tr>
                   <th scope="col">Metric</th>
-                  <th scope="col">Meetings</th>
+                  <th scope="col">Result</th>
                   <th scope="col">Rate</th>
                 </tr>
               </thead>
@@ -250,6 +255,54 @@
                     data-numerator="{{ metric.numerator }}"
                     data-denominator="{{ metric.denominator }}"
                     data-percentage="{{ metric.percentage }}"
+                  >
+                    <th scope="row">{{ metric.label }}</th>
+                    <td>{{ metric.numerator }} of {{ metric.denominator }}</td>
+                    <td>{{ metric.percentage_text }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="dashboard-card-note" role="status">No data</p>
+        {% endif %}
+      </section>
+
+      <section
+        class="dashboard-analysis-card"
+        aria-labelledby="outreach-conversion-heading"
+        data-outreach-conversions
+        data-outreach-record-count="{{ summary.outreach_conversions.record_count }}"
+      >
+        <div class="report-section-heading">
+          <h2 id="outreach-conversion-heading">Outreach conversion rates</h2>
+        </div>
+        {% if summary.outreach_conversions.record_count %}
+          <div class="dashboard-table-wrap dashboard-conversion-table-wrap">
+            <table class="dashboard-data-table dashboard-conversion-table">
+              <caption class="visually-hidden">
+                Outreach conversion rates for the selected period and users
+              </caption>
+              <colgroup>
+                <col class="dashboard-conversion-column-metric">
+                <col class="dashboard-conversion-column-result">
+                <col class="dashboard-conversion-column-rate">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th scope="col">Metric</th>
+                  <th scope="col">Result</th>
+                  <th scope="col">Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for metric in summary.outreach_conversions.metrics %}
+                  <tr
+                    data-outreach-rate="{{ metric.key }}"
+                    data-numerator="{{ metric.numerator }}"
+                    data-denominator="{{ metric.denominator }}"
+                    data-percentage="{{ metric.percentage if metric.percentage is not none else 'none' }}"
                   >
                     <th scope="row">{{ metric.label }}</th>
                     <td>{{ metric.numerator }} of {{ metric.denominator }}</td>

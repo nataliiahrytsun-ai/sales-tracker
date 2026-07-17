@@ -167,6 +167,29 @@ class PipelineConversionSummary:
     metrics: tuple[PipelineConversionMetric, ...]
 
 
+@dataclass(frozen=True)
+class OutreachConversionMetric:
+    """One Outreach conversion numerator and its documented denominator."""
+
+    key: str
+    label: str
+    numerator: int
+    denominator: int
+    percentage: int | None
+
+    @property
+    def percentage_text(self) -> str:
+        return "No data" if self.percentage is None else f"{self.percentage}%"
+
+
+@dataclass(frozen=True)
+class OutreachConversionSummary:
+    """Aggregated Outreach rates for the exact filtered record set."""
+
+    record_count: int
+    metrics: tuple[OutreachConversionMetric, ...]
+
+
 def _display_decimal(value: Decimal) -> str:
     """Format an aggregate target compactly without changing its precision."""
     if value == value.to_integral_value():
@@ -262,6 +285,7 @@ class DashboardSummary:
     selected_period: DashboardFilter
     metrics: tuple[DashboardMetric, ...]
     pipeline_conversions: PipelineConversionSummary
+    outreach_conversions: OutreachConversionSummary
     activity_buckets: tuple[ActivityBucket, ...]
     countries: tuple[BreakdownItem, ...]
     blockers: tuple[BreakdownItem, ...]
@@ -761,6 +785,58 @@ def _pipeline_conversion_summary(
     )
 
 
+def _outreach_conversion_summary(
+    outreach: list[DailyOutreach],
+) -> OutreachConversionSummary:
+    """Calculate rates after summing every selected record's components."""
+    total_activities = sum(record.total_activities for record in outreach)
+    companies_contacted = sum(record.unique_companies for record in outreach)
+    definitions = (
+        (
+            "reply",
+            "Reply rate",
+            sum(record.replies or 0 for record in outreach),
+            total_activities,
+        ),
+        (
+            "positive_reply",
+            "Positive reply rate",
+            sum(record.positive_replies or 0 for record in outreach),
+            total_activities,
+        ),
+        (
+            "meeting_booking",
+            "Meeting booking rate",
+            sum(record.meetings_booked or 0 for record in outreach),
+            companies_contacted,
+        ),
+    )
+    metrics = tuple(
+        OutreachConversionMetric(
+            key=key,
+            label=label,
+            numerator=numerator,
+            denominator=denominator,
+            percentage=(
+                int(
+                    (
+                        Decimal(numerator)
+                        / Decimal(denominator)
+                        * Decimal(100)
+                    ).quantize(Decimal("1"), rounding=ROUND_HALF_UP),
+                )
+                if denominator
+                else None
+            ),
+        )
+        for key, label, numerator, denominator in definitions
+    )
+    return OutreachConversionSummary(
+        record_count=len(outreach),
+        metrics=metrics,
+    )
+
+
 def get_dashboard_summary(
     session: Session,
     *,
@@ -802,6 +878,7 @@ def get_dashboard_summary(
         selected_period=selected_period,
         metrics=metrics,
         pipeline_conversions=_pipeline_conversion_summary(meetings),
+        outreach_conversions=_outreach_conversion_summary(outreach),
         activity_buckets=_activity_buckets(selected_period, outreach, meetings),
         countries=_country_breakdown(session, outreach),
         blockers=_relative_breakdown(blockers),
@@ -826,6 +903,8 @@ __all__ = [
     "DashboardSummary",
     "DashboardUserFilter",
     "DashboardUserOption",
+    "OutreachConversionMetric",
+    "OutreachConversionSummary",
     "PERIOD_OPTIONS",
     "PREVIOUS_WEEK",
     "PipelineConversionMetric",

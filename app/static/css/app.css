@@ -1302,6 +1302,34 @@ textarea {
   font-weight: 600;
 }
 
+.dashboard-conversion-table-wrap {
+  max-width: 56.25rem;
+  margin-inline: auto;
+}
+
+.dashboard-conversion-table {
+  table-layout: fixed;
+}
+
+.dashboard-conversion-column-metric {
+  width: 60%;
+}
+
+.dashboard-conversion-column-result,
+.dashboard-conversion-column-rate {
+  width: 20%;
+}
+
+.dashboard-conversion-table th,
+.dashboard-conversion-table td {
+  padding-block: 0.4rem;
+}
+
+.dashboard-conversion-table td:nth-child(2),
+.dashboard-conversion-table td:nth-child(3) {
+  white-space: nowrap;
+}
+
 .dashboard-card-note {
   margin-block: 0.2rem 0.45rem;
   font-size: 0.92rem;
