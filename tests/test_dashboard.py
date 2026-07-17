@@ -42,7 +42,7 @@ ACTIVE_EMAIL = "dashboard-user@example.com"
 TEST_PASSWORD = "dashboard-test-password"
 TEST_DATE = date(2026, 7, 15)
 TARGET_CALCULATION_NOTICE = (
-    "Targets are calculated from the weekly goals that overlap the selected period."
+    "Weekly goals are prorated to the selected period."
 )
 
 
@@ -294,7 +294,7 @@ def pipeline_conversion_section(response: httpx.Response) -> str:
 def pipeline_rate(response: httpx.Response, metric: str) -> str:
     section = pipeline_conversion_section(response)
     start = section.index(f'data-pipeline-rate="{metric}"')
-    end = section.index("</tr>", start)
+    end = section.index("</div>", start)
     return section[start:end]
 
 
@@ -308,7 +308,7 @@ def outreach_conversion_section(response: httpx.Response) -> str:
 def outreach_rate(response: httpx.Response, metric: str) -> str:
     section = outreach_conversion_section(response)
     start = section.index(f'data-outreach-rate="{metric}"')
-    end = section.index("</tr>", start)
+    end = section.index("</div>", start)
     return section[start:end]
 
 
@@ -316,7 +316,7 @@ def assert_empty_selected_dashboard(response: httpx.Response) -> None:
     """Assert a selected scope with no valid users cannot expose aggregates."""
     assert response.status_code == 200
     assert "Select at least one user to view data." in response.text
-    assert TARGET_CALCULATION_NOTICE not in response.text
+    assert TARGET_CALCULATION_NOTICE in response.text
     assert 'data-users-summary>Select users</span>' in response.text
     assert response.text.count('class="week-metric-card dashboard-metric-card"') == 6
     for metric, _label in TARGET_FIELDS:
@@ -614,8 +614,18 @@ def test_pipeline_conversion_empty_period_renders_no_data(
 
     assert response.status_code == 200
     assert 'data-total-meetings="0"' in section
-    assert 'data-pipeline-rate="' not in section
-    assert '<p class="dashboard-card-note" role="status">No data</p>' in section
+    assert section.count('data-pipeline-rate="') == 5
+    assert section.count("No data") == 5
+    for metric in (
+        "high_engagement",
+        "need_identification",
+        "concrete_next_step",
+        "proposal",
+        "opportunity_identification",
+    ):
+        row = pipeline_rate(response, metric)
+        assert "0 of 0" in row
+        assert "No data" in row
     assert "division" not in section.lower()
     assert "warning" not in section.lower()
 
@@ -781,12 +791,16 @@ def test_outreach_conversion_empty_period_renders_no_data(
 
     assert response.status_code == 200
     assert 'data-outreach-record-count="0"' in section
-    assert 'data-outreach-rate="' not in section
-    assert '<p class="dashboard-card-note" role="status">No data</p>' in section
+    assert section.count('data-outreach-rate="') == 3
+    assert section.count("No data") == 3
+    for metric in ("reply", "positive_reply", "meeting_booking"):
+        row = outreach_rate(response, metric)
+        assert "0 of 0" in row
+        assert "No data" in row
     assert "warning" not in section.lower()
 
 
-def test_conversion_tables_share_compact_responsive_structure(
+def test_conversion_sections_share_compact_responsive_mini_metrics(
     dashboard_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
     application, _, _, _ = dashboard_application
@@ -797,29 +811,60 @@ def test_conversion_tables_share_compact_responsive_structure(
         pipeline_conversion_section(response),
         outreach_conversion_section(response),
     ):
-        assert "dashboard-conversion-table-wrap" in section
-        assert "dashboard-conversion-table" in section
-        assert section.count("dashboard-conversion-column-") == 3
-        assert "<th scope=\"col\">Metric</th>" in section
-        assert "<th scope=\"col\">Result</th>" in section
-        assert "<th scope=\"col\">Rate</th>" in section
+        assert "<dl class=\"dashboard-mini-metric-grid " in section
+        assert 'class="dashboard-mini-metric"' in section
+        assert 'class="dashboard-mini-metric-result"' in section
+        assert 'class="dashboard-mini-metric-rate"' in section
+        assert "Result: " in section
+        assert "Rate: " in section
+        assert "<table" not in section
+        assert 'role="progressbar"' not in section
 
-    wrapper_css = css.split(
-        ".dashboard-conversion-table-wrap {",
+    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+    assert "Company metrics" not in template
+    assert "Activity &amp; target progress" in template
+    assert template.count('class="dashboard-section-heading"') == 3
+    assert template.count("dashboard-conversion-card") == 3
+    activity_heading = template.index('id="company-metrics-heading"')
+    activity_section = template.rfind("<section", 0, activity_heading)
+    activity_section_tag = template[
+        activity_section:template.index(">", activity_section)
+    ]
+    assert "dashboard-analysis-card dashboard-conversion-card" in (
+        activity_section_tag
+    )
+    assert "dashboard-conversion-grid" not in template
+    assert "dashboard-mini-metric-grid-pipeline" in template
+    assert "dashboard-mini-metric-grid-outreach" in template
+    assert "dashboard-conversion-table-wrap" not in template
+    assert "dashboard-conversion-table" not in template
+    assert "dashboard-conversion-column-" not in template
+    assert ".dashboard-conversion-grid" not in css
+    assert ".dashboard-mini-metric-grid" in css
+    assert ".dashboard-mini-metric" in css
+    assert ".dashboard-conversion-table-wrap" not in css
+    assert ".dashboard-conversion-table" not in css
+    assert ".dashboard-conversion-column-" not in css
+    shared_heading_css = css.split(
+        ".dashboard-section-heading {",
         1,
     )[1].split("}", 1)[0]
-    assert "max-width: 56.25rem" in wrapper_css
-    assert "margin-inline: auto" in wrapper_css
-    assert "width: 60%" in css.split(
-        ".dashboard-conversion-column-metric {",
+    assert "font-size: 1.15rem" in shared_heading_css
+    assert "font-weight: 700" in shared_heading_css
+    assert "line-height: 1.3" in shared_heading_css
+    assert "margin: 0" in shared_heading_css
+    tablet_css = css.split("@media (min-width: 48rem)", 1)[1].split(
+        "@media (min-width: 64rem)",
         1,
-    )[1].split("}", 1)[0]
-    shared_columns = css.split(
-        ".dashboard-conversion-column-result,",
-        1,
-    )[1].split("}", 1)[0]
-    assert "width: 20%" in shared_columns
-    assert "table-layout: fixed" in css
+    )[0]
+    assert ".dashboard-mini-metric-grid" in tablet_css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in tablet_css
+    assert "grid-column: 1 / -1" in tablet_css
+    desktop_css = css.split("@media (min-width: 64rem)", 1)[1]
+    assert ".dashboard-mini-metric-grid-pipeline" in desktop_css
+    assert "grid-template-columns: repeat(5, minmax(0, 1fr))" in desktop_css
+    assert ".dashboard-mini-metric-grid-outreach" in desktop_css
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in desktop_css
 
 
 def test_current_week_aggregates_all_users_without_private_details(
@@ -888,7 +933,7 @@ def test_current_week_company_targets_are_summed_and_progress_is_safe(
     assert 'data-metric="companies_contacted"' in response.text
     assert 'data-target="0"' in response.text
     assert "No target" in response.text
-    assert TARGET_CALCULATION_NOTICE not in response.text
+    assert TARGET_CALCULATION_NOTICE in response.text
 
 
 def test_selected_user_filters_actuals_meetings_and_target(
@@ -1666,7 +1711,16 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert "background:" not in target_helper_css
     assert "border:" not in target_helper_css
     assert "padding:" not in target_helper_css
-    assert template.count('class="dashboard-metrics-helper"') == 2
+    assert template.count('class="dashboard-metrics-helper"') == 1
+    metrics_heading_start = template.index('id="company-metrics-heading"')
+    metrics_heading_end = template.index("</div>", metrics_heading_start)
+    metrics_heading = template[metrics_heading_start:metrics_heading_end]
+    assert 'class="report-section-note"' in metrics_heading
+    assert TARGET_CALCULATION_NOTICE in metrics_heading
+    assert (
+        "Targets are calculated from the weekly goals that overlap "
+        "the selected period."
+    ) not in template
     assert "dashboard-user-selection-notice" not in template
     assert "dashboard-target-decision-notice" not in template
     assert "Decision needed:" not in template

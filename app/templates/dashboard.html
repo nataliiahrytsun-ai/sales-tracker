@@ -151,14 +151,16 @@
         </div>
       {% endif %}
 
-      <section aria-labelledby="company-metrics-heading">
-        <h2 id="company-metrics-heading" class="dashboard-section-title">Company metrics</h2>
+      <section
+        class="dashboard-analysis-card dashboard-conversion-card"
+        aria-labelledby="company-metrics-heading"
+      >
+        <div class="report-section-heading">
+          <h2 id="company-metrics-heading" class="dashboard-section-heading">Activity &amp; target progress</h2>
+          <p class="report-section-note">Weekly goals are prorated to the selected period.</p>
+        </div>
         {% if not summary.has_selected_users %}
           <p class="dashboard-metrics-helper" role="status">Select at least one user to view data.</p>
-        {% elif not summary.selected_period.is_current_week %}
-          <p class="dashboard-metrics-helper">
-            Targets are calculated from the weekly goals that overlap the selected period.
-          </p>
         {% endif %}
         <div class="dashboard-metric-grid">
           {% for metric in summary.metrics %}
@@ -217,104 +219,66 @@
       </section>
 
       <section
-        class="dashboard-analysis-card"
+        class="dashboard-analysis-card dashboard-conversion-card"
         aria-labelledby="pipeline-conversion-heading"
         data-pipeline-conversions
         data-total-meetings="{{ summary.pipeline_conversions.total_meetings }}"
       >
         <div class="report-section-heading">
-          <h2 id="pipeline-conversion-heading">Pipeline conversion metrics</h2>
-          {% if summary.pipeline_conversions.total_meetings %}
-            <p class="report-section-note">
-              Total meetings <strong>{{ summary.pipeline_conversions.total_meetings }}</strong>
-            </p>
-          {% endif %}
+          <h2 id="pipeline-conversion-heading" class="dashboard-section-heading">Pipeline conversion metrics</h2>
+          <p class="report-section-note">
+            Total meetings <strong>{{ summary.pipeline_conversions.total_meetings }}</strong>
+          </p>
         </div>
-        {% if summary.pipeline_conversions.total_meetings %}
-          <div class="dashboard-table-wrap dashboard-conversion-table-wrap">
-            <table class="dashboard-data-table dashboard-conversion-table">
-              <caption class="visually-hidden">
-                Pipeline conversion rates for the selected period and users
-              </caption>
-              <colgroup>
-                <col class="dashboard-conversion-column-metric">
-                <col class="dashboard-conversion-column-result">
-                <col class="dashboard-conversion-column-rate">
-              </colgroup>
-              <thead>
-                <tr>
-                  <th scope="col">Metric</th>
-                  <th scope="col">Result</th>
-                  <th scope="col">Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for metric in summary.pipeline_conversions.metrics %}
-                  <tr
-                    data-pipeline-rate="{{ metric.key }}"
-                    data-numerator="{{ metric.numerator }}"
-                    data-denominator="{{ metric.denominator }}"
-                    data-percentage="{{ metric.percentage }}"
-                  >
-                    <th scope="row">{{ metric.label }}</th>
-                    <td>{{ metric.numerator }} of {{ metric.denominator }}</td>
-                    <td>{{ metric.percentage_text }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <p class="dashboard-card-note" role="status">No data</p>
-        {% endif %}
+        <dl class="dashboard-mini-metric-grid dashboard-mini-metric-grid-pipeline">
+          {% for metric in summary.pipeline_conversions.metrics %}
+            <div
+              class="dashboard-mini-metric"
+              data-pipeline-rate="{{ metric.key }}"
+              data-numerator="{{ metric.numerator }}"
+              data-denominator="{{ metric.denominator }}"
+              data-percentage="{{ metric.percentage if metric.percentage is not none else 'none' }}"
+            >
+              <dt>{{ metric.label }}</dt>
+              <dd class="dashboard-mini-metric-result">
+                <span class="visually-hidden">Result: </span>{{ metric.numerator }} of {{ metric.denominator }}
+              </dd>
+              <dd class="dashboard-mini-metric-rate">
+                <span class="visually-hidden">Rate: </span>{{ metric.percentage_text }}
+              </dd>
+            </div>
+          {% endfor %}
+        </dl>
       </section>
 
       <section
-        class="dashboard-analysis-card"
+        class="dashboard-analysis-card dashboard-conversion-card"
         aria-labelledby="outreach-conversion-heading"
         data-outreach-conversions
         data-outreach-record-count="{{ summary.outreach_conversions.record_count }}"
       >
         <div class="report-section-heading">
-          <h2 id="outreach-conversion-heading">Outreach conversion rates</h2>
+          <h2 id="outreach-conversion-heading" class="dashboard-section-heading">Outreach conversion rates</h2>
         </div>
-        {% if summary.outreach_conversions.record_count %}
-          <div class="dashboard-table-wrap dashboard-conversion-table-wrap">
-            <table class="dashboard-data-table dashboard-conversion-table">
-              <caption class="visually-hidden">
-                Outreach conversion rates for the selected period and users
-              </caption>
-              <colgroup>
-                <col class="dashboard-conversion-column-metric">
-                <col class="dashboard-conversion-column-result">
-                <col class="dashboard-conversion-column-rate">
-              </colgroup>
-              <thead>
-                <tr>
-                  <th scope="col">Metric</th>
-                  <th scope="col">Result</th>
-                  <th scope="col">Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for metric in summary.outreach_conversions.metrics %}
-                  <tr
-                    data-outreach-rate="{{ metric.key }}"
-                    data-numerator="{{ metric.numerator }}"
-                    data-denominator="{{ metric.denominator }}"
-                    data-percentage="{{ metric.percentage if metric.percentage is not none else 'none' }}"
-                  >
-                    <th scope="row">{{ metric.label }}</th>
-                    <td>{{ metric.numerator }} of {{ metric.denominator }}</td>
-                    <td>{{ metric.percentage_text }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <p class="dashboard-card-note" role="status">No data</p>
-        {% endif %}
+        <dl class="dashboard-mini-metric-grid dashboard-mini-metric-grid-outreach">
+          {% for metric in summary.outreach_conversions.metrics %}
+            <div
+              class="dashboard-mini-metric"
+              data-outreach-rate="{{ metric.key }}"
+              data-numerator="{{ metric.numerator }}"
+              data-denominator="{{ metric.denominator }}"
+              data-percentage="{{ metric.percentage if metric.percentage is not none else 'none' }}"
+            >
+              <dt>{{ metric.label }}</dt>
+              <dd class="dashboard-mini-metric-result">
+                <span class="visually-hidden">Result: </span>{{ metric.numerator }} of {{ metric.denominator }}
+              </dd>
+              <dd class="dashboard-mini-metric-rate">
+                <span class="visually-hidden">Rate: </span>{{ metric.percentage_text }}
+              </dd>
+            </div>
+          {% endfor %}
+        </dl>
       </section>
 
       <section class="dashboard-analysis-card dashboard-activity-card" aria-labelledby="daily-activity-heading">
