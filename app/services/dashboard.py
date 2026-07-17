@@ -38,6 +38,16 @@ PERIOD_OPTIONS = (
 PERIOD_LABELS = dict(PERIOD_OPTIONS)
 USER_SCOPE_ALL = "all"
 USER_SCOPE_SELECTED = "selected"
+ACTIVITY_GRANULARITY_DAY = "day"
+ACTIVITY_GRANULARITY_WEEK = "week"
+ACTIVITY_GRANULARITY_MONTH = "month"
+ACTIVITY_GRANULARITY_PERIOD = "period"
+ACTIVITY_HEADINGS = {
+    ACTIVITY_GRANULARITY_DAY: "Activity by day",
+    ACTIVITY_GRANULARITY_WEEK: "Activity by week",
+    ACTIVITY_GRANULARITY_MONTH: "Activity by month",
+    ACTIVITY_GRANULARITY_PERIOD: "Activity for selected period",
+}
 
 
 @dataclass(frozen=True)
@@ -270,6 +280,31 @@ class DashboardMetric:
     def percentage_text(self) -> str:
         return "No target" if self.percentage is None else f"{self.percentage}%"
 
+    @property
+    def status_text(self) -> str:
+        if self.target == 0:
+            return "No target"
+        if self.actual < self.target:
+            return f"{self.remaining_text} remaining"
+        if self.actual == self.target:
+            return "Goal reached"
+        return f"Goal exceeded by {self.exceeded_by_text}"
+
+    @property
+    def status_state(self) -> str:
+        return "success" if self.target > 0 and self.actual >= self.target else "muted"
+
+    @property
+    def needs_attention(self) -> bool:
+        return (
+            self.target > 0
+            and Decimal(self.actual) / self.target < DASHBOARD_TARGET_ATTENTION_RATIO
+        )
+
+
+# Metrics below half of their prorated target receive a quiet, non-warning hint.
+DASHBOARD_TARGET_ATTENTION_RATIO = Decimal("0.5")
+
 
 def _build_dashboard_metric(
     *,
@@ -299,14 +334,7 @@ def _build_dashboard_metric(
     percentage = int(
         (ratio * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP),
     )
-    if ratio < Decimal("0.5"):
-        progress_state = "orange"
-    elif ratio < Decimal("0.8"):
-        progress_state = "amber"
-    elif ratio < 1:
-        progress_state = "light-green"
-    else:
-        progress_state = "green"
+    progress_state = "success" if ratio >= 1 else "standard"
     return DashboardMetric(
         key=key,
         label=label,
@@ -329,6 +357,7 @@ class DashboardSummary:
     pipeline_conversions: PipelineConversionSummary
     outreach_conversions: OutreachConversionSummary
     activity_buckets: tuple[ActivityBucket, ...]
+    activity_granularity: str
     countries: tuple[BreakdownItem, ...]
     blockers: tuple[BreakdownItem, ...]
     mood_summary: MoodSummary
@@ -345,6 +374,11 @@ class DashboardSummary:
     def activity_label_stride(self) -> int:
         """Limit visible axis labels while retaining every accessible value."""
         return max(1, ceil(len(self.activity_buckets) / 7))
+
+    @property
+    def activity_heading(self) -> str:
+        """Describe the actual aggregation used by the activity series."""
+        return ACTIVITY_HEADINGS[self.activity_granularity]
 
 
 def resolve_dashboard_filter(
@@ -624,14 +658,27 @@ def _short_date(value: date) -> str:
 
 def _week_label(start_date: date, end_date: date) -> str:
     if start_date.month == end_date.month:
-        return f"{start_date.strftime('%b')} {start_date.day}-{end_date.day}"
-    return f"{_short_date(start_date)}-{_short_date(end_date)}"
+        return f"{start_date.strftime('%b')} {start_date.day}–{end_date.day}"
+    return f"{_short_date(start_date)}–{_short_date(end_date)}"
+
+
+def _activity_bucket_granularity(selected_period: DashboardFilter) -> str:
+    """Return the aggregation metadata used to build the activity series."""
+    duration = (selected_period.end_date - selected_period.start_date).days + 1
+    if (
+        selected_period.key not in {CURRENT_WEEK, PREVIOUS_WEEK}
+        and duration > 14
+    ):
+        return ACTIVITY_GRANULARITY_WEEK
+    return ACTIVITY_GRANULARITY_DAY
 
 
 def _activity_buckets(
     selected_period: DashboardFilter,
     outreach: list[DailyOutreach],
     meetings: list[PipelineMeeting],
+    *,
+    granularity: str | None = None,
 ) -> tuple[ActivityBucket, ...]:
     outreach_by_day: Counter[date] = Counter()
     for record in outreach:
@@ -639,10 +686,8 @@ def _activity_buckets(
     meetings_by_day: Counter[date] = Counter(
         _local_meeting_date(meeting) for meeting in meetings
     )
-    duration = (selected_period.end_date - selected_period.start_date).days + 1
-    group_by_week = (
-        selected_period.key not in {CURRENT_WEEK, PREVIOUS_WEEK} and duration > 14
-    )
+    bucket_granularity = granularity or _activity_bucket_granularity(selected_period)
+    group_by_week = bucket_granularity == ACTIVITY_GRANULARITY_WEEK
 
     raw_buckets: list[tuple[str, date, date, int, int]] = []
     current = selected_period.start_date
@@ -1030,12 +1075,19 @@ def get_dashboard_summary(
         )
         for metric, label in TARGET_FIELDS
     )
+    activity_granularity = _activity_bucket_granularity(selected_period)
     return DashboardSummary(
         selected_period=selected_period,
         metrics=metrics,
         pipeline_conversions=_pipeline_conversion_summary(meetings),
         outreach_conversions=_outreach_conversion_summary(outreach),
-        activity_buckets=_activity_buckets(selected_period, outreach, meetings),
+        activity_buckets=_activity_buckets(
+            selected_period,
+            outreach,
+            meetings,
+            granularity=activity_granularity,
+        ),
+        activity_granularity=activity_granularity,
         countries=_country_breakdown(session, outreach),
         blockers=_blocker_breakdown(outreach),
         mood_summary=_mood_summary(selected_period, outreach),
@@ -1050,6 +1102,11 @@ def get_dashboard_summary(
 
 
 __all__ = [
+    "ACTIVITY_GRANULARITY_DAY",
+    "ACTIVITY_GRANULARITY_MONTH",
+    "ACTIVITY_GRANULARITY_PERIOD",
+    "ACTIVITY_GRANULARITY_WEEK",
+    "ACTIVITY_HEADINGS",
     "CURRENT_MONTH",
     "CURRENT_WEEK",
     "CUSTOM_RANGE",

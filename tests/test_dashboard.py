@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Generator
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from math import ceil
 from pathlib import Path
 import re
 
@@ -32,9 +33,16 @@ from app.services.dashboard import (
     CURRENT_MONTH,
     CURRENT_WEEK,
     CUSTOM_RANGE,
+    DASHBOARD_TARGET_ATTENTION_RATIO,
     PREVIOUS_WEEK,
+    ACTIVITY_GRANULARITY_MONTH,
+    ACTIVITY_GRANULARITY_PERIOD,
     USER_SCOPE_SELECTED,
     DashboardUserFilter,
+    _activity_bucket_granularity,
+    ACTIVITY_HEADINGS,
+    _build_dashboard_metric,
+    _activity_buckets,
     get_dashboard_summary,
     resolve_dashboard_filter,
 )
@@ -328,8 +336,8 @@ def assert_empty_selected_dashboard(response: httpx.Response) -> None:
         assert 'data-target="0"' in card
         assert 'data-remaining="0"' in card
         assert 'data-percentage="none"' in card
-        assert 'class="metric-remaining"' not in card
-        assert 'class="week-metric-percentage"' not in card
+        assert 'class="dashboard-kpi-status' in card
+        assert 'class="dashboard-circular-progress' in card
     assert response.text.count('role="progressbar"') == 6
     assert response.text.count("No target") >= 6
     assert "No activity to display." in response.text
@@ -1640,6 +1648,92 @@ def test_activity_chart_groups_long_periods_by_calendar_week(
         assert len(long_summary.activity_buckets) == 3
 
 
+def test_activity_heading_uses_backend_bucket_granularity(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    """The section title follows aggregation metadata, not the period preset."""
+    _, engine, _, _ = dashboard_application
+    with Session(engine) as session:
+        current_week, error = resolve_dashboard_filter(
+            today=TEST_DATE,
+            period=CURRENT_WEEK,
+        )
+        assert error is None and current_week is not None
+        daily_summary = get_dashboard_summary(session, selected_period=current_week)
+        assert daily_summary.activity_granularity == "day"
+        assert daily_summary.activity_heading == "Activity by day"
+
+        current_month, error = resolve_dashboard_filter(
+            today=TEST_DATE,
+            period=CURRENT_MONTH,
+        )
+        assert error is None and current_month is not None
+        weekly_summary = get_dashboard_summary(session, selected_period=current_month)
+        assert weekly_summary.activity_granularity == "week"
+        assert weekly_summary.activity_heading == "Activity by week"
+
+    assert ACTIVITY_HEADINGS[ACTIVITY_GRANULARITY_MONTH] == "Activity by month"
+    assert (
+        ACTIVITY_HEADINGS[ACTIVITY_GRANULARITY_PERIOD]
+        == "Activity for selected period"
+    )
+    assert _activity_bucket_granularity(current_month) == "week"
+
+
+def test_activity_heading_is_rendered_from_summary_metadata(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, _, _, _ = dashboard_application
+    response = get_dashboard(application, f"/dashboard?period={CURRENT_MONTH}")
+
+    assert response.status_code == 200
+    assert "Activity by week" in response.text
+    assert "Activity by day</h2>" not in response.text
+    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+    assert "{{ summary.activity_heading }}" in template
+
+
+def test_activity_chart_long_range_uses_compact_week_labels_and_sparse_axis() -> None:
+    selected, error = resolve_dashboard_filter(
+        today=TEST_DATE,
+        period=CUSTOM_RANGE,
+        from_value="2025-08-04",
+        to_value="2025-11-30",
+    )
+    assert error is None and selected is not None
+
+    buckets = _activity_buckets(selected, [], [])
+    assert len(buckets) > 7
+    assert buckets[0].label == "Aug 4–10"
+    assert any(bucket.label == "Sep 29–Oct 5" for bucket in buckets)
+    assert buckets[-1].label == "Nov 24–30"
+    stride = max(1, ceil(len(buckets) / 7))
+    visible_indexes = [
+        index
+        for index in range(len(buckets))
+        if index % stride == 0 or index == len(buckets) - 1
+    ]
+    assert visible_indexes[0] == 0
+    assert visible_indexes[-1] == len(buckets) - 1
+    assert len(visible_indexes) < len(buckets)
+
+    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+    script = Path("app/static/js/dashboard_filter.js").read_text(encoding="utf-8")
+    assert 'data-label-stride="{{ summary.activity_label_stride }}"' in template
+    assert "dashboard-chart-label{% if loop.index0" in template
+    assert "--chart-label-stride" in script
+    label_css = css.split(".dashboard-chart-label {", 1)[1].split("}", 1)[0]
+    assert "overflow-wrap: normal" in label_css
+    assert "word-break: normal" in label_css
+    assert "hyphens: none" in label_css
+    assert ".dashboard-chart-label.is-visible" in css
+    assert "-webkit-line-clamp: 2" in css
+    assert "overflow-x: auto" not in css.split(".dashboard-grouped-chart {", 1)[1].split(
+        ".dashboard-chart-group", 1
+    )[0]
+
+
 @pytest.mark.parametrize(
     ("period", "expected_start", "expected_end"),
     (
@@ -1852,6 +1946,7 @@ def test_prorated_remaining_and_zero_target_progress_states(
     assert 'data-percentage="0"' in remaining_card
     assert 'data-bar-percentage="0"' in remaining_card
     assert "2 remaining" in remaining_card
+    assert "Needs attention" in remaining_card
 
     zero_target = get_dashboard(application)
     zero_card = metric_card(zero_target, "companies_contacted")
@@ -1860,6 +1955,129 @@ def test_prorated_remaining_and_zero_target_progress_states(
     assert 'data-progress-state="neutral"' in zero_card
     assert 'data-bar-percentage="0"' in zero_card
     assert "No target" in zero_card
+
+
+def test_dashboard_kpi_states_attention_threshold_and_progress_cap() -> None:
+    """KPI presentation keeps exact calculations while exposing quiet states."""
+    incomplete = _build_dashboard_metric(
+        key="x", label="X", actual=49, target=Decimal("100")
+    )
+    exact = _build_dashboard_metric(
+        key="x", label="X", actual=100, target=Decimal("100")
+    )
+    exceeded = _build_dashboard_metric(
+        key="x", label="X", actual=193, target=Decimal("100")
+    )
+
+    assert DASHBOARD_TARGET_ATTENTION_RATIO == Decimal("0.5")
+    assert incomplete.status_text == "51 remaining"
+    assert incomplete.status_state == "muted"
+    assert incomplete.needs_attention is True
+    assert incomplete.progress_state == "standard"
+    assert exact.status_text == "Goal reached"
+    assert exact.status_state == "success"
+    assert exact.needs_attention is False
+    assert exact.progress_state == "success"
+    assert exceeded.status_text == "Goal exceeded by 93"
+    assert exceeded.status_state == "success"
+    assert exceeded.percentage == 193
+    assert exceeded.bar_percentage == 100
+
+
+def test_dashboard_kpi_template_uses_circular_progress_without_comparison_ui() -> None:
+    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert 'class="dashboard-kpi-value-row"' in template
+    assert 'class="dashboard-kpi-actual"' in template
+    assert "of {{ metric.target_text }} target" in template
+    assert 'class="dashboard-circular-progress' in template
+    assert 'stroke-dasharray="{{ metric.bar_percentage }} 100"' in template
+    assert "{{ metric.percentage_text if metric.target > 0 else '—' }}" in template
+    assert "{{ metric.status_text }}" in template
+    assert "Needs attention" in template
+    assert "previous period" not in template.lower()
+    assert "#d66a0a" not in css.split(".dashboard-kpi-main-row", 1)[1].split(
+        ".dashboard-analysis-grid", 1
+    )[0]
+    assert ".dashboard-circular-progress-success" in css
+    assert "stroke-linecap: round" in css
+    progress_css = css.split(".dashboard-circular-progress {", 1)[1].split(
+        "}", 1
+    )[0]
+    assert "width: 3.9rem" in progress_css
+    assert "height: 3.9rem" in progress_css
+    assert "stroke-width: 4" in css
+    assert "font-size: 0.65rem" in css
+    actual_css = css.split(".dashboard-kpi-actual {", 1)[1].split("}", 1)[0]
+    assert "font-size: 1.42rem" in actual_css
+    assert "font-weight: 750" in actual_css
+    assert "margin-top: auto" not in css.split(".dashboard-kpi-status {", 1)[1].split(
+        "}", 1
+    )[0]
+    assert 'class="dashboard-kpi-status-row"' in template
+    assert " · Needs attention" in template
+    assert "position: absolute" in progress_css
+
+
+def test_dashboard_secondary_dashboard_typography_uses_quiet_weights() -> None:
+    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    report_note_rules = re.findall(r"\.report-section-note \{([^}]*)\}", css)
+    target_css = css.split(".dashboard-kpi-target {", 1)[1].split("}", 1)[0]
+    status_css = css.split(".dashboard-kpi-status {", 1)[1].split("}", 1)[0]
+    success_status_css = css.split(
+        ".dashboard-kpi-status-success {",
+        1,
+    )[1].split("}", 1)[0]
+    attention_css = css.split(".dashboard-kpi-attention {", 1)[1].split("}", 1)[0]
+    mini_result_css = css.split(
+        ".dashboard-mini-metric-result {",
+        1,
+    )[1].split("}", 1)[0]
+
+    assert any(
+        "color: var(--muted)" in rule and "font-weight: 400" in rule
+        for rule in report_note_rules
+    )
+    assert "font-weight: 500" in target_css
+    assert "font-weight: 500" in status_css
+    assert "font-weight: 600" in success_status_css
+    assert "font-weight: 500" in attention_css
+    assert "font-size: 0.78rem" in attention_css
+    assert "var(--primary) 40%" in attention_css
+    assert "text-decoration: none" in attention_css
+    assert "background:" not in attention_css
+    assert "border:" not in attention_css
+    assert "font-weight: 400" in mini_result_css
+    assert "Total meetings <span>" in template
+    assert "Total meetings <strong>" not in template
+
+
+def test_dashboard_analytics_numeric_typography_is_compact_and_hierarchical() -> None:
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    mini_rate_css = css.split(".dashboard-mini-metric-rate {", 1)[1].split(
+        "}", 1
+    )[0]
+    average_css = css.split(".dashboard-mood-average-value {", 1)[1].split(
+        "}", 1
+    )[0]
+    average_suffix_css = css.split(
+        ".dashboard-mood-average-value span {", 1
+    )[1].split("}", 1)[0]
+    donut_total_css = css.split(".dashboard-mood-total strong {", 1)[1].split(
+        "}", 1
+    )[0]
+
+    assert "font-size: 1.1rem" in mini_rate_css
+    assert "font-weight: 750" in mini_rate_css
+    assert "font-size: 1.78rem" in average_css
+    assert "font-weight: 750" in average_css
+    assert "font-size: 0.92rem" in average_suffix_css
+    assert "font-weight: 500" in average_suffix_css
+    assert "font-size: 1.42rem" in donut_total_css
 
 
 def test_custom_range_and_validation_preserve_dates(
@@ -2121,15 +2339,12 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert "min-height: 2.75rem" in css
     assert ".dashboard-metric-grid" in css
     assert ".dashboard-analysis-grid" in css
-    assert 'class="metric-primary-row"' in template
-    assert 'class="metric-remaining"' in template
-    primary_row = template.split('class="metric-primary-row"', 1)[1].split(
-        "</div>",
-        1,
-    )[0]
-    assert "week-metric-primary" in primary_row
-    assert "week-metric-percentage" in primary_row
-    assert "remaining" not in primary_row
+    assert 'class="dashboard-kpi-main-row"' in template
+    assert 'class="dashboard-kpi-status' in template
+    assert 'class="dashboard-circular-progress' in template
+    assert "padding-inline-end: 4.7rem" in css
+    assert "top: 50%" in css
+    assert "align-items: stretch" in css
     assert 'class="dashboard-grouped-chart{% if' in template
     assert 'class="dashboard-chart-legend"' in template
     assert 'class="dashboard-chart-group"' in template
@@ -2175,12 +2390,9 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
         "}",
         1,
     )[0]
-    assert "height: 9.75rem" in grouped_chart_css
-    tablet_grouped_chart_css = tablet_css.split(
-        ".dashboard-grouped-chart {",
-        1,
-    )[1].split("}", 1)[0]
-    assert "height: 8.75rem" in tablet_grouped_chart_css
+    assert "height:" not in grouped_chart_css
+    assert "min-height: 5.4rem" in css
+    assert ".dashboard-grouped-chart {\n    height:" not in tablet_css
     assert "applyButton.disabled = !datesAreValid()" in script
     assert "if (!isCustom()) applyPresetPeriod()" in script
     assert "checkedUsers().length === 0" not in script
@@ -2195,6 +2407,7 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert "customAppliedSummary.hidden" in script
     assert "replaceUserParams(params)" in script
     assert 'chart.style.setProperty("--chart-columns"' in script
+    assert 'chart.style.setProperty("--chart-label-stride"' in script
     assert "barGroup.style.setProperty(" in script
     assert '"--bar-height"' in script
     assert "ResizeObserver" not in script

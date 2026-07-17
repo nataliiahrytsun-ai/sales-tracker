@@ -174,45 +174,35 @@
               data-progress-state="{{ metric.progress_state }}"
               data-bar-percentage="{{ metric.bar_percentage }}"
             >
-              <h3>{{ metric.label }}</h3>
-              {% if metric.target > 0 %}
-                <div class="metric-primary-row">
-                  <p class="week-metric-primary" aria-label="Actual {{ metric.actual }} of company target {{ metric.target_text }}">
-                    <strong>{{ metric.actual }}</strong> of {{ metric.target_text }}
+              <div class="dashboard-kpi-main-row">
+                <div class="dashboard-kpi-copy">
+                  <h3>{{ metric.label }}</h3>
+                  <p class="dashboard-kpi-value-row">
+                    <strong class="dashboard-kpi-actual">{{ metric.actual }}</strong>
+                    {% if metric.target > 0 %}
+                      <span class="dashboard-kpi-target">of {{ metric.target_text }} target</span>
+                    {% else %}
+                      <span class="dashboard-kpi-target">No target</span>
+                    {% endif %}
                   </p>
-                  <span class="week-metric-percentage">{{ metric.percentage_text }}</span>
+                  <p class="dashboard-kpi-status-row">
+                    <span class="dashboard-kpi-status dashboard-kpi-status-{{ metric.status_state }}">{{ metric.status_text }}</span>{% if metric.needs_attention %}<span class="dashboard-kpi-attention"> · Needs attention</span>{% endif %}
+                  </p>
                 </div>
-                <p class="metric-remaining">
-                  {% if metric.actual > metric.target %}
-                    Goal exceeded by {{ metric.exceeded_by_text }}
-                  {% else %}
-                    {{ metric.remaining_text }} remaining
-                  {% endif %}
-                </p>
-                <div
-                  class="week-progress"
+                <svg
+                  class="dashboard-circular-progress dashboard-circular-progress-{{ metric.progress_state }}"
                   role="progressbar"
-                  aria-label="{{ metric.label }}: actual {{ metric.actual }}, company target {{ metric.target_text }}, remaining {{ metric.remaining_text }}, {{ metric.percentage_text }}"
+                  aria-label="{{ metric.label }}: {{ metric.actual }} of {{ metric.target_text }} target, {{ metric.percentage_text }}"
                   aria-valuemin="0"
                   aria-valuemax="100"
                   aria-valuenow="{{ metric.bar_percentage }}"
+                  viewBox="0 0 48 48"
                 >
-                  <span class="week-progress-fill week-progress-fill-{{ metric.progress_state }}" style="width: {{ metric.bar_percentage }}%"></span>
-                </div>
-              {% else %}
-                <p class="dashboard-actual">Actual <strong>{{ metric.actual }}</strong></p>
-                <p class="week-no-target">No target</p>
-                <div
-                  class="week-progress"
-                  role="progressbar"
-                  aria-label="{{ metric.label }}: actual {{ metric.actual }}, no target"
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                  aria-valuenow="0"
-                >
-                  <span class="week-progress-fill week-progress-fill-neutral" style="width: 0%"></span>
-                </div>
-              {% endif %}
+                  <circle class="dashboard-circular-progress-track" cx="24" cy="24" r="18" pathLength="100"></circle>
+                  <circle class="dashboard-circular-progress-value" cx="24" cy="24" r="18" pathLength="100" stroke-dasharray="{{ metric.bar_percentage }} 100"></circle>
+                  <text class="dashboard-circular-progress-label" x="24" y="25" text-anchor="middle" dominant-baseline="middle">{{ metric.percentage_text if metric.target > 0 else '—' }}</text>
+                </svg>
+              </div>
             </article>
           {% endfor %}
         </div>
@@ -220,7 +210,7 @@
 
       <section class="dashboard-analysis-card dashboard-activity-card" aria-labelledby="daily-activity-heading">
         <div class="report-section-heading">
-          <h2 id="daily-activity-heading" class="dashboard-section-heading">Activity by day</h2>
+          <h2 id="daily-activity-heading" class="dashboard-section-heading">{{ summary.activity_heading }}</h2>
           <p class="report-section-note">Outreach and meetings shown separately.</p>
         </div>
         {% if not summary.has_selected_users %}
@@ -234,6 +224,7 @@
           class="dashboard-grouped-chart{% if summary.activity_buckets | length > 7 %} dashboard-grouped-chart-dense{% endif %}"
           data-grouped-chart
           data-columns="{{ summary.activity_buckets | length }}"
+          data-label-stride="{{ summary.activity_label_stride }}"
           role="group"
           aria-label="Grouped bar chart of Outreach activities and Meetings held for {{ summary.selected_period.start_date.isoformat() }} to {{ summary.selected_period.end_date.isoformat() }}"
         >
@@ -260,7 +251,7 @@
                   </span>
                 </span>
               </div>
-              <span class="dashboard-chart-label">
+              <span class="dashboard-chart-label{% if loop.index0 % summary.activity_label_stride == 0 or loop.last %} is-visible{% endif %}{% if loop.last %} is-last{% endif %}">
                 {% if loop.index0 % summary.activity_label_stride == 0 or loop.last %}{{ bucket.label }}{% else %}&nbsp;{% endif %}
               </span>
             </div>
@@ -299,7 +290,7 @@
         <div class="report-section-heading">
           <h2 id="pipeline-conversion-heading" class="dashboard-section-heading">Pipeline conversion metrics</h2>
           <p class="report-section-note">
-            Total meetings <strong>{{ summary.pipeline_conversions.total_meetings }}</strong>
+            Total meetings <span>{{ summary.pipeline_conversions.total_meetings }}</span>
           </p>
         </div>
         <dl class="dashboard-mini-metric-grid dashboard-mini-metric-grid-pipeline">

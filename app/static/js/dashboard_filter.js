@@ -241,6 +241,7 @@ document.querySelectorAll("[data-dashboard-filter]").forEach((form) => {
 
 document.querySelectorAll("[data-grouped-chart]").forEach((chart) => {
   chart.style.setProperty("--chart-columns", chart.dataset.columns);
+  chart.style.setProperty("--chart-label-stride", chart.dataset.labelStride);
   chart.querySelectorAll("[data-bar-height]").forEach((barGroup) => {
     barGroup.style.setProperty(
       "--bar-height",
