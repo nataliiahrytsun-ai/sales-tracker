@@ -1,28 +1,141 @@
 "use strict";
 
-const removeCommentsFragmentAfterNativeScroll = () => {
-  if (window.location.hash === "#comments-overview") {
-    window.requestAnimationFrame(() => {
-      if (window.location.hash === "#comments-overview") {
-        window.history.replaceState(
+document.querySelectorAll(".dashboard-section-navigation").forEach(
+  (navigation) => {
+    const links = Array.from(
+      navigation.querySelectorAll('a[href^="#"]'),
+    );
+    const sections = links.map((link) => (
+      document.querySelector(link.getAttribute("href"))
+    ));
+    if (sections.some((section) => !section)) return;
+
+    const shell = navigation.closest(".dashboard-section-navigation-shell");
+    let activeIndex = -1;
+    let requestedIndex = null;
+    let updateFrame = null;
+    let scrollFallback = null;
+
+    const stickyOffset = () => (
+      (shell || navigation).getBoundingClientRect().height + 8
+    );
+    const activationOffset = () => Math.max(
+      stickyOffset(),
+      Number.parseFloat(window.getComputedStyle(sections[0]).scrollMarginTop) ||
+        0,
+    ) + 1;
+    const sectionIndexFromHash = () => links.findIndex(
+      (link) => link.getAttribute("href") === window.location.hash,
+    );
+    const replaceHash = (index) => {
+      const hash = links[index].getAttribute("href");
+      if (window.location.hash === hash) return;
+      window.history.replaceState(
+        null,
+        "",
+        window.location.pathname + window.location.search + hash,
+      );
+    };
+    const setActive = (index, updateHash = false) => {
+      links.forEach((link, linkIndex) => {
+        if (linkIndex === index) {
+          link.setAttribute("aria-current", "location");
+        } else {
+          link.removeAttribute("aria-current");
+        }
+      });
+      if (activeIndex !== index) {
+        activeIndex = index;
+        links[index].scrollIntoView({block: "nearest", inline: "nearest"});
+      }
+      if (updateHash) replaceHash(index);
+    };
+    const isAtPageBottom = () => (
+      window.innerHeight + window.scrollY >=
+      document.documentElement.scrollHeight - 2
+    );
+    const visibleSectionIndex = () => {
+      if (window.scrollY <= 2) return 0;
+      if (isAtPageBottom()) return sections.length - 1;
+      const offset = activationOffset();
+      let index = 0;
+      sections.forEach((section, sectionIndex) => {
+        if (section.getBoundingClientRect().top <= offset) {
+          index = sectionIndex;
+        }
+      });
+      return index;
+    };
+    const updateActiveSection = () => {
+      updateFrame = null;
+      if (requestedIndex !== null) {
+        setActive(requestedIndex);
+        return;
+      }
+      setActive(visibleSectionIndex(), true);
+    };
+    const scheduleUpdate = () => {
+      if (updateFrame !== null) return;
+      updateFrame = window.requestAnimationFrame(updateActiveSection);
+    };
+    const scrollToSection = (index, smooth, preserveHash = false) => {
+      requestedIndex = smooth || preserveHash ? index : null;
+      setActive(index);
+      sections[index].scrollIntoView({
+        behavior: smooth ? "smooth" : "auto",
+        block: "start",
+      });
+      if (smooth) {
+        window.clearTimeout(scrollFallback);
+        scrollFallback = window.setTimeout(() => {
+          requestedIndex = null;
+          scheduleUpdate();
+        }, 900);
+      }
+    };
+
+    links.forEach((link, index) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        window.history.pushState(
           null,
           "",
-          window.location.pathname + window.location.search,
+          window.location.pathname +
+            window.location.search +
+            link.getAttribute("href"),
         );
-      }
+        scrollToSection(index, true);
+      });
     });
-  }
-};
 
-if (document.readyState === "loading") {
-  document.addEventListener(
-    "DOMContentLoaded",
-    removeCommentsFragmentAfterNativeScroll,
-    {once: true},
-  );
-} else {
-  removeCommentsFragmentAfterNativeScroll();
-}
+    const observer = new IntersectionObserver(scheduleUpdate, {
+      rootMargin: `-${activationOffset()}px 0px -65% 0px`,
+      threshold: [0, 1],
+    });
+    sections.forEach((section) => observer.observe(section));
+    window.addEventListener("scroll", scheduleUpdate, {passive: true});
+    window.addEventListener("resize", scheduleUpdate);
+    ["wheel", "touchstart", "pointerdown", "keydown"].forEach((eventName) => {
+      window.addEventListener(eventName, () => {
+        if (requestedIndex === null) return;
+        window.clearTimeout(scrollFallback);
+        requestedIndex = null;
+        scheduleUpdate();
+      }, {passive: true});
+    });
+    window.addEventListener("hashchange", () => {
+      const index = sectionIndexFromHash();
+      if (index >= 0) scrollToSection(index, false, true);
+    });
+
+    const initialIndex = sectionIndexFromHash();
+    if (initialIndex >= 0) {
+      scrollToSection(initialIndex, false, true);
+    } else {
+      setActive(0);
+    }
+  },
+);
 
 document.querySelectorAll("[data-dashboard-filter]").forEach((form) => {
   const period = form.querySelector("[data-period-select]");
@@ -250,51 +363,20 @@ document.querySelectorAll("[data-grouped-chart]").forEach((chart) => {
   });
 });
 
+document.querySelectorAll("[data-comment-group-select]").forEach((select) => {
+  select.addEventListener("change", () => {
+    window.location.assign(select.value);
+  });
+});
+
 document.querySelectorAll("[data-expand-toggle]").forEach((toggle) => {
   const list = document.getElementById(toggle.getAttribute("aria-controls"));
   if (!list) return;
   const rows = Array.from(list.querySelectorAll("[data-expandable-row]"));
   const label = toggle.dataset.label;
-  const grid = toggle.closest(".dashboard-analysis-grid");
-
-  const isDesktop = () => window.matchMedia("(min-width: 64rem)").matches;
-  const cards = () => (
-    grid ? Array.from(grid.querySelectorAll(".dashboard-analysis-card")) : []
-  );
-  const clearCardBaseline = () => {
-    cards().forEach((card) => {
-      card.style.removeProperty("min-height");
-    });
-    if (grid) delete grid.dataset.collapsedCardHeight;
-  };
-  const captureCardBaseline = () => {
-    if (!grid || !isDesktop() || grid.dataset.collapsedCardHeight) return;
-    const baseline = Math.max(
-      ...cards().map((card) => card.getBoundingClientRect().height),
-    );
-    grid.dataset.collapsedCardHeight = String(baseline);
-    cards().forEach((card) => {
-      card.style.minHeight = `${baseline}px`;
-    });
-  };
-
-  const syncGridExpansion = () => {
-    if (!grid) return;
-    const hasExpandedCard = Array.from(
-      grid.querySelectorAll("[data-expand-toggle]"),
-    ).some((control) => control.getAttribute("aria-expanded") === "true");
-    if (!isDesktop()) {
-      clearCardBaseline();
-      grid.classList.remove("has-expanded-card");
-      return;
-    }
-    grid.classList.toggle("has-expanded-card", hasExpandedCard);
-    if (!hasExpandedCard) clearCardBaseline();
-  };
 
   toggle.addEventListener("click", () => {
     const expanded = toggle.getAttribute("aria-expanded") === "true";
-    if (!expanded) captureCardBaseline();
     rows.forEach((row) => {
       row.hidden = expanded;
     });
@@ -304,6 +386,5 @@ document.querySelectorAll("[data-expand-toggle]").forEach((toggle) => {
       "aria-label",
       `${expanded ? "View all" : "Show less"} ${label}`,
     );
-    syncGridExpansion();
   });
 });

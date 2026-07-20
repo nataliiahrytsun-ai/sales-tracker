@@ -14,6 +14,7 @@
               <strong>{{ summary.selected_period.label }}</strong>
               <span class="report-period-separator" aria-hidden="true">&middot;</span>
               <span>{{ summary.selected_period.display_range }}</span>
+              <span class="dashboard-comparison-range">Compared with {{ summary.comparison_periods.previous.display_range }}</span>
             </div>
           {% endif %}
         </div>
@@ -21,6 +22,18 @@
 
       <div class="report-navigation-row dashboard-navigation-row">
         <a class="back-link" href="{{ url_for('home') }}">Back to Home</a>
+      </div>
+    </div>
+      <div class="dashboard-section-navigation-shell">
+        <nav class="dashboard-section-navigation" aria-label="Dashboard sections">
+          <a href="#dashboard-overview" aria-current="location">Targets</a>
+          <a href="#dashboard-activity">Activity trend</a>
+          <a href="#dashboard-conversions">Conversions</a>
+          <a href="#dashboard-discussion">Discussion</a>
+          <a href="#dashboard-mood">Mood</a>
+          <a href="#dashboard-countries-blockers">Countries &amp; blockers</a>
+          <a href="#comments-overview">Comments</a>
+        </nav>
       </div>
       <form
         class="dashboard-filter{% if selected_period_key == 'custom' %} dashboard-filter-custom{% endif %}"
@@ -48,13 +61,13 @@
                 <span class="dashboard-control-arrow" aria-hidden="true">&#9662;</span>
               </div>
             </div>
-          </div>
-          <div
-            class="dashboard-custom-applied"
-            data-custom-applied-summary
-            {% if selected_period_key != 'custom' or not summary %}hidden{% endif %}
-          >
-            <button class="dashboard-edit-dates" type="button" data-edit-dates>Edit dates</button>
+            <div
+              class="dashboard-custom-applied"
+              data-custom-applied-summary
+              {% if selected_period_key != 'custom' or not summary %}hidden{% endif %}
+            >
+              <button class="dashboard-edit-dates" type="button" data-edit-dates>Edit dates</button>
+            </div>
           </div>
           <div class="dashboard-custom-dates" data-custom-dates{% if selected_period_key != 'custom' or summary %} hidden{% endif %}>
             <div class="dashboard-custom-date-fields">
@@ -140,7 +153,6 @@
           <p class="alert dashboard-filter-error" role="alert">{{ filter_error }}</p>
         {% endif %}
       </form>
-    </div>
 
     {% if summary %}
       <div class="dashboard-results">
@@ -152,12 +164,16 @@
       {% endif %}
 
       <section
+        id="dashboard-overview"
         class="dashboard-analysis-card dashboard-conversion-card"
         aria-labelledby="company-metrics-heading"
       >
         <div class="report-section-heading">
           <h2 id="company-metrics-heading" class="dashboard-section-heading">Activity &amp; target progress</h2>
-          <p class="report-section-note">Weekly goals are prorated to the selected period.</p>
+          <p
+            class="report-section-note"
+            title="Based on weekly goals and the length of the selected period."
+          >{{ summary.target_adjustment_text }}</p>
         </div>
         {% if not summary.has_selected_users %}
           <p class="dashboard-metrics-helper" role="status">Select at least one user to view data.</p>
@@ -175,20 +191,22 @@
               data-bar-percentage="{{ metric.bar_percentage }}"
             >
               <div class="dashboard-kpi-main-row">
-                <div class="dashboard-kpi-copy">
-                  <h3>{{ metric.label }}</h3>
-                  <p class="dashboard-kpi-value-row">
-                    <strong class="dashboard-kpi-actual">{{ metric.actual }}</strong>
-                    {% if metric.target > 0 %}
-                      <span class="dashboard-kpi-target">of {{ metric.target_text }} target</span>
-                    {% else %}
-                      <span class="dashboard-kpi-target">No target</span>
-                    {% endif %}
-                  </p>
-                  <p class="dashboard-kpi-status-row">
-                    <span class="dashboard-kpi-status dashboard-kpi-status-{{ metric.status_state }}">{{ metric.status_text }}</span>{% if metric.needs_attention %}<span class="dashboard-kpi-attention"> · Needs attention</span>{% endif %}
-                  </p>
-                </div>
+                <h3>{{ metric.label }}</h3>
+                <p class="dashboard-kpi-value-row">
+                  <strong class="dashboard-kpi-actual">{{ metric.actual }}</strong>
+                  {% if metric.target > 0 %}
+                    <span class="dashboard-kpi-target">of {{ metric.target_text }} target</span>
+                  {% else %}
+                    <span class="dashboard-kpi-target">No target</span>
+                  {% endif %}
+                </p>
+                <p
+                  class="dashboard-comparison dashboard-kpi-comparison dashboard-comparison-{{ metric.comparison.state }}"
+                  aria-label="{{ metric.comparison.accessible_label }}"
+                ><span aria-hidden="true">{{ metric.comparison.text }}</span></p>
+                <p class="dashboard-kpi-status-row">
+                  <span class="dashboard-kpi-status dashboard-kpi-status-{{ metric.status_state }}">{{ metric.status_text }}</span>{% if metric.needs_attention %}<span class="dashboard-kpi-attention"> · Needs attention</span>{% endif %}
+                </p>
                 <svg
                   class="dashboard-circular-progress dashboard-circular-progress-{{ metric.progress_state }}"
                   role="progressbar"
@@ -208,7 +226,7 @@
         </div>
       </section>
 
-      <section class="dashboard-analysis-card dashboard-activity-card" aria-labelledby="daily-activity-heading">
+      <section id="dashboard-activity" class="dashboard-analysis-card dashboard-activity-card" aria-labelledby="daily-activity-heading">
         <div class="report-section-heading">
           <h2 id="daily-activity-heading" class="dashboard-section-heading">{{ summary.activity_heading }}</h2>
           <p class="report-section-note">Outreach and meetings shown separately.</p>
@@ -282,6 +300,7 @@
       </section>
 
       <section
+        id="dashboard-conversions"
         class="dashboard-analysis-card dashboard-conversion-card"
         aria-labelledby="pipeline-conversion-heading"
         data-pipeline-conversions
@@ -309,6 +328,10 @@
               <dd class="dashboard-mini-metric-rate">
                 <span class="visually-hidden">Rate: </span>{{ metric.percentage_text }}
               </dd>
+              <dd
+                class="dashboard-comparison dashboard-comparison-{{ metric.comparison.state }}"
+                aria-label="{{ metric.comparison.accessible_label }}"
+              ><span aria-hidden="true">{{ metric.comparison.text }}</span></dd>
             </div>
           {% endfor %}
         </dl>
@@ -339,12 +362,17 @@
               <dd class="dashboard-mini-metric-rate">
                 <span class="visually-hidden">Rate: </span>{{ metric.percentage_text }}
               </dd>
+              <dd
+                class="dashboard-comparison dashboard-comparison-{{ metric.comparison.state }}"
+                aria-label="{{ metric.comparison.accessible_label }}"
+              ><span aria-hidden="true">{{ metric.comparison.text }}</span></dd>
             </div>
           {% endfor %}
         </dl>
       </section>
 
       <section
+        id="dashboard-discussion"
         class="dashboard-analysis-card dashboard-discussion-prompts-card"
         aria-labelledby="discussion-prompts-heading"
         data-discussion-prompts
@@ -379,6 +407,7 @@
       </section>
 
       <article
+        id="dashboard-mood"
         class="dashboard-analysis-card dashboard-mood-summary-card"
         aria-labelledby="mood-summary-heading"
       >
@@ -403,8 +432,13 @@
             <section class="dashboard-mood-average" aria-labelledby="average-mood-heading">
               <h3 id="average-mood-heading">Average mood</h3>
               <p class="dashboard-mood-average-value">{{ summary.mood_summary.average_text }} <span>/ 3</span></p>
+              {% if summary.mood_summary.comparison %}
+                <p
+                  class="dashboard-comparison dashboard-comparison-{{ summary.mood_summary.comparison.state }}"
+                  aria-label="{{ summary.mood_summary.comparison.accessible_label }}"
+                ><span aria-hidden="true">{{ summary.mood_summary.comparison.text }}</span></p>
+              {% endif %}
               <p class="dashboard-mood-recorded-count">{{ summary.mood_summary.recorded_count }} recorded</p>
-              <p class="dashboard-mood-scale">1 Difficult · 2 Okay · 3 Good</p>
             </section>
 
             <section class="dashboard-mood-distribution" aria-labelledby="mood-distribution-heading">
@@ -444,7 +478,10 @@
               <div class="dashboard-mood-trend-heading">
                 <h3 id="daily-mood-trend-heading">Daily mood trend</h3>
                 <div class="dashboard-mood-trend-legend" aria-label="Mood trend legend">
-                  <span class="dashboard-mood-trend-key-current">Current period</span>
+                  <span class="dashboard-mood-trend-key-current">Selected period</span>
+                  {% if summary.mood_summary.has_previous_mood %}
+                    <span class="dashboard-mood-trend-key-previous">Previous period</span>
+                  {% endif %}
                 </div>
               </div>
               <div class="dashboard-mood-trend-viewport" tabindex="0" aria-label="Daily mood trend">
@@ -460,6 +497,27 @@
                     <line class="dashboard-mood-grid-line" x1="48" y1="{{ y }}" x2="{{ summary.mood_summary.chart_width - 12 }}" y2="{{ y }}"></line>
                     <text class="dashboard-mood-axis-label" x="0" y="{{ y + 4 }}">{{ label }}</text>
                   {% endfor %}
+                  {% if summary.mood_summary.has_previous_mood %}
+                    {% set previous_plot = namespace(previous_x=none, previous_y=none) %}
+                    {% for point in summary.mood_summary.previous_trend %}
+                      {% if point.average is not none %}
+                        {% if point.connects_to_previous %}
+                          <line class="dashboard-mood-previous-line" x1="{{ previous_plot.previous_x }}" y1="{{ previous_plot.previous_y }}" x2="{{ point.x }}" y2="{{ point.y }}"></line>
+                        {% endif %}
+                        <circle
+                          class="dashboard-mood-previous-point"
+                          cx="{{ point.x }}"
+                          cy="{{ point.y }}"
+                          r="4"
+                          aria-hidden="true"
+                          data-previous-mood-date="{{ point.date.isoformat() }}"
+                          data-previous-mood-average="{{ point.display_average }}"
+                        ></circle>
+                        {% set previous_plot.previous_x = point.x %}
+                        {% set previous_plot.previous_y = point.y %}
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
                   {% set plot = namespace(previous_x=none, previous_y=none) %}
                   {% for point in summary.mood_summary.trend %}
                     {% if point.average is not none %}
@@ -484,36 +542,60 @@
                       <text class="dashboard-mood-date-label" x="{{ point.x }}" y="145" text-anchor="middle">{{ point.date.strftime('%b') }} {{ point.date.day }}</text>
                     {% endif %}
                   {% endfor %}
+                  {% for selected_point, previous_point in summary.mood_summary.trend_pairs %}
+                    {% set tooltip_y = selected_point.y if selected_point.y is not none else (previous_point.y if previous_point and previous_point.y is not none else 67) %}
+                    <circle
+                      class="dashboard-mood-tooltip-target"
+                      cx="{{ selected_point.x }}"
+                      cy="{{ tooltip_y }}"
+                      r="9"
+                      tabindex="0"
+                      aria-label="Selected period — {{ selected_point.date.strftime('%b') }} {{ selected_point.date.day }}: {{ selected_point.display_average if selected_point.display_average is not none else 'No data' }}{% if previous_point %}; Previous period — {{ previous_point.date.strftime('%b') }} {{ previous_point.date.day }}: {{ previous_point.display_average if previous_point.display_average is not none else 'No data' }}{% endif %}"
+                    ><title>Selected period — {{ selected_point.date.strftime('%b') }} {{ selected_point.date.day }}: {{ selected_point.display_average if selected_point.display_average is not none else 'No data' }}{% if previous_point %}; Previous period — {{ previous_point.date.strftime('%b') }} {{ previous_point.date.day }}: {{ previous_point.display_average if previous_point.display_average is not none else 'No data' }}{% endif %}</title></circle>
+                  {% endfor %}
                 </svg>
               </div>
+              {% if not summary.mood_summary.has_previous_mood %}
+                <p class="dashboard-card-note dashboard-mood-previous-empty">No previous mood data</p>
+              {% endif %}
             </section>
           </div>
-          <p class="dashboard-card-note dashboard-mood-note">Missing mood is excluded, not treated as neutral.</p>
         {% else %}
           <p class="dashboard-card-note dashboard-mood-empty">No recorded mood for this period.</p>
         {% endif %}
+        <p class="dashboard-card-note dashboard-mood-note">Mood scale: 1 = Difficult · 2 = Okay · 3 = Good · Missing mood is excluded.</p>
       </article>
 
-      <section class="dashboard-analysis-grid" aria-label="Countries and blockers">
-        <article class="dashboard-analysis-card dashboard-analysis-section dashboard-countries-section">
+      <section
+        id="dashboard-countries-blockers"
+        class="dashboard-analysis-card dashboard-countries-blockers-section"
+        aria-labelledby="dashboard-countries-blockers-heading"
+      >
+        <h2 id="dashboard-countries-blockers-heading" class="dashboard-section-heading">Countries &amp; blockers</h2>
+        <div class="dashboard-countries-blockers-grid">
+        <section class="dashboard-analysis-section dashboard-countries-section dashboard-countries-panel" aria-labelledby="dashboard-countries-heading">
           <header class="dashboard-analysis-heading">
-            <h2 class="dashboard-section-heading">Countries</h2>
+            <h3 id="dashboard-countries-heading">Countries</h3>
+            {% if summary.countries | length > 3 %}
+              <button class="dashboard-view-all" type="button" data-expand-toggle data-label="Countries" aria-controls="dashboard-country-list" aria-expanded="false" aria-label="View all Countries">View all</button>
+            {% endif %}
           </header>
           <div class="dashboard-analysis-body">
             {% if summary.countries %}
               <div class="dashboard-ranked-header" aria-hidden="true">
-                <span>Country</span><span>Companies</span><span>Share</span>
+                <span>Country</span><span></span><span>Companies</span><span>Share</span>
               </div>
               <div id="dashboard-country-list" class="dashboard-ranked-list dashboard-breakdown-list">
                 {% for item in summary.countries %}
                   <div
-                    class="dashboard-ranked-item dashboard-breakdown-item"
+                    class="dashboard-ranked-item dashboard-breakdown-item dashboard-ranked-item-with-bar"
                     data-country="{{ item.key }}"
                     data-share="{{ item.share_percentage }}"
                     data-bar-percentage="{{ item.bar_percentage }}"
                     {% if loop.index > 3 %}data-expandable-row hidden{% endif %}
                   >
-                    <span class="dashboard-ranked-label"><span>{{ item.label }}</span><span class="dashboard-bar" aria-hidden="true"><span class="dashboard-bar-fill" style="width: {{ item.bar_percentage }}%"></span></span></span>
+                    <span class="dashboard-ranked-label">{{ item.label }}</span>
+                    <span class="dashboard-bar" aria-hidden="true"><span class="dashboard-bar-fill" style="width: {{ item.share_percentage }}%"></span></span>
                     <strong>{{ item.value }}</strong>
                     <span class="dashboard-ranked-share">{{ item.share_percentage }}%</span>
                   </div>
@@ -523,32 +605,33 @@
               <p class="dashboard-card-note">No country activity for this period.</p>
             {% endif %}
           </div>
-          {% if summary.countries | length > 3 %}
-            <footer class="dashboard-analysis-footer">
-              <button class="dashboard-view-all" type="button" data-expand-toggle data-label="Countries" aria-controls="dashboard-country-list" aria-expanded="false" aria-label="View all Countries">View all</button>
-            </footer>
-          {% endif %}
-        </article>
+        </section>
 
-        <article class="dashboard-analysis-card dashboard-analysis-section dashboard-blockers-section">
+        <div class="dashboard-countries-blockers-divider" aria-hidden="true"></div>
+
+        <section class="dashboard-analysis-section dashboard-blockers-section dashboard-blockers-panel" aria-labelledby="dashboard-blockers-heading">
           <header class="dashboard-analysis-heading">
-            <h2 class="dashboard-section-heading">Blockers</h2>
+            <h3 id="dashboard-blockers-heading">Blockers</h3>
+            {% if summary.blockers | length > 3 %}
+              <button class="dashboard-view-all" type="button" data-expand-toggle data-label="Blockers" aria-controls="dashboard-blocker-list" aria-expanded="false" aria-label="View all Blockers">View all</button>
+            {% endif %}
           </header>
           <div class="dashboard-analysis-body">
             {% if summary.blockers %}
               <div class="dashboard-ranked-header" aria-hidden="true">
-                <span>Blocker</span><span>Companies</span><span>Share</span>
+                <span>Blocker</span><span></span><span>Companies</span><span>Share</span>
               </div>
               <div id="dashboard-blocker-list" class="dashboard-ranked-list dashboard-blocker-list">
                 {% for item in summary.blockers %}
                   <div
-                    class="dashboard-ranked-item dashboard-blocker-item"
+                    class="dashboard-ranked-item dashboard-blocker-item dashboard-ranked-item-with-bar"
                     data-blocker="{{ item.key }}"
                     data-blocker-count="{{ item.value }}"
                     data-share="{{ item.share_percentage }}"
                     {% if loop.index > 3 %}data-expandable-row hidden{% endif %}
                   >
-                    <span>{{ item.label }}</span>
+                    <span class="dashboard-ranked-label">{{ item.label }}</span>
+                    <span class="dashboard-bar" aria-hidden="true"><span class="dashboard-bar-fill" style="width: {{ item.share_percentage }}%"></span></span>
                     <strong>{{ item.value }}</strong>
                     <span class="dashboard-ranked-share">{{ item.share_percentage }}%</span>
                   </div>
@@ -558,12 +641,8 @@
               <p class="dashboard-card-note">No Daily Outreach blockers for this period.</p>
             {% endif %}
           </div>
-          {% if summary.blockers | length > 3 %}
-            <footer class="dashboard-analysis-footer">
-              <button class="dashboard-view-all" type="button" data-expand-toggle data-label="Blockers" aria-controls="dashboard-blocker-list" aria-expanded="false" aria-label="View all Blockers">View all</button>
-            </footer>
-          {% endif %}
-        </article>
+        </section>
+        </div>
       </section>
 
       <section
@@ -573,16 +652,16 @@
       >
         <div class="report-section-heading">
           <h2 id="comments-overview-heading" class="dashboard-section-heading">Comments overview</h2>
-          <nav class="dashboard-comment-grouping" aria-label="Group comments">
-            <span>Group</span>
-            {% for value, label in [('employee', 'By employee'), ('date', 'By date'), ('source', 'By source')] %}
-              <a
-                class="dashboard-group-button{% if comment_grouping == value %} is-active{% endif %}"
-                href="{{ comment_group_urls[value] }}"
-                {% if comment_grouping == value %}aria-current="true"{% endif %}
-              >{{ label }}</a>
-            {% endfor %}
-          </nav>
+          {% if comment_groups %}
+            <div class="dashboard-comment-grouping">
+              <label for="dashboard-comment-group">Group by</label>
+              <select id="dashboard-comment-group" data-comment-group-select>
+                {% for value, label in [('employee', 'Employee'), ('date', 'Date'), ('source', 'Source')] %}
+                  <option value="{{ comment_group_urls[value] }}"{% if comment_grouping == value %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          {% endif %}
         </div>
         {% if comment_groups %}
           <div class="dashboard-table-wrap dashboard-comments-table-wrap">
@@ -606,15 +685,15 @@
               {% for group in comment_groups %}
                 <tbody>
                   <tr class="dashboard-comments-group-row">
-                    <th colspan="5" scope="rowgroup">{{ group.label }}</th>
+                    <th colspan="5" scope="rowgroup">{% if comment_grouping == 'employee' %}Employee{% elif comment_grouping == 'date' %}Date{% else %}Source{% endif %}: {{ group.label }}</th>
                   </tr>
                   {% for item in group.comments %}
                     <tr data-comment-source="{{ item.source_type | lower | replace(' ', '-') }}">
-                      <td>{{ item.date.isoformat() }}</td>
-                      <td>{{ item.employee }}</td>
-                      <td>{{ item.source_type }}</td>
-                      <td>{{ item.outcome or '—' }}</td>
-                      <td>{{ item.comment }}</td>
+                      <td data-label="Date">{{ item.date.isoformat() }}</td>
+                      <td data-label="Employee">{{ item.employee }}</td>
+                      <td data-label="Source">{{ item.source_type }}</td>
+                      <td data-label="Outcome">{{ item.outcome or '—' }}</td>
+                      <td data-label="Comment">{{ item.comment }}</td>
                     </tr>
                   {% endfor %}
                 </tbody>
@@ -628,5 +707,5 @@
       </div>
     {% endif %}
   </section>
-  <script src="{{ url_for('static', path='/js/dashboard_filter.js') }}" defer></script>
+  <script src="{{ url_for('static', path='/js/dashboard_filter.js') }}?v=dashboard-navigation-6" defer></script>
 {% endblock %}

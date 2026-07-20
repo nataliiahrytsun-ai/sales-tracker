@@ -2,7 +2,7 @@
 
 from calendar import monthrange
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from math import ceil
@@ -68,6 +68,7 @@ class DashboardFilter:
     end_date: date
     from_value: str = ""
     to_value: str = ""
+    as_of_date: date | None = None
 
     @property
     def is_current_week(self) -> bool:
@@ -81,6 +82,59 @@ class DashboardFilter:
         if self.start_date.year == self.end_date.year:
             return f"{start} – {end} {self.end_date.year}"
         return f"{start} {self.start_date.year} – {end} {self.end_date.year}"
+
+
+@dataclass(frozen=True)
+class ComparisonPeriod:
+    """One exact inclusive range used by previous-period comparisons."""
+
+    start_date: date
+    end_date: date
+
+    @property
+    def duration_days(self) -> int:
+        return (self.end_date - self.start_date).days + 1
+
+    @property
+    def display_range(self) -> str:
+        if self.start_date == self.end_date:
+            return (
+                f"{self.start_date.strftime('%b')} {self.start_date.day}, "
+                f"{self.start_date.year}"
+            )
+        if self.start_date.year == self.end_date.year:
+            if self.start_date.month == self.end_date.month:
+                return (
+                    f"{self.start_date.strftime('%b')} {self.start_date.day}"
+                    f"–{self.end_date.day}, {self.end_date.year}"
+                )
+            return (
+                f"{self.start_date.strftime('%b')} {self.start_date.day}"
+                f"–{self.end_date.strftime('%b')} {self.end_date.day}, "
+                f"{self.end_date.year}"
+            )
+        return (
+            f"{self.start_date.strftime('%b')} {self.start_date.day}, "
+            f"{self.start_date.year}–{self.end_date.strftime('%b')} "
+            f"{self.end_date.day}, {self.end_date.year}"
+        )
+
+
+@dataclass(frozen=True)
+class DashboardComparisonPeriods:
+    """Positionally comparable current and previous inclusive ranges."""
+
+    current: ComparisonPeriod
+    previous: ComparisonPeriod
+
+
+@dataclass(frozen=True)
+class ComparisonDisplay:
+    """Compact, accessible display model for one metric difference."""
+
+    state: str
+    text: str
+    accessible_label: str
 
 
 @dataclass(frozen=True)
@@ -179,10 +233,32 @@ class MoodSummary:
     distribution: tuple[BreakdownItem, ...]
     trend: tuple[MoodTrendPoint, ...]
     chart_width: int
+    comparison: ComparisonDisplay | None = None
+    previous_trend: tuple[MoodTrendPoint, ...] = ()
+    previous_recorded_count: int = 0
 
     @property
     def has_recorded_mood(self) -> bool:
         return self.recorded_count > 0
+
+    @property
+    def has_previous_mood(self) -> bool:
+        return self.previous_recorded_count > 0
+
+    @property
+    def trend_pairs(
+        self,
+    ) -> tuple[tuple[MoodTrendPoint, MoodTrendPoint | None], ...]:
+        """Pair series by ordinal day rather than unrelated calendar dates."""
+        return tuple(
+            (
+                selected,
+                self.previous_trend[index]
+                if index < len(self.previous_trend)
+                else None,
+            )
+            for index, selected in enumerate(self.trend)
+        )
 
 
 @dataclass(frozen=True)
@@ -213,6 +289,7 @@ class PipelineConversionMetric:
     numerator: int
     denominator: int
     percentage: int | None
+    comparison: ComparisonDisplay | None = None
 
     @property
     def percentage_text(self) -> str:
@@ -236,6 +313,7 @@ class OutreachConversionMetric:
     numerator: int
     denominator: int
     percentage: int | None
+    comparison: ComparisonDisplay | None = None
 
     @property
     def percentage_text(self) -> str:
@@ -271,6 +349,7 @@ class DashboardMetric:
     percentage: int | None
     bar_percentage: int
     progress_state: str
+    comparison: ComparisonDisplay | None = None
 
     @property
     def target_text(self) -> str:
@@ -296,7 +375,7 @@ class DashboardMetric:
             return f"{self.remaining_text} remaining"
         if self.actual == self.target:
             return "Goal reached"
-        return f"Goal exceeded by {self.exceeded_by_text}"
+        return f"{self.exceeded_by_text} above target"
 
     @property
     def status_state(self) -> str:
@@ -361,6 +440,7 @@ class DashboardSummary:
     """All privacy-safe company aggregates for one selected period."""
 
     selected_period: DashboardFilter
+    comparison_periods: DashboardComparisonPeriods
     metrics: tuple[DashboardMetric, ...]
     pipeline_conversions: PipelineConversionSummary
     outreach_conversions: OutreachConversionSummary
@@ -388,6 +468,55 @@ class DashboardSummary:
     def activity_heading(self) -> str:
         """Describe the actual aggregation used by the activity series."""
         return ACTIVITY_HEADINGS[self.activity_granularity]
+
+    @property
+    def target_adjustment_text(self) -> str:
+        """Explain target proration in compact product language."""
+        if self.selected_period.key != CUSTOM_RANGE:
+            return "Targets adjusted to the selected period"
+        days = (
+            self.selected_period.end_date - self.selected_period.start_date
+        ).days + 1
+        noun = "day" if days == 1 else "days"
+        return f"Targets adjusted to {days} selected {noun}"
+
+
+def resolve_comparison_periods(
+    selected_period: DashboardFilter,
+) -> DashboardComparisonPeriods:
+    """Resolve the documented non-overlapping previous comparison range."""
+    current_end = selected_period.end_date
+    if selected_period.key in {CURRENT_WEEK, CURRENT_MONTH}:
+        current_end = min(
+            selected_period.as_of_date or selected_period.end_date,
+            selected_period.end_date,
+        )
+    current = ComparisonPeriod(
+        start_date=selected_period.start_date,
+        end_date=current_end,
+    )
+
+    if selected_period.key in {CURRENT_WEEK, PREVIOUS_WEEK}:
+        previous = ComparisonPeriod(
+            start_date=current.start_date - timedelta(days=7),
+            end_date=current.end_date - timedelta(days=7),
+        )
+    elif selected_period.key == CURRENT_MONTH:
+        previous_month_end = current.start_date - timedelta(days=1)
+        previous = ComparisonPeriod(
+            start_date=previous_month_end.replace(day=1),
+            end_date=previous_month_end.replace(
+                day=min(current.end_date.day, previous_month_end.day),
+            ),
+        )
+    else:
+        previous_end = current.start_date - timedelta(days=1)
+        previous = ComparisonPeriod(
+            start_date=previous_end
+            - timedelta(days=current.duration_days - 1),
+            end_date=previous_end,
+        )
+    return DashboardComparisonPeriods(current=current, previous=previous)
 
 
 def resolve_dashboard_filter(
@@ -429,6 +558,7 @@ def resolve_dashboard_filter(
             end_date=end_date,
             from_value=from_value,
             to_value=to_value,
+            as_of_date=today,
         ),
         None,
     )
@@ -783,6 +913,94 @@ def _rounded_percentage(numerator: int, denominator: int) -> int:
     )
 
 
+def _difference_display(
+    difference: Decimal,
+    *,
+    unit: str = "",
+    decimal_places: int = 0,
+) -> ComparisonDisplay:
+    """Format a rounded difference with redundant non-color direction cues."""
+    quantum = Decimal(1).scaleb(-decimal_places)
+    rounded = difference.quantize(quantum, rounding=ROUND_HALF_UP)
+    if rounded == 0:
+        return ComparisonDisplay(
+            state="neutral",
+            text="— No change",
+            accessible_label="No change compared with the previous period",
+        )
+    magnitude = format(abs(rounded), f".{decimal_places}f")
+    suffix = f" {unit}" if unit else ""
+    accessible_unit = " percentage points" if unit == "pp" else ""
+    if rounded > 0:
+        return ComparisonDisplay(
+            state="positive",
+            text=f"↑ {magnitude}{suffix}",
+            accessible_label=(
+                f"Increased by {magnitude}{accessible_unit} "
+                "compared with the previous period"
+            ),
+        )
+    return ComparisonDisplay(
+        state="negative",
+        text=f"↓ {magnitude}{suffix}",
+        accessible_label=(
+            f"Decreased by {magnitude}{accessible_unit} "
+            "compared with the previous period"
+        ),
+    )
+
+
+def _rate_comparison(
+    *,
+    current_numerator: int,
+    current_denominator: int,
+    previous_numerator: int,
+    previous_denominator: int,
+) -> ComparisonDisplay:
+    """Compare source rates before rounding to the whole-pp UI precision."""
+    if current_denominator == 0 or previous_denominator == 0:
+        return ComparisonDisplay(
+            state="unavailable",
+            text="— No comparable rate",
+            accessible_label=(
+                "No comparable rate for the previous period"
+            ),
+        )
+    current_rate = (
+        Decimal(current_numerator) / Decimal(current_denominator) * Decimal(100)
+    )
+    previous_rate = (
+        Decimal(previous_numerator)
+        / Decimal(previous_denominator)
+        * Decimal(100)
+    )
+    return _difference_display(current_rate - previous_rate, unit="pp")
+
+
+def _attach_rate_comparisons(
+    display: tuple[PipelineConversionMetric, ...]
+    | tuple[OutreachConversionMetric, ...],
+    current: tuple[PipelineConversionMetric, ...]
+    | tuple[OutreachConversionMetric, ...],
+    previous: tuple[PipelineConversionMetric, ...]
+    | tuple[OutreachConversionMetric, ...],
+) -> tuple[PipelineConversionMetric, ...] | tuple[OutreachConversionMetric, ...]:
+    current_by_key = {metric.key: metric for metric in current}
+    previous_by_key = {metric.key: metric for metric in previous}
+    return tuple(
+        replace(
+            metric,
+            comparison=_rate_comparison(
+                current_numerator=current_by_key[metric.key].numerator,
+                current_denominator=current_by_key[metric.key].denominator,
+                previous_numerator=previous_by_key[metric.key].numerator,
+                previous_denominator=previous_by_key[metric.key].denominator,
+            ),
+        )
+        for metric in display
+    )
+
+
 def _country_breakdown(
     session: Session,
     outreach: list[DailyOutreach],
@@ -834,8 +1052,10 @@ def _mood_display(value: Decimal) -> str:
 
 
 def _mood_summary(
-    selected_period: DashboardFilter,
+    selected_period: DashboardFilter | ComparisonPeriod,
     outreach: list[DailyOutreach],
+    *,
+    position_count: int | None = None,
 ) -> MoodSummary:
     """Build all mood analytics from the same filled outreach user-days."""
     recorded = [record for record in outreach if record.user_mood is not None]
@@ -848,6 +1068,7 @@ def _mood_summary(
         )
 
     duration = (selected_period.end_date - selected_period.start_date).days + 1
+    chart_positions = position_count or duration
     chart_width = 640
     label_stride = max(1, ceil(duration / 9))
     trend: list[MoodTrendPoint] = []
@@ -872,8 +1093,13 @@ def _mood_summary(
                 ),
                 x=(
                     48
-                    if duration == 1
-                    else round(48 + (chart_width - 60) * index / (duration - 1))
+                    if chart_positions == 1
+                    else round(
+                        48
+                        + (chart_width - 60)
+                        * index
+                        / (chart_positions - 1),
+                    )
                 ),
                 y=(
                     int(18 + (Decimal(3) - daily_average) * Decimal(49))
@@ -886,7 +1112,7 @@ def _mood_summary(
                 connects_to_previous=bool(day_scores) and has_previous_point,
             ),
         )
-        has_previous_point = has_previous_point or bool(day_scores)
+        has_previous_point = bool(day_scores)
 
     return MoodSummary(
         average=average,
@@ -895,6 +1121,31 @@ def _mood_summary(
         distribution=_mood_breakdown(outreach),
         trend=tuple(trend),
         chart_width=chart_width,
+    )
+
+
+def _attach_mood_comparison(
+    current: MoodSummary,
+    previous: MoodSummary,
+) -> MoodSummary:
+    if current.average is None:
+        comparison = None
+    elif previous.average is None:
+        comparison = ComparisonDisplay(
+            state="unavailable",
+            text="— No previous mood data",
+            accessible_label="No previous mood data",
+        )
+    else:
+        comparison = _difference_display(
+            current.average - previous.average,
+            decimal_places=1,
+        )
+    return replace(
+        current,
+        comparison=comparison,
+        previous_trend=previous.trend,
+        previous_recorded_count=previous.recorded_count,
     )
 
 
@@ -1062,13 +1313,42 @@ def get_dashboard_summary(
         if user_filter is None or user_filter.includes_all
         else user_filter.user_ids
     )
+    comparison_periods = resolve_comparison_periods(selected_period)
     outreach, meetings = _company_records(
         session,
         start_date=selected_period.start_date,
         end_date=selected_period.end_date,
         user_ids=selected_user_ids,
     )
+    current_outreach = [
+        record
+        for record in outreach
+        if comparison_periods.current.start_date
+        <= record.activity_date
+        <= comparison_periods.current.end_date
+    ]
+    current_meetings = [
+        meeting
+        for meeting in meetings
+        if comparison_periods.current.start_date
+        <= meeting.occurred_at.date()
+        <= comparison_periods.current.end_date
+    ]
+    previous_outreach, previous_meetings = _company_records(
+        session,
+        start_date=comparison_periods.previous.start_date,
+        end_date=comparison_periods.previous.end_date,
+        user_ids=selected_user_ids,
+    )
     actuals = aggregate_activity_actuals(outreach, meetings)
+    comparison_actuals = aggregate_activity_actuals(
+        current_outreach,
+        current_meetings,
+    )
+    previous_actuals = aggregate_activity_actuals(
+        previous_outreach,
+        previous_meetings,
+    )
     targets = _company_targets(
         session,
         start_date=selected_period.start_date,
@@ -1076,18 +1356,58 @@ def get_dashboard_summary(
         user_ids=selected_user_ids,
     )
     metrics = tuple(
-        _build_dashboard_metric(
-            key=metric,
-            label=DASHBOARD_METRIC_LABEL_OVERRIDES.get(metric, label),
-            actual=actuals[metric],
-            target=targets[metric],
+        replace(
+            _build_dashboard_metric(
+                key=metric,
+                label=DASHBOARD_METRIC_LABEL_OVERRIDES.get(metric, label),
+                actual=actuals[metric],
+                target=targets[metric],
+            ),
+            comparison=_difference_display(
+                Decimal(comparison_actuals[metric] - previous_actuals[metric]),
+            ),
         )
         for metric, label in TARGET_FIELDS
     )
     pipeline_conversions = _pipeline_conversion_summary(meetings)
     outreach_conversions = _outreach_conversion_summary(outreach)
+    current_pipeline_conversions = _pipeline_conversion_summary(
+        current_meetings,
+    )
+    previous_pipeline_conversions = _pipeline_conversion_summary(
+        previous_meetings,
+    )
+    pipeline_conversions = replace(
+        pipeline_conversions,
+        metrics=_attach_rate_comparisons(
+            pipeline_conversions.metrics,
+            current_pipeline_conversions.metrics,
+            previous_pipeline_conversions.metrics,
+        ),
+    )
+    current_outreach_conversions = _outreach_conversion_summary(
+        current_outreach,
+    )
+    previous_outreach_conversions = _outreach_conversion_summary(
+        previous_outreach,
+    )
+    outreach_conversions = replace(
+        outreach_conversions,
+        metrics=_attach_rate_comparisons(
+            outreach_conversions.metrics,
+            current_outreach_conversions.metrics,
+            previous_outreach_conversions.metrics,
+        ),
+    )
     blockers = _blocker_breakdown(outreach)
-    mood_summary = _mood_summary(selected_period, outreach)
+    mood_summary = _attach_mood_comparison(
+        _mood_summary(comparison_periods.current, current_outreach),
+        _mood_summary(
+            comparison_periods.previous,
+            previous_outreach,
+            position_count=comparison_periods.current.duration_days,
+        ),
+    )
     pipeline_metrics = {
         metric.key: metric for metric in pipeline_conversions.metrics
     }
@@ -1115,6 +1435,7 @@ def get_dashboard_summary(
     activity_granularity = _activity_bucket_granularity(selected_period)
     return DashboardSummary(
         selected_period=selected_period,
+        comparison_periods=comparison_periods,
         metrics=metrics,
         pipeline_conversions=pipeline_conversions,
         outreach_conversions=outreach_conversions,
@@ -1148,6 +1469,9 @@ __all__ = [
     "CURRENT_MONTH",
     "CURRENT_WEEK",
     "CUSTOM_RANGE",
+    "ComparisonDisplay",
+    "ComparisonPeriod",
+    "DashboardComparisonPeriods",
     "DashboardFilter",
     "DashboardComment",
     "DashboardMetric",
@@ -1171,4 +1495,5 @@ __all__ = [
     "normalize_dashboard_user_filter",
     "resolve_dashboard_filter",
     "resolve_dashboard_filters",
+    "resolve_comparison_periods",
 ]

@@ -158,7 +158,7 @@ def get_dashboard(application: FastAPI, url: str = "/dashboard") -> httpx.Respon
 
 def grouping_url(response: httpx.Response, label: str) -> SplitResult:
     match = re.search(
-        rf'<a[^>]+href="([^"]+)"[^>]*>{re.escape(label)}</a>',
+        rf'<option value="([^"]+)"[^>]*>{re.escape(label)}</option>',
         response.text,
     )
     assert match is not None
@@ -186,16 +186,19 @@ def test_comments_default_invalid_fallback_sources_and_safe_rendering(
     ):
         assert response.status_code == 200
         section = comments_section(response)
-        assert response.text.count('aria-current="true"') == 1
+        assert section.count("data-comment-group-select") == 1
+        assert section.count("<select") == 1
+        assert section.count("<option") == 3
+        assert section.count(" selected") == 1
         assert section.count("<table") == 1
         assert section.count("<thead>") == 1
         assert section.count('scope="col"') == 5
         assert section.count('colspan="5" scope="rowgroup"') == 2
-        assert ">Anna Employee</th>" in section
-        assert ">Ben Employee</th>" in section
+        assert ">Employee: Anna Employee</th>" in section
+        assert ">Employee: Ben Employee</th>" in section
         assert "dashboard-comments-table-wrap" in section
         assert 'id="comments-overview"' in section
-        for label in ("By employee", "By date", "By source"):
+        for label in ("Employee", "Date", "Source"):
             assert grouping_url(response, label).fragment == "comments-overview"
         assert "Meeting" in response.text
         assert "Daily Outreach" in response.text
@@ -214,19 +217,19 @@ def test_comments_group_by_date_and_source(
     application, _, _, _ = comments_application
     by_date = get_dashboard(application, "/dashboard?comment_group=date")
     by_date_section = comments_section(by_date)
-    assert by_date_section.index(">2026-07-15</th>") < by_date_section.index(
-        ">2026-07-14</th>",
+    assert by_date_section.index(">Date: 2026-07-15</th>") < by_date_section.index(
+        ">Date: 2026-07-14</th>",
     )
     assert by_date.text.count("data-comment-source=") == 3
     assert 'comment_group=date#comments-overview"' in by_date.text
     by_source = get_dashboard(application, "/dashboard?comment_group=source")
-    assert ">Meeting</th>" in by_source.text
-    assert ">Daily Outreach</th>" in by_source.text
+    assert ">Source: Meeting</th>" in by_source.text
+    assert ">Source: Daily Outreach</th>" in by_source.text
     assert by_source.text.count("data-comment-source=") == 3
     assert 'comment_group=source#comments-overview"' in by_source.text
 
 
-def test_comments_table_has_fixed_columns_and_local_mobile_scroll() -> None:
+def test_comments_table_has_fixed_columns_and_stacked_mobile_layout() -> None:
     template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
     css = Path("app/static/css/app.css").read_text(encoding="utf-8")
 
@@ -241,7 +244,11 @@ def test_comments_table_has_fixed_columns_and_local_mobile_scroll() -> None:
     )[1].split("}", 1)[0]
     assert "min-width: 0" in wrapper_css
     assert "overscroll-behavior-inline: contain" in wrapper_css
-    assert "overflow-x: auto" in css
+    assert 'data-label="Date"' in template
+    assert 'data-label="Employee"' in template
+    assert 'data-label="Source"' in template
+    assert 'data-label="Outcome"' in template
+    assert 'data-label="Comment"' in template
     table_css = css.split(".dashboard-comments-table {", 1)[1].split("}", 1)[0]
     assert "min-width: 46rem" in table_css
     assert "table-layout: fixed" in table_css
@@ -257,6 +264,49 @@ def test_comments_table_has_fixed_columns_and_local_mobile_scroll() -> None:
     assert ".dashboard-comment-group {" not in css
     assert "var(--accent)" not in css
     assert "var(--accent-soft)" not in css
+    grouping_css = css.split(
+        ".dashboard-comment-grouping {",
+        1,
+    )[1].split("}", 1)[0]
+    label_css = css.split(
+        ".dashboard-comment-grouping label {",
+        1,
+    )[1].split("}", 1)[0]
+    select_css = css.split(
+        ".dashboard-comment-grouping select {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "display: flex" in grouping_css
+    assert "align-items: center" in grouping_css
+    assert "white-space: nowrap" in label_css
+    assert "width: 10rem" in select_css
+    final_mobile_css = css.rsplit("@media (max-width: 47.999rem)", 1)[1]
+    mobile_grouping_css = final_mobile_css.split(
+        ".dashboard-comment-grouping {",
+        1,
+    )[1].split("}", 1)[0]
+    mobile_select_css = final_mobile_css.split(
+        ".dashboard-comment-grouping select {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "display: flex" in mobile_grouping_css
+    assert "align-items: center" in mobile_grouping_css
+    assert "flex: 1 1 auto" in mobile_select_css
+    assert "min-width: 0" in mobile_select_css
+    mobile_table_wrap_css = final_mobile_css.split(
+        ".dashboard-comments-table-wrap {",
+        1,
+    )[1].split("}", 1)[0]
+    mobile_table_css = final_mobile_css.split(
+        ".dashboard-comments-table {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "overflow-x: visible" in mobile_table_wrap_css
+    assert "min-width: 0" in mobile_table_css
+    assert ".dashboard-comments-table td::before" in final_mobile_css
+    assert "content: attr(data-label)" in final_mobile_css
+    assert ".dashboard-comments-table td:last-child" in final_mobile_css
+    assert "grid-column: 1 / -1" in final_mobile_css
 
 
 def test_grouping_links_preserve_period_dates_and_repeated_user_ids(
@@ -268,7 +318,7 @@ def test_grouping_links_preserve_period_dates_and_repeated_user_ids(
         "/dashboard?period=custom&from=2026-07-13&to=2026-07-15"
         f"&user_scope=selected&user_id={first_id}&user_id={second_id}",
     )
-    assert grouping_query(custom, "By source") == {
+    assert grouping_query(custom, "Source") == {
         "period": ["custom"],
         "from": ["2026-07-13"],
         "to": ["2026-07-15"],
@@ -276,7 +326,7 @@ def test_grouping_links_preserve_period_dates_and_repeated_user_ids(
         "user_id": [str(first_id), str(second_id)],
         "comment_group": ["source"],
     }
-    assert grouping_url(custom, "By source").fragment == "comments-overview"
+    assert grouping_url(custom, "Source").fragment == "comments-overview"
 
 
 def test_comment_period_user_filters_empty_state_and_reset(
@@ -294,11 +344,12 @@ def test_comment_period_user_filters_empty_state_and_reset(
     assert "Anna outreach comment" not in previous.text
     empty = get_dashboard(application, "/dashboard?user_scope=selected")
     assert "No comments for this period." in empty.text
+    assert "data-comment-group-select" not in comments_section(empty)
     reset = get_dashboard(
         application,
         "/dashboard?period=previous-week&comment_group=source&reset=true",
     )
-    assert grouping_query(reset, "By employee")["comment_group"] == ["employee"]
-    assert grouping_url(reset, "By employee").fragment == "comments-overview"
+    assert grouping_query(reset, "Employee")["comment_group"] == ["employee"]
+    assert grouping_url(reset, "Employee").fragment == "comments-overview"
     assert 'data-initial-period="current-week"' in reset.text
     assert 'data-initial-user-scope="all"' in reset.text

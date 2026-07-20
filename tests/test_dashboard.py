@@ -44,6 +44,7 @@ from app.services.dashboard import (
     _build_dashboard_metric,
     _activity_buckets,
     get_dashboard_summary,
+    resolve_comparison_periods,
     resolve_dashboard_filter,
 )
 from app.services.passwords import hash_password
@@ -53,8 +54,86 @@ ACTIVE_EMAIL = "dashboard-user@example.com"
 TEST_PASSWORD = "dashboard-test-password"
 TEST_DATE = date(2026, 7, 15)
 TARGET_CALCULATION_NOTICE = (
-    "Weekly goals are prorated to the selected period."
+    "Targets adjusted to the selected period"
 )
+
+
+@pytest.mark.parametrize(
+    ("today", "period", "from_value", "to_value", "current", "previous"),
+    (
+        (
+            date(2026, 7, 15),
+            CURRENT_WEEK,
+            "",
+            "",
+            (date(2026, 7, 13), date(2026, 7, 15)),
+            (date(2026, 7, 6), date(2026, 7, 8)),
+        ),
+        (
+            date(2026, 7, 15),
+            PREVIOUS_WEEK,
+            "",
+            "",
+            (date(2026, 7, 6), date(2026, 7, 12)),
+            (date(2026, 6, 29), date(2026, 7, 5)),
+        ),
+        (
+            date(2026, 3, 31),
+            CURRENT_MONTH,
+            "",
+            "",
+            (date(2026, 3, 1), date(2026, 3, 31)),
+            (date(2026, 2, 1), date(2026, 2, 28)),
+        ),
+        (
+            date(2026, 2, 20),
+            CURRENT_MONTH,
+            "",
+            "",
+            (date(2026, 2, 1), date(2026, 2, 20)),
+            (date(2026, 1, 1), date(2026, 1, 20)),
+        ),
+        (
+            date(2024, 3, 31),
+            CURRENT_MONTH,
+            "",
+            "",
+            (date(2024, 3, 1), date(2024, 3, 31)),
+            (date(2024, 2, 1), date(2024, 2, 29)),
+        ),
+        (
+            date(2026, 7, 20),
+            CUSTOM_RANGE,
+            "2026-07-10",
+            "2026-07-15",
+            (date(2026, 7, 10), date(2026, 7, 15)),
+            (date(2026, 7, 4), date(2026, 7, 9)),
+        ),
+    ),
+)
+def test_previous_period_resolver_uses_documented_inclusive_ranges(
+    today: date,
+    period: str,
+    from_value: str,
+    to_value: str,
+    current: tuple[date, date],
+    previous: tuple[date, date],
+) -> None:
+    selected, error = resolve_dashboard_filter(
+        today=today,
+        period=period,
+        from_value=from_value,
+        to_value=to_value,
+    )
+    assert error is None and selected is not None
+
+    resolved = resolve_comparison_periods(selected)
+
+    assert (resolved.current.start_date, resolved.current.end_date) == current
+    assert (resolved.previous.start_date, resolved.previous.end_date) == previous
+    assert resolved.previous.end_date < resolved.current.start_date
+    if period != CURRENT_MONTH or resolved.previous.duration_days == resolved.current.duration_days:
+        assert resolved.previous.duration_days == resolved.current.duration_days
 
 
 def add_outreach(
@@ -286,6 +365,122 @@ def get_dashboard(application: FastAPI, url: str = "/dashboard") -> httpx.Respon
             return await client.get(url)
 
     return asyncio.run(scenario())
+
+
+def test_dashboard_comparisons_use_elapsed_period_and_same_user_filter(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    _, engine, first_id, second_id = dashboard_application
+    selected, error = resolve_dashboard_filter(
+        today=TEST_DATE,
+        period=CURRENT_WEEK,
+    )
+    assert error is None and selected is not None
+
+    with Session(engine) as session:
+        add_outreach(
+            session,
+            user_id=second_id,
+            activity_date=date(2026, 7, 7),
+            total=100,
+            companies=10,
+        )
+        session.commit()
+        all_users = get_dashboard_summary(session, selected_period=selected)
+        one_user = get_dashboard_summary(
+            session,
+            selected_period=selected,
+            user_filter=DashboardUserFilter(
+                scope=USER_SCOPE_SELECTED,
+                user_ids=(first_id,),
+            ),
+        )
+
+    metric_comparisons = {
+        metric.key: metric.comparison.text
+        for metric in all_users.metrics
+        if metric.comparison is not None
+    }
+    assert metric_comparisons == {
+        "total_activities": "↓ 77",
+        "companies_contacted": "↓ 4",
+        "replies": "↑ 3",
+        "positive_replies": "↑ 2",
+        "meetings_booked": "↑ 1",
+        "meetings_held": "↑ 2",
+    }
+    assert all_users.comparison_periods.previous.display_range == "Jul 6–8, 2026"
+    assert one_user.metrics[0].comparison is not None
+    assert one_user.metrics[0].comparison.text == "↑ 3"
+    assert (
+        one_user.metrics[0].comparison.accessible_label
+        == "Increased by 3 compared with the previous period"
+    )
+    assert [
+        metric.comparison.text for metric in all_users.outreach_conversions.metrics
+    ] == [
+        "↑ 12 pp",
+        "↑ 7 pp",
+        "↑ 13 pp",
+    ]
+    assert all_users.mood_summary.comparison is not None
+    assert all_users.mood_summary.comparison.text == "— No previous mood data"
+
+
+def test_dashboard_compact_comparisons_have_complete_accessible_labels(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, _, _, _ = dashboard_application
+    response = get_dashboard(application)
+    total_card = metric_card(response, "total_activities")
+    pipeline_section = pipeline_conversion_section(response)
+
+    assert "vs previous period" not in total_card
+    assert "↑ +" not in total_card
+    assert "↓ −" not in total_card
+    assert 'aria-label="Increased by 23 compared with the previous period"' in total_card
+    assert "↑ 23" in total_card
+    assert "— No comparable rate" not in pipeline_section
+    assert "percentage points compared with the previous period" in response.text
+
+
+def test_mood_comparison_renders_positionally_paired_accessible_series(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, _, second_id = dashboard_application
+    with Session(engine) as session:
+        add_outreach(
+            session,
+            user_id=second_id,
+            activity_date=date(2026, 7, 7),
+            total=1,
+            companies=1,
+            mood=UserMood.OKAY,
+        )
+        add_outreach(
+            session,
+            user_id=second_id,
+            activity_date=date(2026, 7, 8),
+            total=1,
+            companies=1,
+            mood=UserMood.GOOD,
+        )
+        session.commit()
+
+    response = get_dashboard(application)
+    mood_card = response.text.split('id="mood-summary-heading"', 1)[1].split(
+        "</article>", 1,
+    )[0]
+
+    assert "Selected period" in mood_card
+    assert "Previous period" in mood_card
+    assert mood_card.count("dashboard-mood-previous-line") == 1
+    assert "stroke-dasharray: 5 5" in Path(
+        "app/static/css/app.css",
+    ).read_text(encoding="utf-8")
+    assert "Selected period — Jul 14: 1; Previous period — Jul 7: 2" in mood_card
+    assert "Selected period — Jul 15: No data; Previous period — Jul 8: 3" in mood_card
+    assert "No previous mood data" not in mood_card
 
 
 def metric_card(response: httpx.Response, metric: str) -> str:
@@ -891,6 +1086,8 @@ def test_pipeline_conversion_zero_denominator_is_safe(
         and metric.numerator == 0
         and metric.percentage is None
         and metric.percentage_text == "No data"
+        and metric.comparison is not None
+        and metric.comparison.text == "— No comparable rate"
         for metric in summary.pipeline_conversions.metrics
     )
 
@@ -1116,7 +1313,7 @@ def test_conversion_sections_share_compact_responsive_mini_metrics(
     template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
     assert "Company metrics" not in template
     assert "Activity &amp; target progress" in template
-    assert template.count("dashboard-section-heading") == 9
+    assert template.count("dashboard-section-heading") == 8
     assert template.count("dashboard-conversion-card") == 3
     activity_heading = template.index('id="company-metrics-heading"')
     activity_section = template.rfind("<section", 0, activity_heading)
@@ -1198,13 +1395,12 @@ def test_comment_grouping_preserves_records_and_marks_active_control(
     assert response.text.count("Private outreach note") == 1
     assert response.text.count("Foreign private note") == 1
     assert response.text.count("Do not expose meeting note") == 3
-    active_link = re.search(
-        rf'<a[^>]+class="dashboard-group-button is-active"[^>]*'
-        rf'href="[^"]*comment_group={grouping}'
-        rf'#comments-overview"[^>]*aria-current="true"',
+    active_option = re.search(
+        rf'<option value="[^"]*comment_group={grouping}'
+        rf'#comments-overview" selected>',
         response.text,
     )
-    assert active_link is not None
+    assert active_option is not None
 
     outreach_row_start = response.text.index(
         'data-comment-source="daily-outreach"',
@@ -1223,7 +1419,7 @@ def test_current_week_company_targets_are_summed_and_progress_is_safe(
     assert 'data-remaining="0"' in response.text
     assert 'data-percentage="750"' in response.text
     assert 'data-bar-percentage="100"' in response.text
-    assert "Goal exceeded by 26" in response.text
+    assert "26 above target" in response.text
     assert 'data-metric="companies_contacted"' in response.text
     assert 'data-target="0"' in response.text
     assert "No target" in response.text
@@ -1323,11 +1519,15 @@ def test_period_and_selected_users_filter_together_with_prorated_targets(
     assert 'data-target="11"' in metric_card(month, "total_activities")
     assert 'data-actual="20"' in metric_card(custom, "total_activities")
     assert 'data-target="0.3"' in metric_card(custom, "total_activities")
-    for response in (previous, month, custom):
+    for response in (previous, month):
         assert response.status_code == 200
         assert TARGET_CALCULATION_NOTICE in response.text
         assert "Select at least one user to view data." not in response.text
         assert response.text.count('role="progressbar"') == 6
+    assert custom.status_code == 200
+    assert "Targets adjusted to 1 selected day" in custom.text
+    assert "Select at least one user to view data." not in custom.text
+    assert custom.text.count('role="progressbar"') == 6
 
 
 def test_unknown_and_malformed_user_ids_are_safe(
@@ -1498,22 +1698,9 @@ def test_user_filter_navigation_preserves_applied_period_query_parameters(
     assert "new URLSearchParams(window.location.search)" in url_helper
     assert "window.location.href" not in url_helper
 
-    fragment_cleanup = script.split(
-        "const removeCommentsFragmentAfterNativeScroll",
-        1,
-    )[1].split(
-        'document.querySelectorAll("[data-dashboard-filter]")',
-        1,
-    )[0]
-    assert fragment_cleanup.count(
-        'window.location.hash === "#comments-overview"',
-    ) == 2
-    assert "window.requestAnimationFrame" in fragment_cleanup
-    assert 'document.addEventListener(\n    "DOMContentLoaded"' in fragment_cleanup
-    assert "window.history.replaceState(" in fragment_cleanup
-    assert "window.location.pathname + window.location.search" in fragment_cleanup
-    assert "scrollTo" not in fragment_cleanup
-    assert script.count('"#comments-overview"') == 2
+    assert "removeCommentsFragmentAfterNativeScroll" not in script
+    assert 'window.addEventListener("hashchange"' in script
+    assert "window.history.replaceState(" in script
 
     navigation_logic = script.split("const navigateWithParams", 1)[1].split(
         "const replaceUserParams",
@@ -1612,7 +1799,7 @@ def test_user_filter_navigation_preserves_applied_period_query_parameters(
     assert "#" not in reset_href.group(1)
     for grouping in ("employee", "date", "source"):
         assert re.search(
-            rf'href="[^"]*period=custom[^"]*user_scope=selected'
+            rf'<option value="[^"]*period=custom[^"]*user_scope=selected'
             rf'[^"]*from=2026-07-13[^"]*to=2026-07-14'
             rf'[^"]*user_id={first_id}[^"]*comment_group={grouping}'
             r'#comments-overview"',
@@ -1660,7 +1847,7 @@ def test_analysis_grid_preserves_values_empty_states_and_responsive_markup(
         template.index('id="pipeline-conversion-heading"'),
         template.index('id="outreach-conversion-heading"'),
         template.index('id="mood-summary-heading"'),
-        template.index('class="dashboard-analysis-grid"'),
+        template.index('id="dashboard-countries-blockers"'),
         template.index('id="comments-overview-heading"'),
     ]
     assert section_positions == sorted(section_positions)
@@ -1670,45 +1857,44 @@ def test_analysis_grid_preserves_values_empty_states_and_responsive_markup(
     ):
         heading_tag = template.split(f'id="{heading}"', 1)[1].split(">", 1)[0]
         assert "dashboard-section-heading" in heading_tag
-    for heading in ("Countries", "Blockers", "Mood summary"):
-        heading_tag = template.split(f">{heading}</h2>", 1)[0].rsplit("<h2", 1)[1]
-        assert "dashboard-section-heading" in heading_tag
-
-    assert 'class="dashboard-analysis-grid"' in response.text
+    assert '>Countries &amp; blockers</h2>' in response.text
     assert response.text.count("dashboard-analysis-section") == 2
-    assert '>Countries</h2>' in response.text
-    assert '>Blockers</h2>' in response.text
+    assert '>Countries</h3>' in response.text
+    assert '>Blockers</h3>' in response.text
     assert '>Mood summary</h2>' in response.text
     assert '>Mood distribution</h3>' in response.text
     assert '>Daily mood trend</h3>' in response.text
     assert "Country" in response.text
     assert "Companies" in response.text
-    countries_section = response.text.split(">Countries</h2>", 1)[1].split(
-        "</article>",
+    countries_section = response.text.split(
+        'class="dashboard-analysis-section dashboard-countries-section dashboard-countries-panel"',
+        1,
+    )[1].split(
+        'class="dashboard-analysis-section dashboard-blockers-section dashboard-blockers-panel"',
         1,
     )[0]
     assert "Replies" not in countries_section
     assert "Positive" not in countries_section
     assert "<table" not in countries_section
     assert re.search(
-        r'data-country="BR"[\s\S]*?<span>Brazil</span>'
-        r'[\s\S]*?width: 100%[\s\S]*?<strong>5</strong>',
+        r'data-country="BR"[\s\S]*?dashboard-ranked-label">Brazil</span>'
+        r'[\s\S]*?dashboard-bar[\s\S]*?<strong>5</strong>',
         response.text,
     )
     assert re.search(
         r'data-blocker="No response"[\s\S]*?<strong>2</strong>',
         response.text,
     )
-    blockers_section = response.text.split(">Blockers</h2>", 1)[1].split(
-        "</article>",
+    blockers_section = response.text.split(
+        'class="dashboard-analysis-section dashboard-blockers-section dashboard-blockers-panel"',
         1,
-    )[0]
+    )[1].split('id="comments-overview"', 1)[0]
     rendered_blockers = re.findall(r'data-blocker="([^"]+)"', blockers_section)
     assert rendered_blockers == ["No response"]
     assert 'data-blocker-count="0"' not in blockers_section
     assert 'data-blocker-count="2"' in blockers_section
     assert "No blocker" not in blockers_section
-    assert "dashboard-bar" not in blockers_section
+    assert blockers_section.count('class="dashboard-bar"') == 1
     assert blockers_section.count("dashboard-blocker-item") == 1
 
     assert response.text.count('class="dashboard-mood-donut') == 1
@@ -1753,10 +1939,10 @@ def test_blockers_render_only_positive_counts_descending_with_stable_ties(
         session.commit()
 
     response = get_dashboard(application)
-    blockers_section = response.text.split(">Blockers</h2>", 1)[1].split(
-        "</article>",
+    blockers_section = response.text.split(
+        'class="dashboard-analysis-section dashboard-blockers-section dashboard-blockers-panel"',
         1,
-    )[0]
+    )[1].split('id="comments-overview"', 1)[0]
     rendered_blockers = re.findall(r'data-blocker="([^"]+)"', blockers_section)
     assert rendered_blockers == [
         "Competitor",
@@ -1781,10 +1967,10 @@ def test_blockers_render_only_positive_counts_descending_with_stable_ties(
     assert empty.text.count("No recorded mood for this period.") == 1
     assert 'class="dashboard-mood-donut' not in empty.text
     assert "data-mood-legend=" not in empty.text
-    empty_blockers = empty.text.split(">Blockers</h2>", 1)[1].split(
-        "</article>",
+    empty_blockers = empty.text.split(
+        'class="dashboard-analysis-section dashboard-blockers-section dashboard-blockers-panel"',
         1,
-    )[0]
+    )[1].split('id="comments-overview"', 1)[0]
     assert 'data-blocker-count="0"' not in empty_blockers
 
     css = Path("app/static/css/app.css").read_text(encoding="utf-8")
@@ -1792,30 +1978,24 @@ def test_blockers_render_only_positive_counts_descending_with_stable_ties(
         "@media (hover: hover)",
         1,
     )[0]
-    assert ".dashboard-analysis-grid" in mobile_css
+    assert ".dashboard-countries-blockers-grid" in mobile_css
     assert "grid-template-columns: minmax(0, 1fr)" in mobile_css
     analysis_css = css.split(
-        ".dashboard-analysis-grid {\n  margin-top:",
+        ".dashboard-countries-blockers-grid {",
         1,
     )[1].split(
         "}",
         1,
     )[0]
     assert "grid-template-columns: minmax(0, 1fr)" in analysis_css
-    assert "align-items: stretch" in analysis_css
     tablet_css = css.split("@media (min-width: 48rem)", 1)[1].split(
         "@media (min-width: 64rem)",
         1,
     )[0]
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in tablet_css
+    assert ".dashboard-countries-blockers-grid" not in tablet_css
     desktop_css = css.split("@media (min-width: 64rem)", 1)[1]
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in desktop_css
-    assert "align-items: start" in desktop_css
-    desktop_card_css = desktop_css.split(
-        ".dashboard-analysis-grid .dashboard-analysis-card {", 1,
-    )[1].split("}", 1)[0]
-    assert "min-height:" not in desktop_card_css
-    assert "align-self: stretch" in desktop_card_css
+    assert ".dashboard-countries-blockers-grid" in desktop_css
+    assert "minmax(0, 1fr) 1px minmax(0, 1fr)" in desktop_css
     assert "min-height: 26rem" not in desktop_css
     assert ".dashboard-mood-summary-layout" in tablet_css
     assert ".dashboard-mood-summary-layout" in desktop_css
@@ -2080,7 +2260,7 @@ def test_previous_week_and_month_use_saved_and_prorated_targets(
     assert 'data-actual="148"' not in month.text
     assert 'data-target="20"' in metric_card(month, "total_activities")
     assert 'data-percentage="245"' in metric_card(month, "total_activities")
-    assert "Goal exceeded by 29" in metric_card(month, "total_activities")
+    assert "29 above target" in metric_card(month, "total_activities")
 
 
 def test_custom_targets_prorate_one_and_multiple_overlapping_weeks(
@@ -2099,12 +2279,12 @@ def test_custom_targets_prorate_one_and_multiple_overlapping_weeks(
     one_day_card = metric_card(one_day, "total_activities")
     assert 'data-target="0.6"' in one_day_card
     assert 'data-percentage="1750"' in one_day_card
-    assert "Goal exceeded by 9.4" in one_day_card
+    assert "9.4 above target" in one_day_card
 
     two_week_card = metric_card(two_weeks, "total_activities")
     assert 'data-target="2.9"' in two_week_card
     assert 'data-percentage="665"' in two_week_card
-    assert "Goal exceeded by 16.1" in two_week_card
+    assert "16.1 above target" in two_week_card
 
 
 def test_month_prorates_partial_first_and_last_weeks(
@@ -2286,13 +2466,13 @@ def test_dashboard_kpi_states_attention_threshold_and_progress_cap() -> None:
     assert exact.status_state == "success"
     assert exact.needs_attention is False
     assert exact.progress_state == "success"
-    assert exceeded.status_text == "Goal exceeded by 93"
+    assert exceeded.status_text == "93 above target"
     assert exceeded.status_state == "success"
     assert exceeded.percentage == 193
     assert exceeded.bar_percentage == 100
 
 
-def test_dashboard_kpi_template_uses_circular_progress_without_comparison_ui() -> None:
+def test_dashboard_kpi_template_keeps_progress_and_adds_compact_comparisons() -> None:
     template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
     css = Path("app/static/css/app.css").read_text(encoding="utf-8")
 
@@ -2304,7 +2484,9 @@ def test_dashboard_kpi_template_uses_circular_progress_without_comparison_ui() -
     assert "{{ metric.percentage_text if metric.target > 0 else '—' }}" in template
     assert "{{ metric.status_text }}" in template
     assert "Needs attention" in template
-    assert "previous period" not in template.lower()
+    assert "{{ metric.comparison.text }}" in template
+    assert ".dashboard-comparison-positive" in css
+    assert ".dashboard-comparison-negative" in css
     assert "#d66a0a" not in css.split(".dashboard-kpi-main-row", 1)[1].split(
         ".dashboard-analysis-grid", 1
     )[0]
@@ -2315,6 +2497,8 @@ def test_dashboard_kpi_template_uses_circular_progress_without_comparison_ui() -
     )[0]
     assert "width: 3.9rem" in progress_css
     assert "height: 3.9rem" in progress_css
+    assert "justify-self: end" in progress_css
+    assert '[data-metric="meetings_booked"] .dashboard-circular-progress' not in css
     assert "stroke-width: 4" in css
     assert "font-size: 0.65rem" in css
     actual_css = css.split(".dashboard-kpi-actual {", 1)[1].split("}", 1)[0]
@@ -2324,8 +2508,36 @@ def test_dashboard_kpi_template_uses_circular_progress_without_comparison_ui() -
         "}", 1
     )[0]
     assert 'class="dashboard-kpi-status-row"' in template
+    assert 'class="dashboard-comparison dashboard-kpi-comparison' in template
+    assert "dashboard-kpi-meta-row" not in template
     assert " · Needs attention" in template
-    assert "position: absolute" in progress_css
+    kpi_row_css = css.split(".dashboard-kpi-main-row {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    assert "display: grid" in kpi_row_css
+    assert "grid-template-areas:" in kpi_row_css
+    assert '"title title ring"' in kpi_row_css
+    assert '"value comparison ring"' in kpi_row_css
+    assert '"status status ring"' in kpi_row_css
+    assert "minmax(0, 1fr) max-content auto" in kpi_row_css
+    assert "position: absolute" not in progress_css
+    assert '[data-metric="meetings_booked"]' not in css
+    comparison_css = css.split(".dashboard-kpi-comparison {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    assert "white-space: nowrap" in comparison_css
+    assert "dashboard-kpi-copy" not in template
+    mobile_css = css.rsplit("@media (max-width: 47.999rem)", 1)[1]
+    mobile_kpi_row_css = mobile_css.split(".dashboard-kpi-main-row {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    assert '"title title"' in mobile_kpi_row_css
+    assert '"value ring"' in mobile_kpi_row_css
+    assert '"comparison ring"' in mobile_kpi_row_css
+    assert '"status status"' in mobile_kpi_row_css
 
 
 def test_dashboard_secondary_dashboard_typography_uses_quiet_weights() -> None:
@@ -2399,7 +2611,8 @@ def test_custom_range_and_validation_preserve_dates(
     assert custom.status_code == 200
     assert custom.text.count("1 Jul – 1 Jul 2026") == 1
     assert 'data-actual="3"' in custom.text
-    assert TARGET_CALCULATION_NOTICE in custom.text
+    assert "Targets adjusted to 1 selected day" in custom.text
+    assert "Compared with Jun 30, 2026" in custom.text
     assert 'data-target="0"' in metric_card(custom, "total_activities")
     assert 'data-custom-applied="true"' in custom.text
     assert "Edit dates" in custom.text
@@ -2458,6 +2671,85 @@ def test_empty_dashboard_and_reset(
     assert 'data-actual="30"' in metric_card(reset, "total_activities")
 
 
+def test_dashboard_secondary_navigation_links_stable_sections(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, _, _, _ = dashboard_application
+    response = get_dashboard(application)
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+    nav_start = response.text.index(
+        'class="dashboard-section-navigation"',
+    )
+    nav_end = response.text.index("</nav>", nav_start)
+    navigation = response.text[nav_start:nav_end]
+    expected_links = {
+        "Targets": "#dashboard-overview",
+        "Activity trend": "#dashboard-activity",
+        "Conversions": "#dashboard-conversions",
+        "Discussion": "#dashboard-discussion",
+        "Mood": "#dashboard-mood",
+        "Countries &amp; blockers": "#dashboard-countries-blockers",
+        "Comments": "#comments-overview",
+    }
+
+    assert "Back to Home" in response.text[:nav_start]
+    assert 'aria-label="Dashboard sections"' in response.text
+    for label, href in expected_links.items():
+        assert f'href="{href}"' in navigation
+        assert f">{label}</a>" in navigation
+        assert f'id="{href.removeprefix("#")}"' in response.text
+    assert (
+        'href="#dashboard-overview" aria-current="location">Targets</a>'
+        in navigation
+    )
+    assert ">Overview</a>" not in navigation
+    assert ">Activity</a>" not in navigation
+    assert "Weekly goals are prorated to the selected period." not in response.text
+    assert TARGET_CALCULATION_NOTICE in response.text
+    navigation_css = css.split(
+        ".dashboard-section-navigation {",
+        1,
+    )[1].split("}", 1)[0]
+    shell_css = css.split(
+        ".dashboard-section-navigation-shell {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "position: sticky" in shell_css
+    assert "width: 100%" in navigation_css
+    assert "overflow-x: auto" in navigation_css
+    assert "background: #eef2ff" in navigation_css
+    assert "border: 1px solid #c7d2fe" in navigation_css
+    assert "width: max-content" not in navigation_css
+    assert "justify-content: space-between" not in navigation_css
+    mobile_css = css.rsplit("@media (max-width: 47.999rem)", 1)[1]
+    mobile_navigation_css = mobile_css.split(
+        ".dashboard-section-navigation {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "display: flex" in mobile_navigation_css
+    assert "flex-wrap: nowrap" in mobile_navigation_css
+    assert "overflow-x: auto" in mobile_navigation_css
+    assert "white-space: nowrap" in mobile_navigation_css
+
+
+def test_dashboard_secondary_navigation_scroll_spy_contract() -> None:
+    script = Path("app/static/js/dashboard_filter.js").read_text(encoding="utf-8")
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert "new IntersectionObserver" in script
+    assert 'link.setAttribute("aria-current", "location")' in script
+    assert 'link.removeAttribute("aria-current")' in script
+    assert "window.history.replaceState" in script
+    assert "window.history.pushState" in script
+    assert 'behavior: smooth ? "smooth" : "auto"' in script
+    assert 'scrollIntoView({block: "nearest", inline: "nearest"})' in script
+    assert 'window.addEventListener("hashchange"' in script
+    assert "scrollToSection(initialIndex, false, true)" in script
+    assert "activationOffset()" in script
+    assert "removeCommentsFragmentAfterNativeScroll" not in script
+    assert '.dashboard-section-navigation a[aria-current="location"]' in css
+
+
 def test_home_links_to_dashboard_and_filter_is_responsive(
     dashboard_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
@@ -2509,7 +2801,7 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
         1
     ].split("}", 1)[0]
     assert "margin-top: 0.5rem" in dashboard_navigation_css
-    assert "margin-bottom: 0.75rem" in dashboard_navigation_css
+    assert "margin-bottom: 0.55rem" in dashboard_navigation_css
     target_helper_css = css.split(
         ".dashboard-metrics-helper {",
         1,
@@ -2523,7 +2815,7 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     metrics_heading_end = template.index("</div>", metrics_heading_start)
     metrics_heading = template[metrics_heading_start:metrics_heading_end]
     assert 'class="report-section-note"' in metrics_heading
-    assert TARGET_CALCULATION_NOTICE in metrics_heading
+    assert "{{ summary.target_adjustment_text }}" in metrics_heading
     assert (
         "Targets are calculated from the weekly goals that overlap "
         "the selected period."
@@ -2650,8 +2942,20 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert 'class="dashboard-kpi-main-row"' in template
     assert 'class="dashboard-kpi-status' in template
     assert 'class="dashboard-circular-progress' in template
-    assert "padding-inline-end: 4.7rem" in css
-    assert "top: 50%" in css
+    kpi_main_row_css = css.split(".dashboard-kpi-main-row {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    assert "grid-template-areas:" in kpi_main_row_css
+    assert '"title title ring"' in kpi_main_row_css
+    assert '"value comparison ring"' in kpi_main_row_css
+    assert '"status status ring"' in kpi_main_row_css
+    assert "minmax(0, 1fr) max-content auto" in kpi_main_row_css
+    assert "padding-inline-end: 4.7rem" not in css
+    assert "top: 50%" not in css.split(
+        ".dashboard-circular-progress {",
+        1,
+    )[1].split("}", 1)[0]
     assert "align-items: stretch" in css
     assert 'class="dashboard-grouped-chart{% if' in template
     assert 'class="dashboard-chart-legend"' in template
@@ -2894,7 +3198,7 @@ def test_mood_average_daily_trend_filters_rounding_and_missing_rules(
         assert mood.trend[1].average is None
         assert mood.trend[1].display_average is None
         assert mood.trend[2].average == Decimal("2.5")
-        assert mood.trend[2].connects_to_previous
+        assert not mood.trend[2].connects_to_previous
 
         first_day, error = resolve_dashboard_filter(
             today=TEST_DATE,
@@ -3000,25 +3304,44 @@ def test_country_blocker_shares_sorting_and_view_all_markup(
     ]
 
     response = get_dashboard(application)
-    countries = response.text.split(">Countries</h2>", 1)[1].split(
-        "</article>", 1,
+    shared_section = response.text.split(
+        'id="dashboard-countries-blockers"',
+        1,
+    )[1].split('id="comments-overview"', 1)[0]
+    countries = shared_section.split(
+        'class="dashboard-analysis-section dashboard-countries-section dashboard-countries-panel"',
+        1,
+    )[1].split(
+        'class="dashboard-analysis-section dashboard-blockers-section dashboard-blockers-panel"',
+        1,
     )[0]
-    blockers = response.text.split(">Blockers</h2>", 1)[1].split(
-        "</article>", 1,
-    )[0]
+    blockers = shared_section.split(
+        'class="dashboard-analysis-section dashboard-blockers-section dashboard-blockers-panel"',
+        1,
+    )[1]
+    assert shared_section.count("dashboard-analysis-card") == 1
+    assert "Countries &amp; blockers" in shared_section
     assert countries.count("data-country=") == 8
     assert countries.count("data-expandable-row hidden") == 5
     country_rows = re.findall(
-        r'<div\s+class="dashboard-ranked-item dashboard-breakdown-item"[\s\S]*?>',
+        r'<div\s+class="dashboard-ranked-item dashboard-breakdown-item '
+        r'dashboard-ranked-item-with-bar"[\s\S]*?>',
         countries,
     )
     assert len(country_rows) == 8
     assert sum(" hidden" not in row for row in country_rows) == 3
     assert "data-expandable-row hidden" in country_rows[3]
     assert blockers.count("data-blocker=") == 5
+    assert countries.count('class="dashboard-bar"') == 8
+    assert blockers.count('class="dashboard-bar"') == 5
+    assert 'style="width: 31%"' in countries
+    assert 'style="width: 33%"' in blockers
     assert blockers.count("data-expandable-row hidden") == 2
     assert countries.count("data-expand-toggle") == 1
     assert blockers.count("data-expand-toggle") == 1
+    countries_header = countries.split("</header>", 1)[0]
+    assert "View all" in countries_header
+    assert "dashboard-view-all" in countries_header
     assert 'aria-expanded="false"' in countries
     assert 'aria-expanded="false"' in blockers
     assert "No blocker" not in blockers
@@ -3037,9 +3360,15 @@ def test_mood_template_accessibility_and_empty_state(
     assert "Mood distribution" in mood_card
     assert "Daily mood trend" in mood_card
     assert mood_card.count("data-mood-legend=") == 3
-    assert "Missing mood is excluded, not treated as neutral." in mood_card
-    assert "Current period" in mood_card
-    assert "Previous period" not in mood_card
+    assert (
+        "Mood scale: 1 = Difficult · 2 = Okay · 3 = Good · "
+        "Missing mood is excluded."
+    ) in mood_card
+    assert "Selected period" in mood_card
+    assert "dashboard-mood-trend-key-previous" not in mood_card
+    assert "dashboard-mood-previous-line" not in mood_card
+    assert "No previous mood data" in mood_card
+    assert "dashboard-mood-scale" not in mood_card
     assert 'aria-label="2026-07-13: average 3, 1 recorded entry"' in mood_card
     assert 'aria-label="2026-07-14: average 1, 1 recorded entry"' in mood_card
     assert 'data-mood-date="2026-07-15"' not in mood_card
@@ -3070,10 +3399,10 @@ def test_long_mood_trend_uses_compact_proportional_dates_and_retains_gaps(
         assert error is None and selected is not None
         mood = get_dashboard_summary(session, selected_period=selected).mood_summary
 
-    assert len(mood.trend) == 31
+    assert len(mood.trend) == 15
     assert mood.chart_width == 640
     assert mood.trend[0].date == date(2026, 7, 1)
-    assert mood.trend[-1].date == date(2026, 7, 31)
+    assert mood.trend[-1].date == date(2026, 7, 15)
     assert mood.trend[0].show_date_label
     assert mood.trend[-1].show_date_label
     assert sum(point.show_date_label for point in mood.trend) <= 10
@@ -3099,53 +3428,39 @@ def test_redesigned_analysis_layout_and_view_all_script_contract() -> None:
     script = Path("app/static/js/dashboard_filter.js").read_text(encoding="utf-8")
 
     assert template.index("mood-summary-heading") < template.index(
-        'class="dashboard-analysis-grid"',
+        'id="dashboard-countries-blockers"',
     ) < template.index("comments-overview-heading")
     assert template.count("dashboard-mood-summary-card") == 1
-    assert 'aria-label="Countries and blockers"' in template
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
-    mobile_css = css.split("@media (max-width: 47.999rem)", 1)[1].split(
-        "@media (hover: hover)", 1,
-    )[0]
-    assert "grid-template-columns: minmax(0, 1fr)" in mobile_css
-    mobile_card_css = mobile_css.split(
-        ".dashboard-analysis-grid .dashboard-analysis-card {", 1,
+    assert template.count("dashboard-countries-blockers-section") == 1
+    assert "dashboard-countries-section dashboard-countries-panel" in template
+    assert "dashboard-blockers-section dashboard-blockers-panel" in template
+    assert "dashboard-countries-blockers-divider" in template
+    assert "dashboard-countries-blockers-grid" in template
+    assert template.count("dashboard-ranked-item-with-bar") == 2
+    assert "style=\"width: {{ item.share_percentage }}%\"" in template
+    countries_grid_css = css.split(
+        ".dashboard-countries-blockers-grid {", 1,
     )[1].split("}", 1)[0]
-    assert "min-height: 0" in mobile_card_css
-    analysis_grid_css = css.split(
-        ".dashboard-analysis-grid {\n  margin-top:", 1,
-    )[1].split("}", 1)[0]
-    assert "align-items: stretch" in analysis_grid_css
-    analysis_card_css = css.split(
-        ".dashboard-analysis-grid .dashboard-analysis-card {", 1,
-    )[1].split("}", 1)[0]
-    assert "display: flex" in analysis_card_css
-    assert "flex-direction: column" in analysis_card_css
-    assert "align-self: stretch" in analysis_card_css
-    assert "height: auto" in analysis_card_css
-    analysis_body_css = css.split(
-        ".dashboard-analysis-body {", 1,
-    )[1].split("}", 1)[0]
-    assert "flex: 1 1 auto" in analysis_body_css
-    expanded_grid_css = css.split(
-        ".dashboard-analysis-grid.has-expanded-card {", 1,
-    )[1].split("}", 1)[0]
-    assert "align-items: start" in expanded_grid_css
+    assert "display: grid" in countries_grid_css
+    assert "min-width: 0" in countries_grid_css
     hidden_row_css = css.split(
         ".dashboard-ranked-item[hidden] {", 1,
     )[1].split("}", 1)[0]
     assert "display: none !important" in hidden_row_css
-    assert "fixed" not in analysis_card_css
     desktop_css = css.split("@media (min-width: 64rem)", 1)[1]
-    desktop_grid_css = desktop_css.split(
-        ".dashboard-analysis-grid {", 1,
+    desktop_breakdown_css = desktop_css.split(
+        ".dashboard-countries-blockers-grid {", 1,
     )[1].split("}", 1)[0]
-    assert "align-items: start" in desktop_grid_css
-    desktop_card_css = desktop_css.split(
-        ".dashboard-analysis-grid .dashboard-analysis-card {", 1,
+    assert "minmax(0, 1fr) 1px minmax(0, 1fr)" in desktop_breakdown_css
+    assert "column-gap: 1.5rem" in desktop_breakdown_css
+    mobile_css = css.rsplit("@media (max-width: 47.999rem)", 1)[1]
+    mobile_shell_css = mobile_css.split(
+        ".dashboard-section-navigation-shell {", 1,
     )[1].split("}", 1)[0]
-    assert "min-height:" not in desktop_card_css
-    assert "align-self: stretch" in desktop_card_css
+    assert "position: static" not in mobile_shell_css
+    assert "grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr)" in mobile_css
+    assert "width: 8.125rem" in mobile_css
+    assert "height: 11.25rem" in mobile_css
     trend_viewport_css = css.split(
         ".dashboard-mood-trend-viewport {", 1,
     )[1].split("}", 1)[0]
@@ -3162,9 +3477,5 @@ def test_redesigned_analysis_layout_and_view_all_script_contract() -> None:
     assert 'toggle.setAttribute("aria-expanded", String(!expanded))' in script
     assert 'row.hidden = expanded' in script
     assert 'toggle.textContent = expanded ? "View all" : "Show less"' in script
-    assert 'grid.classList.toggle("has-expanded-card", hasExpandedCard)' in script
-    assert "captureCardBaseline" in script
-    assert "clearCardBaseline" in script
-    assert "window.location" not in script.split(
-        'document.querySelectorAll("[data-expand-toggle]")', 1,
-    )[1]
+    assert 'document.querySelectorAll("[data-comment-group-select]")' in script
+    assert "window.location.assign(select.value)" in script
