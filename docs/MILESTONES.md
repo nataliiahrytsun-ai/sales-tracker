@@ -108,7 +108,7 @@ Authenticated users can review the current week, filter results, compare activit
 ## Acceptance Criteria
 
 - The dashboard opens on the current week by default.
-- Date filters support this week, last week, this month, and a custom date range.
+- Date filters support current week, last week, current month, and a custom date range.
 - Data can be filtered by all users or an individual user.
 - Activity, customer response, progress, and sentiment are displayed separately.
 - Pipeline metrics use the definitions from the Implementation Plan.
@@ -117,6 +117,26 @@ Authenticated users can review the current week, filter results, compare activit
 - Companies contacted by country are visible.
 - Mood average and distribution are both visible.
 - Missing mood is excluded from sentiment calculations and is not treated as neutral.
+- Previous-period comparisons follow the exact range, metric, formatting, missing-data, chart, and accessibility rules in `docs/implementation-plan.md`.
+- The previous range is resolved by the documented rules and its actual dates are visible to the user.
+- Current week is compared with the same elapsed weekdays of the previous week, not a complete previous week.
+- Last week is compared with the complete week immediately before it.
+- Current month is compared with the corresponding calendar days of the previous month without duplicating a shortened month's final day.
+- A custom range is compared with the immediately preceding, non-overlapping range of the same inclusive duration.
+- The same All-users or individual-user filter is applied to both periods and both mood-chart series.
+- Quantitative metrics show the absolute difference, not relative percentage growth.
+- Conversion rates show the percentage-point difference, not relative percentage change.
+- Average mood shows the numerical difference using the current Mood summary rounding, without treating missing mood as `Okay`.
+- Zero denominators and unavailable previous-period data produce the documented neutral states without `NaN`, `Infinity`, division errors, or misleading values.
+- Positive differences use a green upward arrow and signed value; negative differences use a red downward arrow and signed value; no change and unavailable comparisons use neutral styling.
+- Comparison direction and meaning remain understandable without relying on color alone.
+- The Dashboard displays `Mood scale: 1 = Difficult · 2 = Okay · 3 = Good`.
+- `Daily mood trend` shows `Selected period` as a solid line and available `Previous period` data as a green dashed line.
+- The mood-chart legend names both series, and the dashed style distinguishes the previous period independently of color.
+- Mood-chart points are paired by ordinal day position within their ranges rather than by equal calendar date.
+- Mood-chart tooltips show the actual period, date, and value for both series.
+- Missing daily mood values remain missing and create series gaps where supported; a completely unavailable previous series is omitted with `No previous mood data`.
+- Previous-period comparison labels and the two-series mood chart remain usable without horizontal overflow on mobile.
 - Common blockers are visible.
 - Discussion prompts are implemented according to `docs/implementation-plan.md`.
 - Discussion prompt calculations respect the selected date and user filters.
@@ -157,6 +177,29 @@ Record each test with one of these statuses:
 - Custom date range displays only records inside the selected range.
 - All-users filter displays combined data.
 - Individual-user filter displays only the selected user's data.
+- Current-week comparisons use the same elapsed weekdays from the previous week.
+- Last-week comparisons use the complete week immediately before last week.
+- Current-month comparisons use the corresponding previous-month dates.
+- A current-month comparison across months of different lengths uses each existing previous-month date once, shows the actual shorter range, and creates no duplicate days.
+- A custom-range comparison uses the immediately preceding, non-overlapping range with the same inclusive calendar-day duration.
+- The displayed `Compared with ...` label contains the actual resolved previous-period dates.
+- All-users comparisons use combined All-users data for both periods.
+- An individual-user comparison and both mood-chart series exclude every other user's data.
+- A positive difference shows the correct absolute or percentage-point value with a green upward arrow, `+` sign, and descriptive text.
+- A negative difference shows the correct absolute or percentage-point value with a red downward arrow, `−` sign, and descriptive text.
+- An unchanged metric displays the neutral `No change` state.
+- Comparison direction remains understandable when color is unavailable.
+- A previous conversion denominator of zero displays `No comparable previous rate` without `NaN`, `Infinity`, or an error.
+- A missing previous-period Average mood displays `No previous mood data` and is not treated as `Okay`.
+- An empty current period retains safe empty-data behavior without a fabricated numerical difference.
+- The Dashboard displays the exact text `Mood scale: 1 = Difficult · 2 = Okay · 3 = Good`.
+- `Daily mood trend` with two complete series shows a solid `Selected period` line and a green dashed `Previous period` line.
+- `Daily mood trend` with partially missing values preserves gaps and displays the remaining available points without substituting `Okay`.
+- `Daily mood trend` without previous-period mood data omits the empty dashed line and displays `No previous mood data`.
+- The two mood series match points by ordinal day position, including weekday-to-weekday and custom-range comparisons.
+- Mood-chart tooltips show the actual dates and values for both `Selected period` and `Previous period`.
+- The mood-chart legend clearly names both series and remains readable when wrapped.
+- Previous-period comparison labels and the two-series mood chart remain readable on mobile without clipped content or horizontal page scrolling.
 - Pipeline meeting totals match manually prepared test records.
 - High-engagement rate matches a manual calculation.
 - Need-identification rate matches a manual calculation.

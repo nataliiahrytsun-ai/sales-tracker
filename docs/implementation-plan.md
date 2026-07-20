@@ -162,9 +162,9 @@ The dashboard is available to all authenticated users.
 
 ### Filters
 
-- This week
+- Current week
 - Last week
-- This month
+- Current month
 - Custom date range
 - All users
 - Individual user
@@ -197,7 +197,185 @@ The dashboard is available to all authenticated users.
 - Difficult, okay, and good entries
 - Common blockers
 - Consecutive difficult days
-- Changes compared with the previous week
+- Changes compared with the corresponding previous period
+
+### Previous-period comparisons
+
+The Dashboard must compare the main metrics for the selected period with the corresponding previous period. The same date and user filters must govern the numerical comparisons and both series in the `Daily mood trend` chart.
+
+#### Previous-period date ranges
+
+All ranges are inclusive of their start and end dates.
+
+- **Current week:** compare the elapsed part of the current week, from Monday through the current date, with the same weekdays of the previous week. For example, Monday–Wednesday of the current week is compared with Monday–Wednesday of the previous week. Do not compare an incomplete current week with a complete previous week.
+- **Last week:** compare the complete previous Monday–Sunday week with the complete Monday–Sunday week immediately before it.
+- **Current month:** compare the elapsed part of the current month, from day 1 through the current date, with day 1 through the same day number of the previous month. For example, July 1–20 is compared with June 1–20. If that day number does not exist in the previous month, end the previous range on the last existing day of that month.
+- **Custom date range:** compare the selected range with the immediately preceding, non-overlapping range containing the same inclusive number of calendar days. If the selected range is July 10–15, its duration is 6 days and the previous range is July 4–9.
+
+For `Current month`, do not map multiple selected dates to the last day of a shorter previous month. The previous range contains each existing calendar date once and may therefore be shorter than the selected range. For example, March 1–31 is compared with February 1–28 in a non-leap year, so the actual previous range contains 28 days. Selected-period positions beyond the end of that previous range have no previous-period point. The implementation must expose and test the actual duration of the resolved previous range.
+
+The Dashboard must display the actual resolved comparison range, for example:
+
+- `Compared with Jul 6–12, 2026`
+- `Compared with Jun 1–20, 2026`
+
+This range label applies to both the numerical comparisons and the previous-period line in `Daily mood trend`. It is especially important for `Current week`, `Current month`, and `Custom date range`.
+
+#### User filtering
+
+Apply exactly the same user filter to both periods:
+
+- `All users` is compared with `All users`;
+- an individual user is compared only with that same user's data.
+
+Data from other users must not enter an individual comparison. The same rule applies to both lines in `Daily mood trend`.
+
+#### Metrics with comparisons
+
+Show previous-period comparisons for these `Activity and target progress` metrics:
+
+- Total outreach activities
+- Companies contacted
+- Replies received
+- Positive replies
+- Meetings booked from outreach
+- Pipeline meetings held
+
+Show previous-period comparisons for these `Pipeline conversion metrics`:
+
+- High-engagement rate
+- Need-identification rate
+- Concrete-next-step rate
+- Proposal rate
+- Opportunity-identification rate
+
+Show previous-period comparisons for these `Outreach conversion rates`:
+
+- Reply rate
+- Positive reply rate
+- Outreach meeting booking rate
+
+Also compare:
+
+- `Average mood` in `Mood summary`;
+- `Daily mood trend` as two chart series.
+
+Do not add numerical comparison labels to:
+
+- target values;
+- target completion percentages;
+- Countries;
+- Blockers;
+- Comments overview;
+- Discussion prompts;
+- mood distribution.
+
+#### Numerical comparison format
+
+For quantitative metrics, show the absolute difference, not relative percentage growth:
+
+- `↑ +5 vs previous period`
+- `↓ −3 vs previous period`
+- `No change`
+
+For conversion rates, show the percentage-point difference, not relative percentage change:
+
+- `↑ +6 pp vs previous period`
+- `↓ −4 pp vs previous period`
+- `No change`
+
+For example, a change from 20% to 26% is `+6 pp`, not `+30%`.
+
+For `Average mood`, show the numerical difference on the 1–3 mood scale, using the same rounding as the current `Mood summary`:
+
+- `↑ +0.4 vs previous period`
+- `↓ −0.3 vs previous period`
+- `No change`
+
+Display each comparison as a compact label beneath its primary metric. Do not use large alert blocks, warning styling, or error banners.
+
+#### Comparison colors and non-color cues
+
+- A positive difference uses a green upward arrow and green value text.
+- A negative difference uses a red downward arrow and red value text.
+- `No change` and unavailable comparisons use neutral gray styling.
+
+Color must not be the only means of communicating the result. Preserve the upward or downward arrow, the `+` or `−` sign, the numerical value, and the descriptive text. A neutral comparison must retain its textual explanation.
+
+#### Missing and non-comparable data
+
+Missing mood must remain missing and must not be converted to `Okay`.
+
+For a quantitative metric, compare with zero only when zero is a trustworthy aggregate for the previous period. Do not invent a zero when the previous value is unknown or undefined.
+
+If a previous-period conversion rate cannot be calculated because its denominator is zero, display:
+
+`No comparable previous rate`
+
+Do not display `NaN`, `Infinity`, a division-by-zero error, or a misleading percentage.
+
+If the previous-period average mood is unavailable, display:
+
+`No previous mood data`
+
+If the current value itself is unavailable, retain the metric's existing empty-data behavior and do not fabricate a numerical difference.
+
+#### Mood scale text
+
+The Dashboard must explain the mood scale with this exact text:
+
+`Mood scale: 1 = Difficult · 2 = Okay · 3 = Good`
+
+#### Daily mood trend
+
+The `Daily mood trend` chart must show the selected and corresponding previous periods simultaneously when previous mood data is available.
+
+The two series are:
+
+- **Selected period:** retain the existing primary-line styling, use a solid line, and label the legend entry `Selected period`.
+- **Previous period:** use a green dashed line and label the legend entry `Previous period`.
+
+The green dashed line identifies the previous period; it does not indicate a positive result. The legend must make that meaning clear. The series must remain distinguishable without relying on color alone.
+
+Match chart points by their ordinal position within each range:
+
+- the first selected-period day corresponds to the first previous-period day;
+- the second day corresponds to the second day;
+- the third day corresponds to the third day;
+- and so on.
+
+This maps Monday to Monday for weekly comparisons. For `Custom date range`, use the day's ordinal position in the range. Do not merge the series by equal calendar date because the two periods use different dates. If the previous range is shorter, positions without a previous date remain missing.
+
+The X-axis may continue to display selected-period dates, but the tooltip must state the actual period, date, and value for both points. For example:
+
+- `Selected period — Jul 14: 2.0`
+- `Previous period — Jul 7: 2.5`
+
+Do not present a previous-period value under a selected-period date without identifying its actual date.
+
+For missing mood values:
+
+- retain each missing daily value as missing or `null`;
+- do not substitute the value 2;
+- do not connect a line artificially across a missing day when the chart library supports gaps;
+- continue to display the other available previous-period points when only some days are missing.
+
+If the previous period has no mood data at all:
+
+- do not render an empty dashed line;
+- retain the selected-period line;
+- display the neutral explanation `No previous mood data`.
+
+The chart must meet these accessibility and responsive requirements:
+
+- solid and dashed line styles distinguish the series in addition to color;
+- the legend names both series in text;
+- tooltips name the period, actual date, and value;
+- the legend remains readable and may wrap on mobile;
+- the chart does not create horizontal page scrolling on mobile;
+- labels are not clipped;
+- tooltips fit within the mobile viewport;
+- both lines remain visually distinguishable on mobile.
 
 ## 8. Core Metrics
 
