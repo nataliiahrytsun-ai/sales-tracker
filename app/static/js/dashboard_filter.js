@@ -315,7 +315,8 @@ document.querySelectorAll("[data-dashboard-filter]").forEach((form) => {
     update();
     if (!isCustom()) applyPresetPeriod();
   });
-  editDatesButton.addEventListener("click", () => {
+  editDatesButton.addEventListener("click", (event) => {
+    event.preventDefault();
     customDatesEditing = true;
     update();
     fromInput.focus();

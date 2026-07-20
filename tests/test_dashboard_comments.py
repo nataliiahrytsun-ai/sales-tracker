@@ -303,6 +303,21 @@ def test_comments_table_has_fixed_columns_and_stacked_mobile_layout() -> None:
     )[1].split("}", 1)[0]
     assert "overflow-x: visible" in mobile_table_wrap_css
     assert "min-width: 0" in mobile_table_css
+    assert "display: block" in mobile_table_css
+    mobile_width_reset_css = final_mobile_css.split(
+        ".dashboard-comments,",
+        1,
+    )[1].split("}", 1)[0]
+    for property_name in (
+        "width: 100%",
+        "max-width: 100%",
+        "min-width: 0",
+        "box-sizing: border-box",
+    ):
+        assert property_name in mobile_width_reset_css
+    assert ".dashboard-comments-table tbody" in mobile_width_reset_css
+    assert ".dashboard-comments-table tr" in mobile_width_reset_css
+    assert ".dashboard-comments-table td" in mobile_width_reset_css
     assert ".dashboard-comments-table td::before" in final_mobile_css
     assert "content: attr(data-label)" in final_mobile_css
     assert ".dashboard-comments-table td:last-child" in final_mobile_css

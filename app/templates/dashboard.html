@@ -52,24 +52,26 @@
           <div class="dashboard-period-group">
             <div class="field-group dashboard-period-field">
               <label for="dashboard-period">Period</label>
-              <div class="dashboard-period-select-control">
-                <select id="dashboard-period" name="period" data-period-select>
-                  {% for value, label in period_options %}
-                    <option value="{{ value }}"{% if selected_period_key == value %} selected{% endif %}>{{ label }}</option>
-                  {% endfor %}
-                </select>
-                <span class="dashboard-control-arrow" aria-hidden="true">&#9662;</span>
+              <div class="dashboard-period-control-row">
+                <div class="dashboard-period-select-control">
+                  <select id="dashboard-period" name="period" data-period-select>
+                    {% for value, label in period_options %}
+                      <option value="{{ value }}"{% if selected_period_key == value %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  <span class="dashboard-control-arrow" aria-hidden="true">&#9662;</span>
+                </div>
+                <a
+                  class="dashboard-edit-dates-link"
+                  href="#dashboard-custom-dates"
+                  data-edit-dates
+                  data-custom-applied-summary
+                  {% if selected_period_key != 'custom' or not summary %}hidden{% endif %}
+                >Edit dates</a>
               </div>
             </div>
-            <div
-              class="dashboard-custom-applied"
-              data-custom-applied-summary
-              {% if selected_period_key != 'custom' or not summary %}hidden{% endif %}
-            >
-              <button class="dashboard-edit-dates" type="button" data-edit-dates>Edit dates</button>
-            </div>
           </div>
-          <div class="dashboard-custom-dates" data-custom-dates{% if selected_period_key != 'custom' or summary %} hidden{% endif %}>
+          <div class="dashboard-custom-dates" id="dashboard-custom-dates" data-custom-dates{% if selected_period_key != 'custom' or summary %} hidden{% endif %}>
             <div class="dashboard-custom-date-fields">
               <div class="field-group">
                 <label for="dashboard-from">From</label>

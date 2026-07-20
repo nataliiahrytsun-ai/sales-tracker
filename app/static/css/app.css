@@ -842,6 +842,20 @@ textarea {
   gap: 0.45rem;
 }
 
+.dashboard-period-control-row {
+  display: flex;
+  min-width: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dashboard-period-control-row .dashboard-period-select-control {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .dashboard-period-select-control {
   position: relative;
   width: 100%;
@@ -1086,32 +1100,21 @@ textarea {
   text-decoration: none;
 }
 
-.dashboard-custom-applied {
-  display: grid;
-  min-width: 0;
-  grid-column: 1;
-  grid-template-columns: minmax(3.75rem, max-content) minmax(0, 1fr);
-  align-items: center;
-  gap: 0.45rem;
-  color: var(--muted);
-  font-size: 0.88rem;
-}
-
-.dashboard-custom-applied[hidden] {
+.dashboard-edit-dates-link[hidden] {
   display: none;
 }
 
-.dashboard-edit-dates {
-  grid-column: 2;
-  justify-self: start;
+.dashboard-edit-dates-link {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin: 0;
   padding: 0;
-  border: 0;
-  background: transparent;
   color: var(--primary);
   font: inherit;
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 0.18em;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -2975,16 +2978,7 @@ textarea {
     align-items: stretch;
   }
 
-  .dashboard-filter-bar > *,
-  .dashboard-custom-applied {
-    grid-column: 1;
-  }
-
-  .dashboard-custom-applied {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .dashboard-edit-dates {
+  .dashboard-filter-bar > * {
     grid-column: 1;
   }
 
@@ -3202,11 +3196,6 @@ textarea {
     grid-row: 1;
   }
 
-  .dashboard-custom-applied {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
   .dashboard-custom-dates {
     grid-column: 1 / -1;
     grid-row: 2;
@@ -3395,10 +3384,6 @@ textarea {
 /* Company Dashboard density and hierarchy refinements. */
 .dashboard-period-group {
   gap: 0.12rem;
-}
-
-.dashboard-custom-applied {
-  margin-top: -0.1rem;
 }
 
 .dashboard-conversion-card,
@@ -3670,7 +3655,20 @@ textarea {
     overflow-x: visible;
   }
 
+  .dashboard-comments,
+  .dashboard-comments-table-wrap,
+  .dashboard-comments-table,
+  .dashboard-comments-table tbody,
+  .dashboard-comments-table tr,
+  .dashboard-comments-table td {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
   .dashboard-comments-table {
+    display: block;
     min-width: 0;
     table-layout: auto;
   }
@@ -3722,6 +3720,9 @@ textarea {
 
   .dashboard-comments-table .dashboard-comments-group-row {
     display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     padding-block: 0.45rem;
     border-top: 1px solid var(--border);
     border-bottom: 0;
@@ -3729,8 +3730,13 @@ textarea {
 
   .dashboard-comments-table .dashboard-comments-group-row th {
     display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     padding: 0;
     border: 0;
+    overflow-wrap: anywhere;
   }
 
   .dashboard-mood-trend-chart {

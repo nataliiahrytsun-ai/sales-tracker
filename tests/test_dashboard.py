@@ -2616,6 +2616,16 @@ def test_custom_range_and_validation_preserve_dates(
     assert 'data-target="0"' in metric_card(custom, "total_activities")
     assert 'data-custom-applied="true"' in custom.text
     assert "Edit dates" in custom.text
+    period_control_start = custom.text.index('class="dashboard-period-control-row"')
+    select_control_start = custom.text.index(
+        'class="dashboard-period-select-control"',
+        period_control_start,
+    )
+    edit_dates_start = custom.text.index(
+        'class="dashboard-edit-dates-link"',
+        period_control_start,
+    )
+    assert select_control_start < edit_dates_start
     custom_dates_tag = re.search(
         r'<div class="dashboard-custom-dates"[^>]*>',
         custom.text,
@@ -2786,6 +2796,20 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
         "dashboard-reset-filters",
     )
     assert ".dashboard-filter" in css
+    period_control_css = css.split(".dashboard-period-control-row {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    edit_dates_css = css.split(".dashboard-edit-dates-link {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    assert "display: flex" in period_control_css
+    assert "flex-direction: row" in period_control_css
+    assert "align-items: center" in period_control_css
+    assert "gap: 0.75rem" in period_control_css
+    assert "flex: 0 0 auto" in edit_dates_css
+    assert "white-space: nowrap" in edit_dates_css
     assert 'class="dashboard-results"' in template
     assert template.index('class="dashboard-results"') > template.index(
         "dashboard-filter",
