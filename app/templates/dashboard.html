@@ -218,7 +218,7 @@
         {% else %}
         <div class="dashboard-chart-legend" aria-label="Chart legend">
           <span><i class="dashboard-chart-key dashboard-chart-key-outreach" aria-hidden="true"></i>Outreach activities</span>
-          <span><i class="dashboard-chart-key dashboard-chart-key-meetings" aria-hidden="true"></i>Meetings held</span>
+          <span><i class="dashboard-chart-key dashboard-chart-key-meetings" aria-hidden="true"></i>Pipeline meetings held</span>
         </div>
         <div
           class="dashboard-grouped-chart{% if summary.activity_buckets | length > 7 %} dashboard-grouped-chart-dense{% endif %}"
@@ -226,14 +226,14 @@
           data-columns="{{ summary.activity_buckets | length }}"
           data-label-stride="{{ summary.activity_label_stride }}"
           role="group"
-          aria-label="Grouped bar chart of Outreach activities and Meetings held for {{ summary.selected_period.start_date.isoformat() }} to {{ summary.selected_period.end_date.isoformat() }}"
+          aria-label="Grouped bar chart of Outreach activities and Pipeline meetings held for {{ summary.selected_period.start_date.isoformat() }} to {{ summary.selected_period.end_date.isoformat() }}"
         >
           {% for bucket in summary.activity_buckets %}
             <div
               class="dashboard-chart-group"
               tabindex="0"
-              title="{{ bucket.range_label }} — Outreach activities: {{ bucket.outreach_activities }}; Meetings held: {{ bucket.meetings_held }}"
-              aria-label="{{ bucket.range_label }}. Outreach activities: {{ bucket.outreach_activities }}. Meetings held: {{ bucket.meetings_held }}."
+              title="{{ bucket.range_label }} — Outreach activities: {{ bucket.outreach_activities }}; Pipeline meetings held: {{ bucket.meetings_held }}"
+              aria-label="{{ bucket.range_label }}. Outreach activities: {{ bucket.outreach_activities }}. Pipeline meetings held: {{ bucket.meetings_held }}."
               data-start="{{ bucket.start_date.isoformat() }}"
               data-end="{{ bucket.end_date.isoformat() }}"
             >
@@ -264,7 +264,7 @@
               <tr>
                 <th scope="col">Date or week</th>
                 <th scope="col">Outreach activities</th>
-                <th scope="col">Meetings held</th>
+                <th scope="col">Pipeline meetings held</th>
               </tr>
             </thead>
             <tbody>
@@ -342,6 +342,40 @@
             </div>
           {% endfor %}
         </dl>
+      </section>
+
+      <section
+        class="dashboard-analysis-card dashboard-discussion-prompts-card"
+        aria-labelledby="discussion-prompts-heading"
+        data-discussion-prompts
+      >
+        <div class="report-section-heading dashboard-discussion-prompts-heading">
+          <h2 id="discussion-prompts-heading" class="dashboard-section-heading">
+            {% if summary.discussion_prompts %}<span class="dashboard-discussion-prompts-icon" aria-hidden="true">💬</span>{% endif %}Discussion prompts
+          </h2>
+          {% if summary.discussion_prompts %}
+            {% set prompt_count = summary.discussion_prompts | length %}
+            <p class="report-section-note dashboard-discussion-prompts-count" data-discussion-topic-count>
+              {{ prompt_count }} topic{% if prompt_count != 1 %}s{% endif %}
+            </p>
+          {% endif %}
+        </div>
+        {% if summary.discussion_prompts %}
+          <div class="dashboard-discussion-prompt-list dashboard-discussion-prompt-list--count-{{ prompt_count }}">
+            {% for prompt in summary.discussion_prompts %}
+              <article
+                class="dashboard-discussion-prompt"
+                data-discussion-prompt="{{ prompt.key }}"
+                data-priority="{{ prompt.priority }}"
+              >
+                <h3>{{ prompt.title }}</h3>
+                <p>{{ prompt.message }}</p>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="dashboard-card-note dashboard-discussion-prompts-empty">No discussion prompts for the selected period.</p>
+        {% endif %}
       </section>
 
       <article

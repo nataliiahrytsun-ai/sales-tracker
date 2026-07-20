@@ -133,14 +133,14 @@ The daily record can be updated throughout the day.
 
 ### Optional fields
 
-| Field            | Input                 |
-| ---------------- | --------------------- |
-| Replies received | Number counter        |
-| Positive replies | Number counter        |
-| Meetings booked  | Number counter        |
-| User mood        | Difficult, Okay, Good |
-| Main blocker     | Predefined tag        |
-| Note             | Short optional text   |
+| Field                         | Input                 |
+| ----------------------------- | --------------------- |
+| Replies received              | Number counter        |
+| Positive replies              | Number counter        |
+| Meetings booked from outreach | Number counter        |
+| User mood                     | Difficult, Okay, Good |
+| Main blocker                  | Predefined tag        |
+| Note                          | Short optional text   |
 
 ### Example country breakdown
 
@@ -173,7 +173,7 @@ The dashboard is available to all authenticated users.
 
 #### Activity
 
-- Pipeline meetings completed
+- Pipeline meetings held
 - Outreach activities
 - Companies contacted
 - Activity per day
@@ -188,7 +188,7 @@ The dashboard is available to all authenticated users.
 - Opportunities identified
 - Replies received
 - Positive replies
-- Meetings booked
+- Meetings booked from outreach
 - Companies contacted by country
 
 #### Sentiment
@@ -224,7 +224,9 @@ A concrete next step includes:
 
 **Positive reply rate** = `positive replies / total outreach activities`
 
-**Meeting booking rate** = `meetings booked / companies contacted`
+**Outreach meeting booking rate** = `meetings booked from outreach / companies contacted`
+
+Meetings booked from outreach remains the sum of Daily Outreach `meetings_booked`. Pipeline meetings held remains the count of filtered Pipeline Meeting records. These clarified user-facing names do not change either data source or calculation.
 
 The application must safely handle empty values and division by zero.
 
@@ -342,7 +344,7 @@ Use this fixed priority order:
 3. Positive replies without booked meetings
 4. Repeated blocker
 
-Display no more than 3 prompts.
+The current MVP supports four prompt types. Display all triggered MVP prompts in the fixed priority order above.
 
 Do not display duplicate prompt types.
 

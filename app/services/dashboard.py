@@ -22,6 +22,10 @@ from app.models import (
     UserMood,
 )
 from app.services.activity_metrics import aggregate_activity_actuals
+from app.services.discussion_prompts import (
+    DiscussionPrompt,
+    build_discussion_prompts,
+)
 from app.services.meetings import BLOCKER_OPTIONS, meeting_date_bounds
 from app.services.targets import TARGET_FIELDS, TARGET_METRICS, current_week_bounds
 
@@ -29,6 +33,10 @@ CURRENT_WEEK = "current-week"
 PREVIOUS_WEEK = "previous-week"
 CURRENT_MONTH = "current-month"
 CUSTOM_RANGE = "custom"
+DASHBOARD_METRIC_LABEL_OVERRIDES = {
+    "meetings_booked": "Meetings booked from outreach",
+    "meetings_held": "Pipeline meetings held",
+}
 PERIOD_OPTIONS = (
     (CURRENT_WEEK, "Current week"),
     (PREVIOUS_WEEK, "Previous week"),
@@ -360,6 +368,7 @@ class DashboardSummary:
     activity_granularity: str
     countries: tuple[BreakdownItem, ...]
     blockers: tuple[BreakdownItem, ...]
+    discussion_prompts: tuple[DiscussionPrompt, ...]
     mood_summary: MoodSummary
     comments: tuple[DashboardComment, ...]
     has_activity: bool
@@ -1010,7 +1019,7 @@ def _outreach_conversion_summary(
         ),
         (
             "meeting_booking",
-            "Meeting booking rate",
+            "Outreach meeting booking rate",
             sum(record.meetings_booked or 0 for record in outreach),
             companies_contacted,
         ),
@@ -1069,18 +1078,46 @@ def get_dashboard_summary(
     metrics = tuple(
         _build_dashboard_metric(
             key=metric,
-            label=label,
+            label=DASHBOARD_METRIC_LABEL_OVERRIDES.get(metric, label),
             actual=actuals[metric],
             target=targets[metric],
         )
         for metric, label in TARGET_FIELDS
     )
+    pipeline_conversions = _pipeline_conversion_summary(meetings)
+    outreach_conversions = _outreach_conversion_summary(outreach)
+    blockers = _blocker_breakdown(outreach)
+    mood_summary = _mood_summary(selected_period, outreach)
+    pipeline_metrics = {
+        metric.key: metric for metric in pipeline_conversions.metrics
+    }
+    outreach_metrics = {
+        metric.key: metric for metric in outreach_conversions.metrics
+    }
+    concrete_next_steps = pipeline_metrics["concrete_next_step"].numerator
+    positive_replies = outreach_metrics["positive_reply"].numerator
+    meetings_booked = outreach_metrics["meeting_booking"].numerator
+    discussion_prompts = build_discussion_prompts(
+        difficult_mood_dates=(
+            record.activity_date
+            for record in outreach
+            if record.user_mood == UserMood.DIFFICULT
+        ),
+        total_meetings=pipeline_conversions.total_meetings,
+        concrete_next_step_count=concrete_next_steps,
+        positive_replies=positive_replies,
+        meetings_booked=meetings_booked,
+        blocker_counts=(
+            (item.label, item.value)
+            for item in blockers
+        ),
+    )
     activity_granularity = _activity_bucket_granularity(selected_period)
     return DashboardSummary(
         selected_period=selected_period,
         metrics=metrics,
-        pipeline_conversions=_pipeline_conversion_summary(meetings),
-        outreach_conversions=_outreach_conversion_summary(outreach),
+        pipeline_conversions=pipeline_conversions,
+        outreach_conversions=outreach_conversions,
         activity_buckets=_activity_buckets(
             selected_period,
             outreach,
@@ -1089,8 +1126,9 @@ def get_dashboard_summary(
         ),
         activity_granularity=activity_granularity,
         countries=_country_breakdown(session, outreach),
-        blockers=_blocker_breakdown(outreach),
-        mood_summary=_mood_summary(selected_period, outreach),
+        blockers=blockers,
+        discussion_prompts=discussion_prompts,
+        mood_summary=mood_summary,
         comments=_dashboard_comments(session, outreach, meetings),
         has_activity=bool(outreach or meetings),
         has_selected_users=(

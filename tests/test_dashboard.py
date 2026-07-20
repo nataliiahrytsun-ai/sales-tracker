@@ -323,6 +323,13 @@ def outreach_rate(response: httpx.Response, metric: str) -> str:
     return section[start:end]
 
 
+def discussion_prompts_section(response: httpx.Response) -> str:
+    marker = response.text.index("data-discussion-prompts")
+    start = response.text.rfind("<section", 0, marker)
+    end = response.text.index("</section>", start)
+    return response.text[start:end]
+
+
 def assert_empty_selected_dashboard(response: httpx.Response) -> None:
     """Assert a selected scope with no valid users cannot expose aggregates."""
     assert response.status_code == 200
@@ -348,6 +355,10 @@ def assert_empty_selected_dashboard(response: httpx.Response) -> None:
     assert "No country activity for this period." in response.text
     assert "No Daily Outreach blockers for this period." in response.text
     assert response.text.count("No recorded mood for this period.") == 1
+    assert (
+        "No discussion prompts for the selected period."
+        in response.text
+    )
     assert "Outreach activities: 10" not in response.text
     assert "Outreach activities: 20" not in response.text
 
@@ -483,6 +494,277 @@ def test_dashboard_requires_authentication(
     response = asyncio.run(scenario())
     assert response.status_code == 303
     assert response.headers["location"] == "/login"
+
+
+def test_discussion_prompts_render_in_fixed_location_with_neutral_empty_state(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, _, _, _ = dashboard_application
+    response = get_dashboard(application)
+    section = discussion_prompts_section(response)
+    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert response.status_code == 200
+    assert "No discussion prompts for the selected period." in section
+    assert "data-discussion-prompt=" not in section
+    assert "data-discussion-topic-count" not in section
+    assert "dashboard-discussion-prompts-icon" not in section
+    assert "dashboard-discussion-prompt-list" not in section
+    assert template.index("outreach-conversion-heading") < template.index(
+        "discussion-prompts-heading",
+    ) < template.index("mood-summary-heading")
+
+    prompt_css = css.split(
+        ".dashboard-discussion-prompts-card {",
+        1,
+    )[1].split(".dashboard-analysis-heading {", 1)[0]
+    assert "background: var(--background)" in prompt_css
+    assert "red" not in prompt_css.casefold()
+    assert "danger" not in prompt_css.casefold()
+    assert "warning" not in prompt_css.casefold()
+    assert "dashboard-discussion-prompt-list--count-1" in prompt_css
+    tablet_css = css.split("@media (min-width: 48rem)", 1)[1].split(
+        "@media (min-width: 64rem)",
+        1,
+    )[0]
+    wide_css = css.split("@media (min-width: 64rem)", 1)[1]
+    for count in (2, 3, 4):
+        assert (
+            f".dashboard-discussion-prompt-list--count-{count}"
+            in tablet_css
+        )
+    assert ".dashboard-discussion-prompt-list--count-3" in wide_css
+    assert ".dashboard-discussion-prompt-list--count-4" in wide_css
+    assert (
+        ".dashboard-results > .dashboard-analysis-card "
+        "+ .dashboard-analysis-card"
+        in css
+    )
+    assert "margin-top: 0.75rem" in css.split(
+        ".dashboard-results > .dashboard-analysis-card "
+        "+ .dashboard-analysis-card {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "overflow-x" not in prompt_css
+    assert re.search(r"^\s*height:", prompt_css, re.MULTILINE) is None
+    assert "flex-wrap: wrap" in prompt_css
+    assert "text-align: right" in prompt_css
+    mobile_css = css.split("@media (max-width: 30rem)", 1)[1].split(
+        "@media (max-width: 47.999rem)",
+        1,
+    )[0]
+    assert ".dashboard-discussion-prompts-count" in mobile_css
+    assert "flex-basis: 100%" in mobile_css
+    assert "text-align: left" in mobile_css
+
+
+def test_one_to_four_triggered_prompts_render_one_card_each(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, _, _ = dashboard_application
+    user_ids: list[int] = []
+    with Session(engine) as session:
+        for prompt_count in range(1, 5):
+            user = User(
+                name=f"Prompt Count {prompt_count}",
+                email=f"prompt-count-{prompt_count}@example.com",
+                password_hash="unused-test-password-hash",
+            )
+            session.add(user)
+            session.flush()
+            assert user.id is not None
+            user_ids.append(user.id)
+
+            dates = (
+                (date(2026, 7, 15),)
+                if prompt_count == 1
+                else (
+                    date(2026, 7, 13),
+                    date(2026, 7, 14),
+                    date(2026, 7, 15),
+                )
+            )
+            for activity_date in dates:
+                add_outreach(
+                    session,
+                    user_id=user.id,
+                    activity_date=activity_date,
+                    total=1,
+                    companies=1,
+                    positive=(3 if prompt_count == 1 else 1),
+                    booked=0,
+                    mood=(
+                        UserMood.DIFFICULT
+                        if prompt_count >= 2
+                        else UserMood.GOOD
+                    ),
+                    blocker=(
+                        "No response" if prompt_count >= 3 else None
+                    ),
+                )
+            if prompt_count == 4:
+                for hour in range(9, 13):
+                    add_meeting(
+                        session,
+                        user_id=user.id,
+                        occurred_at=datetime(
+                            2026,
+                            7,
+                            15,
+                            hour,
+                            tzinfo=UTC,
+                        ),
+                        outcome=PipelineOutcome.NO_FIT,
+                    )
+        session.commit()
+
+    expected_keys = [
+        "positive_replies_without_booked_meetings",
+        "consecutive_difficult_days",
+        "repeated_blocker",
+        "few_concrete_next_steps",
+    ]
+    for prompt_count, user_id in enumerate(user_ids, start=1):
+        response = get_dashboard(
+            application,
+            "/dashboard?user_scope=selected"
+            f"&user_id={user_id}",
+        )
+        keys = re.findall(
+            r'data-discussion-prompt="([^"]+)"',
+            discussion_prompts_section(response),
+        )
+        assert len(keys) == prompt_count
+        assert len(keys) == len(set(keys))
+        assert set(keys) == set(expected_keys[:prompt_count])
+        topic_label = (
+            "1 topic"
+            if prompt_count == 1
+            else f"{prompt_count} topics"
+        )
+        section = discussion_prompts_section(response)
+        assert topic_label in section
+        assert section.count("data-discussion-topic-count") == 1
+        assert (
+            "dashboard-discussion-prompt-list "
+            f"dashboard-discussion-prompt-list--count-{prompt_count}"
+            in section
+        )
+        assert (
+            '<span class="dashboard-discussion-prompts-icon" '
+            'aria-hidden="true">💬</span>'
+            in section
+        )
+
+    four_prompt_section = discussion_prompts_section(
+        get_dashboard(
+            application,
+            "/dashboard?user_scope=selected"
+            f"&user_id={user_ids[-1]}",
+        ),
+    )
+    assert re.findall(
+        r'data-discussion-prompt="([^"]+)"',
+        four_prompt_section,
+    ) == [
+        "consecutive_difficult_days",
+        "few_concrete_next_steps",
+        "positive_replies_without_booked_meetings",
+        "repeated_blocker",
+    ]
+
+
+def test_discussion_prompts_respect_filters_and_fixed_priority(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_id, second_id = dashboard_application
+    with Session(engine) as session:
+        add_outreach(
+            session,
+            user_id=first_id,
+            activity_date=date(2026, 7, 15),
+            total=1,
+            companies=1,
+            positive=0,
+            booked=0,
+            mood=UserMood.DIFFICULT,
+            blocker="No response",
+        )
+        add_outreach(
+            session,
+            user_id=second_id,
+            activity_date=date(2026, 7, 15),
+            total=1,
+            companies=1,
+            positive=1,
+            booked=0,
+            mood=UserMood.DIFFICULT,
+            blocker="No response",
+        )
+        for hour in (10, 11, 12):
+            add_meeting(
+                session,
+                user_id=second_id,
+                occurred_at=datetime(2026, 7, 15, hour, tzinfo=UTC),
+                outcome=PipelineOutcome.NO_FIT,
+            )
+        session.commit()
+
+    base_url = (
+        "/dashboard?period=custom&from=2026-07-14&to=2026-07-15"
+    )
+    all_users = get_dashboard(application, base_url)
+    section = discussion_prompts_section(all_users)
+    keys = re.findall(r'data-discussion-prompt="([^"]+)"', section)
+
+    assert keys == [
+        "consecutive_difficult_days",
+        "few_concrete_next_steps",
+        "positive_replies_without_booked_meetings",
+        "repeated_blocker",
+    ]
+    assert re.findall(r'data-priority="(\d+)"', section) == [
+        "1",
+        "2",
+        "3",
+        "4",
+    ]
+    assert len(keys) == len(set(keys))
+    assert "Difficult mood was recorded on 2 consecutive days." in section
+    assert "Only 2 of 5 meetings had a concrete next step." in section
+    assert (
+        "3 positive replies were recorded, but no meetings were booked."
+        in section
+    )
+    assert "No response was reported 3 times." in section
+
+    first_user = get_dashboard(
+        application,
+        f"{base_url}&user_scope=selected&user_id={first_id}",
+    )
+    assert (
+        "No discussion prompts for the selected period."
+        in discussion_prompts_section(first_user)
+    )
+
+    second_user = get_dashboard(
+        application,
+        f"{base_url}&user_scope=selected&user_id={second_id}",
+    )
+    assert re.findall(
+        r'data-discussion-prompt="([^"]+)"',
+        discussion_prompts_section(second_user),
+    ) == keys[:3]
+
+    single_date = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-07-15&to=2026-07-15",
+    )
+    assert (
+        "No discussion prompts for the selected period."
+        in discussion_prompts_section(single_date)
+    )
 
 
 def test_pipeline_conversion_known_rates_and_safe_html(
@@ -834,7 +1116,7 @@ def test_conversion_sections_share_compact_responsive_mini_metrics(
     template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
     assert "Company metrics" not in template
     assert "Activity &amp; target progress" in template
-    assert template.count("dashboard-section-heading") == 8
+    assert template.count("dashboard-section-heading") == 9
     assert template.count("dashboard-conversion-card") == 3
     activity_heading = template.index('id="company-metrics-heading"')
     activity_section = template.rfind("<section", 0, activity_heading)
@@ -948,6 +1230,23 @@ def test_current_week_company_targets_are_summed_and_progress_is_safe(
     assert TARGET_CALCULATION_NOTICE in response.text
 
 
+def test_dashboard_uses_clarified_meeting_metric_labels(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, _, _, _ = dashboard_application
+    response = get_dashboard(application)
+    booked_card = metric_card(response, "meetings_booked")
+    held_card = metric_card(response, "meetings_held")
+    booking_rate = outreach_rate(response, "meeting_booking")
+
+    assert "Meetings booked from outreach" in booked_card
+    assert "Pipeline meetings held" in held_card
+    assert "Outreach meeting booking rate" in booking_rate
+    assert re.search(r">\s*Meetings booked\s*<", booked_card) is None
+    assert re.search(r">\s*Meetings held\s*<", held_card) is None
+    assert re.search(r">\s*Meeting booking rate\s*<", booking_rate) is None
+
+
 def test_selected_user_filters_actuals_meetings_and_target(
     dashboard_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
@@ -961,8 +1260,14 @@ def test_selected_user_filters_actuals_meetings_and_target(
     assert 'data-actual="10"' in metric_card(response, "total_activities")
     assert 'data-target="2"' in metric_card(response, "total_activities")
     assert 'data-actual="1"' in metric_card(response, "meetings_held")
-    assert "2026-07-13 — Outreach activities: 10; Meetings held: 1" in response.text
-    assert "2026-07-14 — Outreach activities: 0; Meetings held: 0" in response.text
+    assert (
+        "2026-07-13 — Outreach activities: 10; "
+        "Pipeline meetings held: 1"
+    ) in response.text
+    assert (
+        "2026-07-14 — Outreach activities: 0; "
+        "Pipeline meetings held: 0"
+    ) in response.text
     assert 'data-country="BR"' in response.text
     assert 'data-country="DE"' in response.text
     assert 'data-country="AT"' not in response.text
@@ -1322,8 +1627,11 @@ def test_activity_country_blocker_and_mood_aggregates_use_required_sources(
     response = get_dashboard(application)
     assert 'data-start="2026-07-13"' in response.text
     assert "Outreach activities" in response.text
-    assert "Meetings held" in response.text
-    assert "Outreach activities: 10; Meetings held: 1" in response.text
+    assert "Pipeline meetings held" in response.text
+    assert (
+        "Outreach activities: 10; Pipeline meetings held: 1"
+        in response.text
+    )
     assert 'aria-label="Chart legend"' in response.text
     assert 'class="visually-hidden"' in response.text
     assert 'class="dashboard-chart-value">10</span>' in response.text

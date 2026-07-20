@@ -120,7 +120,7 @@ Authenticated users can review the current week, filter results, compare activit
 - Common blockers are visible.
 - Discussion prompts are implemented according to `docs/implementation-plan.md`.
 - Discussion prompt calculations respect the selected date and user filters.
-- No more than three Discussion prompts are displayed.
+- All triggered Discussion prompt types are displayed in the fixed priority order from `docs/implementation-plan.md`.
 - Discussion prompts use neutral, non-punitive wording.
 - The neutral empty state is displayed when no Discussion prompt rule triggers.
 - Pipeline and outreach data can be exported to CSV.
@@ -164,7 +164,7 @@ Record each test with one of these statuses:
 - Proposal and opportunity rates match manually prepared test records.
 - Outreach reply rate matches a manual calculation.
 - Positive reply rate matches a manual calculation.
-- Meeting booking rate matches a manual calculation.
+- Outreach meeting booking rate matches a manual calculation.
 - Dashboard loads without errors when no records exist for the selected period.
 - Dashboard loads without errors when a rate denominator is zero.
 - Country breakdown shows the correct activity and results.
@@ -181,7 +181,7 @@ Record each test with one of these statuses:
 - Discussion prompt calculations for an individual user include only that user's data.
 - Discussion prompt calculations for All users use the combined filtered data.
 - Qualifying Discussion prompts follow the fixed priority order in `docs/implementation-plan.md`.
-- No more than three Discussion prompts are displayed when all four rules qualify.
+- All four Discussion prompt cards are displayed when all four rules qualify, in the documented fixed priority order.
 - No duplicate Discussion prompt types are displayed.
 - The neutral empty state is displayed when no rule triggers.
 - Discussion prompts use neutral, non-punitive wording and do not use warning styling or accusatory language.
