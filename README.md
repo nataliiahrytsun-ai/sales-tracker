@@ -2,6 +2,13 @@
 
 Minimal FastAPI foundation for the Sales Tracker application.
 
+## Product documentation
+
+The maintained product and technical requirements are in
+[`docs/implementation-plan.md`](docs/implementation-plan.md). The original
+`docs/Implementation_Plan.docx` is retained as a historical/exported copy and
+should not be edited independently.
+
 ## Requirements
 
 - Python 3.12

@@ -97,7 +97,7 @@ Provide authenticated users with a usable weekly view of activity, outcomes, sen
 * Add country breakdown
 * Add sentiment average and distribution
 * Add mood trends and blocker summaries
-* Add non-punitive attention indicators
+* Add non-punitive Discussion prompts
 * Add pipeline and outreach CSV exports
 * Add tests for filters, calculations, empty data, division by zero, and permissions
 
@@ -113,11 +113,16 @@ Authenticated users can review the current week, filter results, compare activit
 - Activity, customer response, progress, and sentiment are displayed separately.
 - Pipeline metrics use the definitions from the Implementation Plan.
 - Outreach rates use the formulas from the Implementation Plan.
-- Empty values and division by zero are handled safely.
-- Country activity and results are visible.
+- Missing data, empty values, and zero denominators are handled safely.
+- Companies contacted by country are visible.
 - Mood average and distribution are both visible.
 - Missing mood is excluded from sentiment calculations and is not treated as neutral.
-- Common blockers and supported attention indicators are visible.
+- Common blockers are visible.
+- Discussion prompts are implemented according to `docs/implementation-plan.md`.
+- Discussion prompt calculations respect the selected date and user filters.
+- No more than three Discussion prompts are displayed.
+- Discussion prompts use neutral, non-punitive wording.
+- The neutral empty state is displayed when no Discussion prompt rule triggers.
 - Pipeline and outreach data can be exported to CSV.
 - Dashboard and export access is protected by authentication and authorization.
 - Sentiment data is available only to authenticated users, with the same visibility rules for every user.
@@ -167,12 +172,25 @@ Record each test with one of these statuses:
 - Mood distribution shows the correct Difficult, Okay, and Good counts.
 - Records with missing mood are not included as Okay or another neutral value.
 - Common blockers are displayed with correct counts.
-- Attention indicators are presented as discussion prompts, not performance warnings.
+- Consecutive difficult days triggers according to the exact rule in `docs/implementation-plan.md`.
+- Few concrete next steps triggers according to the exact rule in `docs/implementation-plan.md`.
+- Positive replies without booked meetings triggers according to the exact rule in `docs/implementation-plan.md`.
+- Repeated blocker triggers and applies its deterministic selection and tie-break rules according to `docs/implementation-plan.md`.
+- Every Discussion prompt threshold is tested immediately below, at, and, where applicable, above its boundary.
+- Discussion prompt calculations include only data inside the selected date range.
+- Discussion prompt calculations for an individual user include only that user's data.
+- Discussion prompt calculations for All users use the combined filtered data.
+- Qualifying Discussion prompts follow the fixed priority order in `docs/implementation-plan.md`.
+- No more than three Discussion prompts are displayed when all four rules qualify.
+- No duplicate Discussion prompt types are displayed.
+- The neutral empty state is displayed when no rule triggers.
+- Discussion prompts use neutral, non-punitive wording and do not use warning styling or accusatory language.
 - Pipeline CSV export downloads successfully.
 - Pipeline CSV contains the expected records and fields.
 - Outreach CSV export downloads successfully.
 - Outreach CSV contains the expected records and country data.
-- Unauthorized users cannot access dashboard or export routes.
+- Unauthorized users cannot access the dashboard.
+- Unauthorized users cannot access export routes.
 - Sentiment information is unavailable to unauthenticated users and follows the same rules for every authenticated user.
 - Dashboard remains usable on a mobile-sized viewport.
 

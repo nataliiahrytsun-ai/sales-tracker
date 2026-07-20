@@ -2,7 +2,9 @@
 
 ## Source of Truth
 
-Product requirements: `docs/Implementation_Plan.docx`
+Product requirements: `docs/implementation-plan.md`
+
+Historical/exported copy: `docs/Implementation_Plan.docx`
 
 Implementation milestones: `docs/MILESTONES.md`
 
