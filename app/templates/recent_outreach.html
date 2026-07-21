@@ -8,7 +8,9 @@
       <p class="eyebrow">Outreach history</p>
       <h1 id="recent-outreach-heading">Daily outreach</h1>
       <p>{{ from_value }} to {{ to_value }} &middot; Newest first.</p>
-      <a class="back-link" href="{{ url_for('home') }}">Back to Home</a>
+      <nav class="page-context-nav" aria-label="Outreach history actions">
+        <a href="{{ url_for('home') }}">Back to Home</a>
+      </nav>
       {% if range_error %}<p class="alert" role="alert">{{ range_error }}</p>{% endif %}
       <div
         class="record-filter"

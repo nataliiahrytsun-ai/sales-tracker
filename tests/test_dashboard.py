@@ -2824,8 +2824,7 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     dashboard_navigation_css = css.split(".dashboard-navigation-row {", 1)[
         1
     ].split("}", 1)[0]
-    assert "margin-top: 0.5rem" in dashboard_navigation_css
-    assert "margin-bottom: 0.55rem" in dashboard_navigation_css
+    assert "width: 100%" in dashboard_navigation_css
     target_helper_css = css.split(
         ".dashboard-metrics-helper {",
         1,
@@ -2880,6 +2879,17 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert "width: 100%" in form_controls_css
     assert "max-width: 100%" in form_controls_css
     assert "min-width: 0" in form_controls_css
+    page_context_nav_css = css.split(".page-context-nav {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    assert "display: flex" in page_context_nav_css
+    assert "flex-wrap: wrap" in page_context_nav_css
+    assert "column-gap: 1.25rem" in page_context_nav_css
+    assert "row-gap: 0.75rem" in page_context_nav_css
+    assert "margin-block: 1.5rem" in page_context_nav_css
+    assert "\n  width:" not in page_context_nav_css
+    assert "white-space: nowrap" not in page_context_nav_css
     assert "@media (max-width: 47.999rem)" in css
     mobile_dashboard_css = css.split(
         "@media (max-width: 47.999rem)",
@@ -2903,7 +2913,6 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert "grid-column: 1 / -1" in dashboard_children_rule
     assert "justify-self: stretch" in dashboard_children_rule
     assert ".dashboard-navigation-row" in mobile_dashboard_css
-    assert "justify-items: stretch" in mobile_dashboard_css
     assert ".dashboard-filter" in mobile_dashboard_css
     assert "justify-self: stretch" in mobile_dashboard_css
     assert ".dashboard-period-select-control select" in mobile_dashboard_css
@@ -2935,11 +2944,14 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     )
     assert ".report-section-heading" in css
     assert ".report-section-note" in css
-    assert 'class="report-navigation-row dashboard-navigation-row"' in template
+    assert (
+        'class="page-context-nav dashboard-navigation-row" '
+        'aria-label="Dashboard page actions"'
+    ) in template
     navigation_markup = template.split(
-        'class="report-navigation-row dashboard-navigation-row"',
+        'class="page-context-nav dashboard-navigation-row"',
         1,
-    )[1].split("</div>", 1)[0]
+    )[1].split("</nav>", 1)[0]
     assert "Back to Home" in navigation_markup
     assert "dashboard-filter" not in navigation_markup
     assert template.index("dashboard-period-summary") < template.index(

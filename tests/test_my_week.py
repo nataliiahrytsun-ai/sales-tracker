@@ -350,21 +350,27 @@ def test_my_week_layout_is_responsive_and_accessible() -> None:
     assert 'class="report-heading-row"' in template
     assert 'class="report-period-summary"' in template
     assert (
-        'class="report-navigation-row report-navigation-spaced my-week-links"'
+        'class="page-context-nav" aria-label="My Week actions"'
         in template
     )
     assert 'class="week-metric-percentage"' in template
     assert 'class="week-no-target"' in template
     assert ".week-metric-grid" in mobile_css
     assert ".week-metric-card" in mobile_css
-    assert "margin-bottom: 1.25rem" in mobile_css
+    page_context_nav_css = css.split(".page-context-nav {", 1)[1].split(
+        "}",
+        1,
+    )[0]
     assert ".week-metric-primary" in mobile_css
     assert ".metric-primary-row" in mobile_css
     assert ".metric-remaining" in mobile_css
     assert ".report-heading-row" in mobile_css
     assert ".report-period-summary" in mobile_css
-    assert ".report-navigation-row" in mobile_css
-    assert ".report-navigation-spaced" in mobile_css
+    assert "display: flex" in page_context_nav_css
+    assert "flex-wrap: wrap" in page_context_nav_css
+    assert "column-gap: 1.25rem" in page_context_nav_css
+    assert "row-gap: 0.75rem" in page_context_nav_css
+    assert "margin-block: 1.5rem" in page_context_nav_css
     assert ".week-metric-percentage" in mobile_css
     assert ".week-no-target" in mobile_css
     assert ".week-metric-values" not in css

@@ -18,9 +18,9 @@
           <span class="target-week-range">{{ week_presentation.date_range }}</span>
         </div>
       </div>
-      <div class="report-navigation-row report-navigation-spaced">
-        <a class="back-link" href="{{ url_for('home') }}">Back to Home</a>
-      </div>
+      <nav class="page-context-nav" aria-label="Weekly targets actions">
+        <a href="{{ url_for('home') }}">Back to Home</a>
+      </nav>
     </div>
 
     {% if saved %}

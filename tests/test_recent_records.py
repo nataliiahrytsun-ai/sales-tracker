@@ -814,14 +814,39 @@ def test_recent_records_layout_is_structurally_responsive() -> None:
     recent_outreach_template = Path(
         "app/templates/recent_outreach.html",
     ).read_text(encoding="utf-8")
+    my_week_template = Path("app/templates/my_week.html").read_text(
+        encoding="utf-8",
+    )
+    targets_template = Path("app/templates/targets.html").read_text(
+        encoding="utf-8",
+    )
+    dashboard_template = Path("app/templates/dashboard.html").read_text(
+        encoding="utf-8",
+    )
     filter_javascript = Path(
         "app/static/js/recent_date_filter.js",
     ).read_text(encoding="utf-8")
     mobile_css, desktop_css = css.split("@media (min-width: 48rem)", 1)
-    assert 'class="back-link"' in meeting_template
-    assert 'class="back-link"' in outreach_template
-    assert ".back-link" in mobile_css
-    assert "margin-bottom: 1.25rem" in mobile_css
+    assert 'class="page-context-nav"' in meeting_template
+    assert 'class="page-context-nav"' in outreach_template
+    assert 'aria-label="Meeting history actions"' in recent_meetings_template
+    assert 'aria-label="Outreach history actions"' in recent_outreach_template
+    assert ".page-context-nav" in mobile_css
+    assert "margin-block: 1.5rem" in mobile_css
+    page_context_nav_css = css.split(".page-context-nav {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    page_context_nav_focus_css = css.split(
+        ".page-context-nav a:focus-visible {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "display: flex" in page_context_nav_css
+    assert "flex-wrap: wrap" in page_context_nav_css
+    assert "column-gap: 1.25rem" in page_context_nav_css
+    assert "row-gap: 0.75rem" in page_context_nav_css
+    assert "margin-block: 1.5rem" in page_context_nav_css
+    assert "outline: 0.2rem solid var(--focus)" in page_context_nav_focus_css
     assert ".records-page" in mobile_css
     assert ".record-list" in mobile_css
     assert ".record-card" in mobile_css
@@ -838,6 +863,8 @@ def test_recent_records_layout_is_structurally_responsive() -> None:
     assert "recent_meetings" not in recent_outreach_template
     assert "Back to Home" in recent_meetings_template
     assert "Back to Home" in recent_outreach_template
+    for template in (my_week_template, targets_template, dashboard_template):
+        assert 'class="page-context-nav' in template
     for template in (recent_meetings_template, recent_outreach_template):
         assert 'class="records-page history-records-page"' in template
         assert 'class="record-details history-record-details"' in template

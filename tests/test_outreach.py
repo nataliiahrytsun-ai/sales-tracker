@@ -183,6 +183,25 @@ def test_authenticated_user_can_open_today_outreach_form(
         assert '/static/js/outreach_countries.js' in response.text
         assert 'name="user_id"' not in response.text
         assert 'name="activity_date"' not in response.text
+        normal_actions = re.search(
+            r'<nav class="page-context-nav" aria-label="Outreach page actions">'
+            r'(?P<actions>.*?)</nav>',
+            response.text,
+            re.DOTALL,
+        )
+        assert normal_actions is not None
+        actions = normal_actions.group("actions")
+        assert 'href="http://testserver/outreach/recent"' in actions
+        assert "View / edit outreach" in actions
+        assert 'href="http://testserver/my-week"' in actions
+        assert "Go to My Week" in actions
+        assert 'href="http://testserver/"' in actions
+        assert "Back to Home" in actions
+        assert 'class="button' not in actions
+        assert response.text.count(
+            '<nav class="page-context-nav" aria-label="Outreach page actions">',
+        ) == 1
+        assert "Today's outreach was saved successfully." not in response.text
 
     asyncio.run(scenario())
 
@@ -231,11 +250,51 @@ def test_successful_create_persists_today_for_authenticated_user(
             )
             response = await client.post("/outreach/today", data=submitted)
             confirmation = await client.get(response.headers["location"])
+            refreshed_confirmation = await client.get(
+                response.headers["location"],
+            )
 
         assert response.status_code == 303
         assert response.headers["location"] == "/outreach/today?saved=true"
         assert confirmation.status_code == 200
-        assert "Today's outreach was saved." in confirmation.text
+        assert refreshed_confirmation.status_code == 200
+        assert "Today's outreach was saved successfully." in confirmation.text
+        assert "Your saved values are shown below and can be updated." in (
+            confirmation.text
+        )
+        panel_start = confirmation.text.index(
+            '<div class="success confirmation-panel" role="status">',
+        )
+        navigation_start = confirmation.text.index(
+            '<nav class="page-context-nav" aria-label="Outreach page actions">',
+            panel_start,
+        )
+        panel = confirmation.text[panel_start:navigation_start]
+        navigation = re.search(
+            r'<nav class="page-context-nav" aria-label="Outreach page actions">'
+            r'(?P<links>.*?)</nav>',
+            confirmation.text[navigation_start:],
+            re.DOTALL,
+        )
+        assert navigation is not None
+        links = navigation.group("links")
+        assert 'href="http://testserver/outreach/recent"' in links
+        assert "View / edit outreach" in links
+        assert 'href="http://testserver/my-week"' in links
+        assert "Go to My Week" in links
+        assert 'href="http://testserver/"' in links
+        assert "Back to Home" in links
+        assert 'class="button' not in links
+        assert "page-context-nav" not in panel
+        assert "Edit today's outreach" not in panel
+        assert re.search(
+            r'name="total_activities"[^>]*value="40"',
+            confirmation.text,
+        )
+        assert 'aria-describedby="outreach-saved-entry"' in confirmation.text
+        assert confirmation.text.count(
+            '<nav class="page-context-nav" aria-label="Outreach page actions">',
+        ) == 1
 
     asyncio.run(scenario())
 
@@ -468,7 +527,7 @@ def test_server_calculates_unique_companies_and_ignores_forged_value(
             confirmation = await client.get(response.headers["location"])
 
         assert response.status_code == 303
-        assert "Today's outreach was saved." in confirmation.text
+        assert "Today's outreach was saved successfully." in confirmation.text
         assert "Country total does not match unique companies." not in confirmation.text
         assert '<output class="country-summary-value" data-countries-selected>2' in (
             confirmation.text

@@ -159,6 +159,27 @@ def test_authenticated_user_can_open_meeting_form(
         assert 'list="meeting_country_options"' in response.text
         assert 'name="country_code" value=""' in response.text
         assert '/static/js/meeting_country.js' in response.text
+        normal_actions = re.search(
+            r'<nav class="page-context-nav" aria-label="Meeting page actions">'
+            r'(?P<actions>.*?)</nav>',
+            response.text,
+            re.DOTALL,
+        )
+        assert normal_actions is not None
+        actions = normal_actions.group("actions")
+        assert 'href="http://testserver/meetings/recent"' in actions
+        assert "View / edit meetings" in actions
+        assert 'href="http://testserver/my-week"' in actions
+        assert "Go to My Week" in actions
+        assert 'href="http://testserver/"' in actions
+        assert "Back to Home" in actions
+        assert "Add another meeting" not in actions
+        assert 'action="http://testserver/meetings/' not in actions
+        assert 'class="button' not in actions
+        assert response.text.count(
+            '<nav class="page-context-nav" aria-label="Meeting page actions">',
+        ) == 1
+        assert "Meeting saved successfully." not in response.text
         for code, country_name in (("BR", "Brazil"), ("PL", "Poland")):
             assert (
                 f'<option value="{country_name}" data-country-code="{code}">'
@@ -206,15 +227,17 @@ def test_meeting_option_grids_are_structurally_responsive() -> None:
         ".field-section-heading p",
     )
     optional_fields = css_rule(mobile_css, ".optional-fields")
+    page_actions = css_rule(mobile_css, ".page-context-nav")
+    page_action_children = css_rule(mobile_css, ".page-context-nav > *")
+    page_action_links = css_rule(mobile_css, ".page-context-nav a")
+    page_action_focus = css_rule(
+        mobile_css,
+        ".page-context-nav a:focus-visible",
+    )
+    narrow_css = css.split("@media (max-width: 47.999rem)", 1)[1]
+    narrow_page_actions = css_rule(narrow_css, ".page-context-nav")
     confirmation_actions = css_rule(mobile_css, ".confirmation-actions")
-    confirmation_children = css_rule(
-        mobile_css,
-        ".confirmation-actions > *",
-    )
-    confirmation_button = css_rule(
-        mobile_css,
-        ".confirmation-actions .button",
-    )
+    confirmation_undo = css_rule(mobile_css, ".confirmation-undo")
     option_wrapper = css_rule(mobile_css, ".choice-button")
     option_target = css_rule(mobile_css, ".choice-button span")
     action_button = css_rule(mobile_css, ".button")
@@ -251,12 +274,23 @@ def test_meeting_option_grids_are_structurally_responsive() -> None:
     assert "min-width: 0" in section_heading_children
     assert "overflow-wrap: anywhere" in section_heading_text
     assert "min-width: 0" in optional_fields
-    assert "min-width: 0" in confirmation_actions
-    assert "max-width: 100%" in confirmation_children
-    assert "min-width: 0" in confirmation_children
-    assert "max-width: 100%" in confirmation_button
-    assert "overflow-wrap: anywhere" in confirmation_button
-    assert "white-space: normal" in confirmation_button
+    assert "display: flex" in page_actions
+    assert "flex-wrap: wrap" in page_actions
+    assert "column-gap: 1.25rem" in page_actions
+    assert "row-gap: 0.75rem" in page_actions
+    assert "margin-block: 1.5rem" in page_actions
+    assert "min-width: 0" in page_actions
+    assert "max-width: 100%" in page_action_children
+    assert "min-width: 0" in page_action_children
+    assert "text-decoration: underline" in page_action_links
+    assert "outline: 0.2rem solid var(--focus)" in page_action_focus
+    assert "outline-offset: 0.15rem" in page_action_focus
+    assert "flex-direction: column" in narrow_page_actions
+    assert "align-items: flex-start" in narrow_page_actions
+    assert "column-gap: 1.25rem" in confirmation_actions
+    assert "row-gap: 0.75rem" in confirmation_actions
+    assert "flex: 0 0 auto" in confirmation_undo
+    assert "margin: 0" in confirmation_undo
 
     assert "min-width: 0" in option_wrapper
     assert "width: 100%" in option_target
@@ -398,16 +432,63 @@ def test_successful_meeting_is_saved_for_current_user_only(
                 },
             )
             confirmation = await client.get(response.headers["location"])
+            refreshed_confirmation = await client.get(
+                response.headers["location"],
+            )
 
         assert response.status_code == 303
         assert response.headers["location"] == "/meetings/new?saved=1"
         assert confirmation.status_code == 200
+        assert refreshed_confirmation.status_code == 200
         assert 'class="success confirmation-panel" role="status"' in (
             confirmation.text
         )
         assert "Meeting saved successfully" in confirmation.text
-        assert "Record another meeting" in confirmation.text
-        assert ">Undo</button>" in confirmation.text
+        assert "Meeting saved successfully." in confirmation.text
+        assert "The form below is ready for a new meeting." in confirmation.text
+        panel_start = confirmation.text.index(
+            '<div class="success confirmation-panel" role="status">',
+        )
+        navigation_start = confirmation.text.index(
+            '<nav class="page-context-nav" aria-label="Meeting page actions">',
+            panel_start,
+        )
+        panel = confirmation.text[panel_start:navigation_start]
+        navigation = re.search(
+            r'<nav class="page-context-nav" aria-label="Meeting page actions">'
+            r'(?P<links>.*?)</nav>',
+            confirmation.text[navigation_start:],
+            re.DOTALL,
+        )
+        assert navigation is not None
+        links = navigation.group("links")
+        assert 'href="http://testserver/meetings/recent"' in links
+        assert "View / edit meetings" in links
+        assert 'href="http://testserver/my-week"' in links
+        assert "Go to My Week" in links
+        assert 'href="http://testserver/"' in links
+        assert "Back to Home" in links
+        assert 'class="button' not in links
+        assert "Add another meeting" not in confirmation.text
+        assert "page-context-nav" not in panel
+        assert ">Undo</button>" in panel
+        assert re.search(
+            r'<form class="confirmation-undo" method="post" '
+            r'action="http://testserver/meetings/\d+/undo">',
+            panel,
+        )
+        assert "<a" not in re.search(
+            r'<form class="confirmation-undo".*?</form>',
+            panel,
+            re.DOTALL,
+        ).group(0)
+        assert confirmation.text.count(
+            '<nav class="page-context-nav" aria-label="Meeting page actions">',
+        ) == 1
+        assert 'id="meeting-next-entry">Record another meeting</p>' in (
+            confirmation.text
+        )
+        assert 'aria-describedby="meeting-next-entry"' in confirmation.text
 
     asyncio.run(scenario())
 
@@ -742,7 +823,7 @@ def test_record_another_meeting_opens_clean_form_and_expires_undo(
             expired_undo = await client.post(f"/meetings/{meeting_id}/undo")
 
         assert "Meeting saved successfully" in confirmation.text
-        assert 'href="http://testserver/meetings/new"' in confirmation.text
+        assert 'href="http://testserver/meetings/recent"' in confirmation.text
         assert "Meeting saved successfully" not in fresh_form.text
         assert "Must not carry over" not in fresh_form.text
         assert "Must also be cleared" not in fresh_form.text

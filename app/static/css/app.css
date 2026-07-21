@@ -155,7 +155,7 @@ p {
 }
 
 h1 {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   font-size: clamp(1.75rem, 7vw, 2.5rem);
   line-height: 1.15;
 }
@@ -191,9 +191,8 @@ h2 {
   overflow-wrap: anywhere;
 }
 
-.back-link {
-  display: inline-block;
-  margin-bottom: 1.25rem;
+.section-heading > p:not(.eyebrow) {
+  margin-bottom: 0;
 }
 
 .auth-card {
@@ -607,25 +606,6 @@ textarea {
 
 .dashboard-comparison-range {
   flex-basis: 100%;
-}
-
-.report-navigation-row {
-  display: grid;
-  min-width: 0;
-  justify-items: start;
-  gap: 0.4rem;
-}
-
-.report-navigation-row .back-link {
-  margin-bottom: 0;
-}
-
-.report-navigation-spaced {
-  margin-block: 1rem 1.25rem;
-}
-
-.my-week-links {
-  gap: 0.35rem 1rem;
 }
 
 .report-section-heading {
@@ -1125,8 +1105,6 @@ textarea {
 
 .dashboard-navigation-row {
   width: 100%;
-  margin-top: 0.5rem;
-  margin-bottom: 0.55rem;
 }
 
 .dashboard-section-navigation-shell {
@@ -2624,32 +2602,58 @@ textarea {
   margin-bottom: 0.75rem;
 }
 
+.page-context-nav {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  margin-block: 1.5rem;
+  column-gap: 1.25rem;
+  row-gap: 0.75rem;
+}
+
+.page-context-nav > * {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.page-context-nav a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.page-context-nav a:hover {
+  color: var(--primary-hover);
+}
+
+.page-context-nav a:focus-visible {
+  outline: 0.2rem solid var(--focus);
+  outline-offset: 0.15rem;
+}
+
 .confirmation-actions {
   display: flex;
   flex-wrap: wrap;
   min-width: 0;
-  gap: 0.5rem;
+  align-items: center;
+  column-gap: 1.25rem;
+  row-gap: 0.75rem;
 }
 
-.confirmation-actions > * {
-  max-width: 100%;
-  min-width: 0;
-}
-
-.confirmation-actions form {
+.confirmation-undo {
+  flex: 0 0 auto;
   margin: 0;
 }
 
-.confirmation-actions .button {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  text-align: center;
-  text-decoration: none;
-  white-space: normal;
+.form-context {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .confirmation-panel {
   display: grid;
+  margin-bottom: 1.5rem;
   gap: 1rem;
   padding: 1rem;
   border-color: var(--primary);
@@ -2873,6 +2877,11 @@ textarea {
 }
 
 @media (max-width: 47.999rem) {
+  .page-context-nav {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .page-content > .dashboard-page {
     display: grid;
     width: 100%;
@@ -2942,7 +2951,6 @@ textarea {
 
   .dashboard-navigation-row {
     width: 100%;
-    justify-items: stretch;
   }
 
   .dashboard-mood-content {

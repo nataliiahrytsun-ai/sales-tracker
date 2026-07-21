@@ -14,10 +14,10 @@
           <span>{{ summary.week_start.day }} {{ summary.week_start.strftime('%b') }}{% if summary.week_start.year != summary.week_end.year %} {{ summary.week_start.year }}{% endif %} – {{ summary.week_end.day }} {{ summary.week_end.strftime('%b') }} {{ summary.week_end.year }}</span>
         </div>
       </div>
-      <div class="report-navigation-row report-navigation-spaced my-week-links">
-        <a class="back-link" href="{{ url_for('home') }}">Back to Home</a>
+      <nav class="page-context-nav" aria-label="My Week actions">
+        <a href="{{ url_for('home') }}">Back to Home</a>
         <a href="{{ url_for('targets_page') }}">Set weekly targets</a>
-      </div>
+      </nav>
     </div>
 
     {% if not summary.has_activity %}

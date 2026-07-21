@@ -20,7 +20,9 @@
           {{ editing_meeting.occurred_at.strftime('%Y-%m-%d %H:%M') }}
           · {{ editing_meeting.company_name or 'Company not provided' }}
         </p>
-        <a class="back-link" href="{{ url_for('recent_meetings') }}{% if recent_range_query %}?{{ recent_range_query }}{% endif %}">Back to recent meetings</a>
+        <nav class="page-context-nav" aria-label="Meeting page actions">
+          <a href="{{ url_for('recent_meetings') }}{% if recent_range_query %}?{{ recent_range_query }}{% endif %}">Back to recent meetings</a>
+        </nav>
       {% endif %}
     </div>
 
@@ -28,19 +30,30 @@
       <div class="success confirmation-panel" role="status">
         <div class="confirmation-copy">
           <strong>Meeting saved successfully.</strong>
-          <p>The structured outcome is ready.</p>
+          <p>The form below is ready for a new meeting.</p>
         </div>
         <div class="confirmation-actions">
-          <a class="button button-primary" href="{{ url_for('new_meeting') }}">
-            Record another meeting
-          </a>
-          <form method="post" action="{{ url_for('undo_meeting', meeting_id=saved_meeting_id) }}">
-            <button class="button button-secondary" type="submit">Undo</button>
+          <form class="confirmation-undo" method="post" action="{{ url_for('undo_meeting', meeting_id=saved_meeting_id) }}">
+            <button class="button button-danger" type="submit">Undo</button>
           </form>
         </div>
       </div>
-    {% elif undone %}
-      <p class="success" role="status">The meeting was removed.</p>
+      <nav class="page-context-nav" aria-label="Meeting page actions">
+        <a href="{{ url_for('recent_meetings') }}">View / edit meetings</a>
+        <a href="{{ url_for('my_week_page') }}">Go to My Week</a>
+        <a href="{{ url_for('home') }}">Back to Home</a>
+      </nav>
+    {% else %}
+      {% if undone %}
+        <p class="success" role="status">The meeting was removed.</p>
+      {% endif %}
+      {% if not editing %}
+        <nav class="page-context-nav" aria-label="Meeting page actions">
+          <a href="{{ url_for('recent_meetings') }}">View / edit meetings</a>
+          <a href="{{ url_for('my_week_page') }}">Go to My Week</a>
+          <a href="{{ url_for('home') }}">Back to Home</a>
+        </nav>
+      {% endif %}
     {% endif %}
 
     {% if errors %}
@@ -50,10 +63,14 @@
       </div>
     {% endif %}
 
+    {% if saved_meeting_id %}
+      <p class="form-context" id="meeting-next-entry">Record another meeting</p>
+    {% endif %}
     <form
       class="meeting-form"
       method="post"
       action="{% if editing %}{{ url_for('update_meeting', meeting_id=meeting_id) }}{% if recent_range_query %}?{{ recent_range_query }}{% endif %}{% else %}{{ url_for('create_meeting') }}{% endif %}"
+      {% if saved_meeting_id %}aria-describedby="meeting-next-entry"{% endif %}
     >
       <section class="field-section required-fields" aria-labelledby="required-fields-heading">
         <div class="field-section-heading">

@@ -542,7 +542,7 @@ def test_targets_form_is_responsive_and_links_home() -> None:
     assert "Back to Home" in template
     assert 'class="report-heading-row"' in template
     assert 'class="report-period-summary"' in template
-    assert 'class="report-navigation-row report-navigation-spaced"' in template
+    assert 'class="page-context-nav" aria-label="Weekly targets actions"' in template
     script = Path("app/static/js/targets_week.js").read_text(encoding="utf-8")
 
     assert 'class="target-week-trigger"' in template
@@ -572,7 +572,7 @@ def test_targets_form_is_responsive_and_links_home() -> None:
     assert ".targets-grid" in mobile_css
     assert ".report-heading-row" in mobile_css
     assert ".report-period-summary" in mobile_css
-    assert ".report-navigation-spaced" in mobile_css
+    assert ".page-context-nav" in mobile_css
     assert "min-width: 0" in mobile_css
     assert ".target-week-picker" in mobile_css
     assert ".target-week-trigger" in mobile_css
