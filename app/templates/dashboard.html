@@ -2,6 +2,22 @@
 
 {% block title %}Company Dashboard - Sales Tracker{% endblock %}
 
+{% block secondary_navigation %}
+  <div class="dashboard-section-navigation-shell">
+    <div class="shell dashboard-section-navigation-inner">
+      <nav class="dashboard-section-navigation" aria-label="Dashboard sections">
+        <a href="#dashboard-overview" aria-current="location">Targets</a>
+        <a href="#dashboard-activity">Activity trend</a>
+        <a href="#dashboard-conversions">Conversions</a>
+        <a href="#dashboard-discussion">Discussion</a>
+        <a href="#dashboard-mood">Mood</a>
+        <a href="#dashboard-countries-blockers">Countries &amp; blockers</a>
+        <a href="#comments-overview">Comments</a>
+      </nav>
+    </div>
+  </div>
+{% endblock %}
+
 {% block content %}
   <section class="dashboard-page" aria-labelledby="dashboard-heading">
     <div class="dashboard-topbar">
@@ -24,17 +40,6 @@
         <a href="{{ url_for('home') }}">Back to Home</a>
       </nav>
     </div>
-      <div class="dashboard-section-navigation-shell">
-        <nav class="dashboard-section-navigation" aria-label="Dashboard sections">
-          <a href="#dashboard-overview" aria-current="location">Targets</a>
-          <a href="#dashboard-activity">Activity trend</a>
-          <a href="#dashboard-conversions">Conversions</a>
-          <a href="#dashboard-discussion">Discussion</a>
-          <a href="#dashboard-mood">Mood</a>
-          <a href="#dashboard-countries-blockers">Countries &amp; blockers</a>
-          <a href="#comments-overview">Comments</a>
-        </nav>
-      </div>
       <form
         class="dashboard-filter{% if selected_period_key == 'custom' %} dashboard-filter-custom{% endif %}"
         method="get"

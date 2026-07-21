@@ -2692,6 +2692,8 @@ def test_dashboard_secondary_navigation_links_stable_sections(
     )
     nav_end = response.text.index("</nav>", nav_start)
     navigation = response.text[nav_start:nav_end]
+    stack_start = response.text.index('class="app-navigation-stack')
+    main_start = response.text.index("<main")
     expected_links = {
         "Targets": "#dashboard-overview",
         "Activity trend": "#dashboard-activity",
@@ -2702,7 +2704,8 @@ def test_dashboard_secondary_navigation_links_stable_sections(
         "Comments": "#comments-overview",
     }
 
-    assert "Back to Home" in response.text[:nav_start]
+    assert stack_start < nav_start < main_start
+    assert response.text.count('aria-label="Dashboard sections"') == 1
     assert 'aria-label="Dashboard sections"' in response.text
     for label, href in expected_links.items():
         assert f'href="{href}"' in navigation
@@ -2724,7 +2727,40 @@ def test_dashboard_secondary_navigation_links_stable_sections(
         ".dashboard-section-navigation-shell {",
         1,
     )[1].split("}", 1)[0]
-    assert "position: sticky" in shell_css
+    inner_css = css.split(
+        ".dashboard-section-navigation-inner {",
+        1,
+    )[1].split("}", 1)[0]
+    shared_shell_css = css.split(
+        ".shell {",
+        1,
+    )[1].split("}", 1)[0]
+    stack_css = css.split(
+        ".app-navigation-stack-authenticated {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "position: sticky" in stack_css
+    assert "top: 0" in stack_css
+    assert "z-index: 30" in stack_css
+    assert "position: fixed" not in stack_css
+    assert "position: sticky" not in shell_css
+    assert 'class="dashboard-section-navigation-shell"' in response.text
+    assert 'class="shell dashboard-section-navigation-inner"' in response.text
+    assert (
+        response.text.index('class="dashboard-section-navigation-shell"')
+        < response.text.index('class="shell dashboard-section-navigation-inner"')
+        < nav_start
+    )
+    assert "width: 100%" in shell_css
+    assert "width: 100vw" not in shell_css
+    assert "position: fixed" not in shell_css
+    assert "margin-inline: auto" in inner_css
+    assert "width: 100%" in shared_shell_css
+    assert "max-width: none" in shared_shell_css
+    assert "padding-inline: max(1rem, calc((100% - 68rem) / 2))" in shared_shell_css
+    assert "width: 100vw" not in inner_css
+    assert "width:" not in inner_css
+    assert "position:" not in inner_css
     assert "width: 100%" in navigation_css
     assert "overflow-x: auto" in navigation_css
     assert "background: #eef2ff" in navigation_css
@@ -2738,8 +2774,13 @@ def test_dashboard_secondary_navigation_links_stable_sections(
     )[1].split("}", 1)[0]
     assert "display: flex" in mobile_navigation_css
     assert "flex-wrap: nowrap" in mobile_navigation_css
-    assert "overflow-x: auto" in mobile_navigation_css
+    assert "overflow-x: visible" in mobile_navigation_css
     assert "white-space: nowrap" in mobile_navigation_css
+    mobile_shell_css = mobile_css.split(
+        ".dashboard-section-navigation-shell {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "overflow-x: auto" in mobile_shell_css
 
 
 def test_dashboard_secondary_navigation_scroll_spy_contract() -> None:
@@ -2758,6 +2799,33 @@ def test_dashboard_secondary_navigation_scroll_spy_contract() -> None:
     assert "activationOffset()" in script
     assert "removeCommentsFragmentAfterNativeScroll" not in script
     assert '.dashboard-section-navigation a[aria-current="location"]' in css
+
+
+def test_sticky_navigation_height_measurement_contract() -> None:
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+    script = Path("app/static/js/sticky_navigation.js").read_text(
+        encoding="utf-8",
+    )
+    offset_css = css.split(
+        "#dashboard-overview,",
+        1,
+    )[1].split("}", 1)[0]
+
+    assert "--app-navigation-stack-height: 8rem" in css
+    assert "--anchor-safe-gap: 0.75rem" in css
+    assert "scroll-margin-block-start:" in offset_css
+    assert "var(--app-navigation-stack-height)" in offset_css
+    assert "ResizeObserver" in script
+    assert "getBoundingClientRect().height" in script
+    assert '"--app-navigation-stack-height"' in script
+    for forbidden in (
+        "scrollIntoView",
+        "location.assign",
+        "history.pushState",
+        "addEventListener(\"click\"",
+        "mobile-navigation",
+    ):
+        assert forbidden not in script
 
 
 def test_home_links_to_dashboard_and_filter_is_responsive(

@@ -10,6 +10,10 @@
     >
   </head>
   <body>
+    <div
+      class="app-navigation-stack{% if current_user is defined and current_user %} app-navigation-stack-authenticated{% endif %}"
+      {% if current_user is defined and current_user %}data-sticky-navigation{% endif %}
+    >
     <header class="site-header">
       <div class="shell header-content">
         <div class="header-primary-row">
@@ -110,8 +114,11 @@
         {% endif %}
       </div>
     </header>
+      {% block secondary_navigation %}{% endblock %}
+    </div>
     <main class="shell page-content">
       {% block content %}{% endblock %}
     </main>
+    <script src="{{ url_for('static', path='/js/sticky_navigation.js') }}" defer></script>
   </body>
 </html>

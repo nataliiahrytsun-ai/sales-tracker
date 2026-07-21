@@ -293,6 +293,10 @@ def test_desktop_and_mobile_navigation_have_accessible_states() -> None:
     base_template = Path("app/templates/base.html").read_text(encoding="utf-8")
     mobile_css, _desktop_css = css.split("@media (min-width: 48rem)", 1)
     site_header = css_rule(mobile_css, ".site-header")
+    navigation_stack = css_rule(
+        mobile_css,
+        ".app-navigation-stack-authenticated",
+    )
     header_logout = css_rule(mobile_css, ".header-logout .button")
     mobile_navigation = css_rule(mobile_css, ".mobile-navigation")
     mobile_content = css_rule(mobile_css, ".mobile-navigation-content")
@@ -310,7 +314,11 @@ def test_desktop_and_mobile_navigation_have_accessible_states() -> None:
     assert "position: fixed" not in site_header
     assert '<details class="mobile-navigation">' in base_template
     assert "<summary>Menu</summary>" in base_template
-    assert "<script" not in base_template
+    assert 'data-sticky-navigation' in base_template
+    assert 'sticky_navigation.js' in base_template
+    assert "position: sticky" in navigation_stack
+    assert "top: 0" in navigation_stack
+    assert "position: fixed" not in navigation_stack
     assert "min-height: 2.35rem" in header_logout
     assert "display: block" in mobile_navigation
     assert "display: grid" in mobile_content
