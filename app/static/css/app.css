@@ -72,16 +72,14 @@ a {
 
 .header-content {
   display: grid;
-  gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
   padding-block: 0.75rem;
 }
 
 .header-primary-row {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  display: contents;
 }
 
 .header-logout {
@@ -116,6 +114,69 @@ a {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
+}
+
+.mobile-navigation {
+  display: block;
+  min-width: 0;
+}
+
+.mobile-navigation summary {
+  min-height: 2.5rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.5rem;
+  color: var(--primary);
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.mobile-navigation summary:focus-visible {
+  outline: 0.2rem solid var(--focus);
+  outline-offset: 0.15rem;
+}
+
+.mobile-navigation summary:active,
+.mobile-navigation[open] summary {
+  background: #edf2ff;
+  color: #183d9b;
+}
+
+.mobile-navigation[open] {
+  grid-column: 1 / -1;
+}
+
+.mobile-navigation-content {
+  display: grid;
+  min-width: 0;
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  gap: 0.75rem;
+}
+
+.mobile-main-nav,
+.mobile-account-controls {
+  display: grid;
+  min-width: 0;
+  gap: 0.35rem;
+}
+
+.mobile-main-nav .main-nav-link {
+  justify-content: flex-start;
+}
+
+.mobile-account-controls {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.mobile-account-controls .user-name {
+  display: block;
+}
+
+.mobile-account-controls .header-logout {
+  justify-self: start;
 }
 
 .main-nav-link,
@@ -3058,6 +3119,18 @@ textarea {
 }
 
 @media (hover: hover) {
+  .mobile-navigation summary:hover {
+    background: var(--background);
+    color: var(--primary-hover);
+  }
+
+  .mobile-navigation[open] summary:hover {
+    background: #dfe7ff;
+    color: #12337f;
+  }
+
+  .main-nav-link:hover,
+  .account-link:hover,
   .header-home-link:hover {
     background: var(--background);
     color: var(--primary-hover);
@@ -3126,6 +3199,10 @@ textarea {
   }
 
   .mobile-user-nav {
+    display: none;
+  }
+
+  .mobile-navigation {
     display: none;
   }
 

@@ -183,6 +183,8 @@ def test_login_page_uses_shared_responsive_layout(
         assert 'type="password"' in response.text
         assert 'aria-label="User navigation"' not in response.text
         assert 'aria-label="Main navigation"' not in response.text
+        assert 'aria-label="Mobile navigation"' not in response.text
+        assert '<summary>Menu</summary>' not in response.text
         assert stylesheet.status_code == 200
         assert "@media (min-width: 48rem)" in stylesheet.text
         assert "grid-template-columns" in stylesheet.text
@@ -227,6 +229,25 @@ def test_authenticated_home_renders_scoped_actions(
         assert len(re.findall(r"<a\b", navigation.group("body"))) == 5
         assert 'href="http://testserver/targets"' not in navigation.group("body")
         assert response.text.count('aria-label="Main navigation"') == 1
+        mobile_navigation = re.search(
+            r'<nav class="mobile-main-nav" aria-label="Mobile navigation">(?P<body>.*?)</nav>',
+            response.text,
+            re.DOTALL,
+        )
+        assert mobile_navigation is not None
+        assert len(re.findall(r"<a\b", mobile_navigation.group("body"))) == 5
+        for _label, url in (
+            ("Home", "/"),
+            ("Meeting", "/meetings/new"),
+            ("Outreach", "/outreach/today"),
+            ("My Week", "/my-week"),
+            ("Dashboard", "/dashboard"),
+        ):
+            assert f'href="http://testserver{url}"' in mobile_navigation.group("body")
+        assert 'href="http://testserver/targets"' not in mobile_navigation.group("body")
+        assert 'method="post"' not in mobile_navigation.group("body")
+        assert "<details" in response.text
+        assert "<summary>Menu</summary>" in response.text
         assert 'action="http://testserver/logout"' in response.text
         assert '<form class="header-logout" method="post"' in response.text
         assert '<button class="button button-secondary" type="submit">Logout</button>' in response.text
@@ -266,15 +287,18 @@ def test_authenticated_home_renders_scoped_actions(
     asyncio.run(scenario())
 
 
-def test_desktop_main_navigation_has_accessible_active_state() -> None:
-    """Desktop navigation is horizontal, stable, and visibly active."""
+def test_desktop_and_mobile_navigation_have_accessible_states() -> None:
+    """Desktop links and the native mobile disclosure remain accessible."""
     css = STYLESHEET_PATH.read_text(encoding="utf-8")
     base_template = Path("app/templates/base.html").read_text(encoding="utf-8")
     mobile_css, _desktop_css = css.split("@media (min-width: 48rem)", 1)
-    primary_row = css_rule(mobile_css, ".header-primary-row")
     site_header = css_rule(mobile_css, ".site-header")
     header_logout = css_rule(mobile_css, ".header-logout .button")
-    mobile_nav = css_rule(mobile_css, ".mobile-user-nav")
+    mobile_navigation = css_rule(mobile_css, ".mobile-navigation")
+    mobile_content = css_rule(mobile_css, ".mobile-navigation-content")
+    mobile_nav = css_rule(mobile_css, ".mobile-main-nav,\n.mobile-account-controls")
+    summary = css_rule(mobile_css, ".mobile-navigation summary")
+    summary_focus = css_rule(mobile_css, ".mobile-navigation summary:focus-visible")
     active = css_rule(mobile_css, ".main-nav-link-active,\n.header-home-link-active")
     focus = css_rule(mobile_css, ".main-nav-link:focus-visible,\n.account-link:focus-visible,\n.header-home-link:focus-visible")
     keyboard_focus = css_rule(mobile_css, ":focus-visible")
@@ -284,11 +308,19 @@ def test_desktop_main_navigation_has_accessible_active_state() -> None:
     assert "request.url.path.startswith('/targets')" in base_template
     assert "position: sticky" not in site_header
     assert "position: fixed" not in site_header
-    assert "<details" not in base_template
-    assert "<summary" not in base_template
-    assert "justify-content: space-between" in primary_row
+    assert '<details class="mobile-navigation">' in base_template
+    assert "<summary>Menu</summary>" in base_template
+    assert "<script" not in base_template
     assert "min-height: 2.35rem" in header_logout
-    assert "flex-wrap: wrap" in mobile_nav
+    assert "display: block" in mobile_navigation
+    assert "display: grid" in mobile_content
+    assert "display: grid" in mobile_nav
+    assert "min-height: 2.5rem" in summary
+    assert "outline: 0.2rem solid var(--focus)" in summary_focus
+    assert "grid-column: 1 / -1" in css_rule(
+        mobile_css,
+        ".mobile-navigation[open]",
+    )
     assert "background: #edf2ff" in active
     assert "text-decoration: underline" in active
     assert "background: #dfe7ff" in focus
@@ -297,7 +329,8 @@ def test_desktop_main_navigation_has_accessible_active_state() -> None:
     assert "grid-template-columns: auto minmax(0, 1fr) auto" in _desktop_css
     assert "flex-wrap: nowrap" in _desktop_css
     assert "white-space: nowrap" in css_rule(mobile_css, ".site-brand")
-    assert "display: none" in _desktop_css
+    assert "display: none" in css_rule(mobile_css, ".desktop-main-nav,\n.desktop-account-controls")
+    assert "display: none" in css_rule(_desktop_css, ".mobile-navigation")
     assert "min-height: 2.75rem" in _desktop_css
 
 
@@ -348,6 +381,13 @@ def test_main_navigation_maps_each_section_to_one_active_link(
     )
     assert home_navigation is not None
     assert home_navigation.group("body").count('aria-current="page"') == 1
+    home_mobile_navigation = re.search(
+        r'<nav class="mobile-main-nav" aria-label="Mobile navigation">(?P<body>.*?)</nav>',
+        home.text,
+        re.DOTALL,
+    )
+    assert home_mobile_navigation is not None
+    assert home_mobile_navigation.group("body").count('aria-current="page"') == 1
     expected_active_labels = [
         "Meeting", "Outreach", "Meeting", "Outreach", "My Week", "Dashboard",
         "My Week", "Meeting", "Outreach",
@@ -365,6 +405,18 @@ def test_main_navigation_maps_each_section_to_one_active_link(
         )
         assert navigation is not None
         assert navigation.group("body").count('aria-current="page"') == 1
+        mobile_navigation = re.search(
+            r'<nav class="mobile-main-nav" aria-label="Mobile navigation">(?P<body>.*?)</nav>',
+            response.text,
+            re.DOTALL,
+        )
+        assert mobile_navigation is not None
+        assert mobile_navigation.group("body").count('aria-current="page"') == 1
+        assert re.search(
+            rf'<a\s+class="main-nav-link main-nav-link-active"\s+[^>]*'
+            rf'aria-current="page"[^>]*>{active_label}</a>',
+            mobile_navigation.group("body"),
+        )
         assert re.search(
             rf'<a\s+class="main-nav-link main-nav-link-active"\s+[^>]*'
             rf'aria-current="page"[^>]*>{active_label}</a>',
@@ -705,6 +757,8 @@ def test_temporary_password_forces_change_and_blocks_private_routes(
             assert form.status_code == 200
             assert "Replace your temporary password" in form.text
             assert 'aria-label="Main navigation"' not in form.text
+            assert 'aria-label="Mobile navigation"' not in form.text
+            assert '<summary>Menu</summary>' not in form.text
             assert ">Home</a>" not in form.text
 
             async with httpx.AsyncClient(

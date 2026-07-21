@@ -54,24 +54,59 @@
           {% endif %}
         </div>
         {% if current_user is defined and current_user %}
-          <nav class="mobile-user-nav" aria-label="User navigation">
-            {% if not current_user.must_change_password %}
+          {% if not current_user.must_change_password %}
+            <details class="mobile-navigation">
+              <summary>Menu</summary>
+              <div class="mobile-navigation-content">
+                <nav class="mobile-main-nav" aria-label="Mobile navigation">
+                  <a
+                    class="main-nav-link{% if request.url.path == '/' %} main-nav-link-active{% endif %}"
+                    href="{{ url_for('home') }}"
+                    {% if request.url.path == '/' %}aria-current="page"{% endif %}
+                  >Home</a>
+                  <a
+                    class="main-nav-link{% if request.url.path.startswith('/meetings') %} main-nav-link-active{% endif %}"
+                    href="{{ url_for('new_meeting') }}"
+                    {% if request.url.path.startswith('/meetings') %}aria-current="page"{% endif %}
+                  >Meeting</a>
+                  <a
+                    class="main-nav-link{% if request.url.path.startswith('/outreach') %} main-nav-link-active{% endif %}"
+                    href="{{ url_for('today_outreach') }}"
+                    {% if request.url.path.startswith('/outreach') %}aria-current="page"{% endif %}
+                  >Outreach</a>
+                  <a
+                    class="main-nav-link{% if request.url.path == '/my-week' or request.url.path.startswith('/targets') %} main-nav-link-active{% endif %}"
+                    href="{{ url_for('my_week_page') }}"
+                    {% if request.url.path == '/my-week' or request.url.path.startswith('/targets') %}aria-current="page"{% endif %}
+                  >My Week</a>
+                  <a
+                    class="main-nav-link{% if request.url.path == '/dashboard' %} main-nav-link-active{% endif %}"
+                    href="{{ url_for('dashboard_page') }}"
+                    {% if request.url.path == '/dashboard' %}aria-current="page"{% endif %}
+                  >Dashboard</a>
+                </nav>
+                <div class="mobile-account-controls">
+                  <span class="user-name">{{ current_user.name }}</span>
+                  <a class="account-link" href="{{ url_for('change_password_page') }}">Change password</a>
+                  <form class="header-logout" method="post" action="{{ url_for('logout') }}">
+                    <button class="button button-secondary" type="submit">Logout</button>
+                  </form>
+                </div>
+              </div>
+            </details>
+          {% else %}
+            <nav class="mobile-user-nav" aria-label="User navigation">
               <a
-                class="header-home-link{% if request.url.path == '/' %} header-home-link-active{% endif %}"
-                href="{{ url_for('home') }}"
-                {% if request.url.path == '/' %}aria-current="page"{% endif %}
-              >Home</a>
-            {% endif %}
-            <a
-              class="header-home-link{% if request.url.path == '/change-password' %} header-home-link-active{% endif %}"
-              href="{{ url_for('change_password_page') }}"
-              {% if request.url.path == '/change-password' %}aria-current="page"{% endif %}
-            >Change password</a>
-            <span class="user-name">{{ current_user.name }}</span>
-            <form class="header-logout" method="post" action="{{ url_for('logout') }}">
-              <button class="button button-secondary" type="submit">Logout</button>
-            </form>
-          </nav>
+                  class="header-home-link header-home-link-active"
+                  href="{{ url_for('change_password_page') }}"
+                  aria-current="page"
+                >Change password</a>
+                <span class="user-name">{{ current_user.name }}</span>
+                <form class="header-logout" method="post" action="{{ url_for('logout') }}">
+                  <button class="button button-secondary" type="submit">Logout</button>
+                </form>
+            </nav>
+          {% endif %}
         {% endif %}
       </div>
     </header>
