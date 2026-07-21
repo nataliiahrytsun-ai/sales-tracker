@@ -2856,12 +2856,12 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert "max-width: 100%" in site_header_css
     assert "100vw" not in css
     shrink_safe_children = css.split(
-        ".header-content > *,",
+        ".header-primary-row > *,",
         1,
     )[1].split("}", 1)[0]
     for selector in (
-        ".header-top-row > *",
-        ".user-nav > *",
+        ".desktop-main-nav > *",
+        ".desktop-account-controls > *",
         ".page-content > *",
         ".dashboard-navigation-row > *",
         ".dashboard-filter > *",

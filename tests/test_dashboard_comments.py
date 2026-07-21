@@ -26,8 +26,14 @@ from app.models import (
     PipelineOutcome,
     User,
 )
+from app.routes.auth import router as auth_router
 from app.routes.outreach import current_local_date
 from app.routes.dashboard import router as dashboard_router
+from app.routes.home import router as home_router
+from app.routes.meetings import router as meetings_router
+from app.routes.my_week import router as my_week_router
+from app.routes.outreach import router as outreach_router
+from app.routes.targets import router as targets_router
 from app.services.passwords import hash_password
 
 TEST_DATE = date(2026, 7, 15)
@@ -108,18 +114,6 @@ def comments_application(
     application = FastAPI()
     application.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-    @application.get("/", name="home")
-    def home() -> PlainTextResponse:
-        return PlainTextResponse("Home")
-
-    @application.post("/logout", name="logout")
-    def logout() -> PlainTextResponse:
-        return PlainTextResponse("")
-
-    @application.get("/change-password", name="change_password_page")
-    def change_password() -> PlainTextResponse:
-        return PlainTextResponse("")
-
     @application.get("/exports/pipeline.csv", name="export_pipeline_csv")
     def pipeline_export() -> PlainTextResponse:
         return PlainTextResponse("")
@@ -128,7 +122,13 @@ def comments_application(
     def outreach_export() -> PlainTextResponse:
         return PlainTextResponse("")
 
+    application.include_router(auth_router)
     application.include_router(dashboard_router)
+    application.include_router(home_router)
+    application.include_router(meetings_router)
+    application.include_router(my_week_router)
+    application.include_router(outreach_router)
+    application.include_router(targets_router)
 
     def override_session() -> Generator[Session, None, None]:
         with Session(engine) as session:

@@ -76,7 +76,7 @@ a {
   padding-block: 0.75rem;
 }
 
-.header-top-row {
+.header-primary-row {
   display: flex;
   min-width: 0;
   align-items: center;
@@ -95,21 +95,31 @@ a {
   font-size: 0.88rem;
 }
 
-.brand {
+.site-brand {
+  flex: 0 0 auto;
   color: var(--text);
   font-size: 1.15rem;
   font-weight: 750;
+  white-space: nowrap;
   text-decoration: none;
 }
 
-.user-nav {
+.desktop-main-nav,
+.desktop-account-controls {
+  display: none;
+  min-width: 0;
+}
+
+.mobile-user-nav {
   display: flex;
   min-width: 0;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
 }
 
+.main-nav-link,
+.account-link,
 .header-home-link {
   display: inline-flex;
   min-height: 2.5rem;
@@ -127,11 +137,17 @@ a {
     color 120ms ease;
 }
 
+.main-nav-link-active,
 .header-home-link-active {
   background: #edf2ff;
   color: #183d9b;
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-thickness: 0.15rem;
 }
 
+.main-nav-link:focus-visible,
+.account-link:focus-visible,
 .header-home-link:focus-visible {
   background: #dfe7ff;
   color: #12337f;
@@ -770,8 +786,10 @@ textarea {
 }
 
 .header-content > *,
-.header-top-row > *,
-.user-nav > *,
+.header-primary-row > *,
+.desktop-main-nav > *,
+.desktop-account-controls > *,
+.mobile-user-nav > *,
 .page-content > *,
 .dashboard-navigation-row > *,
 .dashboard-filter > *,
@@ -3072,37 +3090,51 @@ textarea {
 
 @media (min-width: 48rem) {
   .header-content {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
+    display: block;
     padding-block: 1rem;
   }
 
-  .header-top-row {
-    display: contents;
-  }
-
-  .user-nav {
-    order: 1;
-    margin-left: auto;
-    flex-wrap: wrap;
+  .header-primary-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
     gap: 0.75rem;
   }
 
-  .header-logout {
-    order: 2;
+  .desktop-main-nav,
+  .desktop-account-controls {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    flex-wrap: nowrap;
   }
 
+  .desktop-main-nav {
+    justify-content: center;
+    gap: 0.4rem;
+  }
+
+  .desktop-account-controls {
+    gap: 0.5rem;
+    padding-left: 0.75rem;
+    border-left: 1px solid var(--border);
+  }
+
+  .desktop-account-controls .user-name {
+    display: inline;
+    max-width: 14rem;
+  }
+
+  .mobile-user-nav {
+    display: none;
+  }
+
+  .main-nav-link,
+  .account-link,
   .header-home-link {
     min-height: 2.75rem;
     padding: 0.55rem 0.8rem;
     font-size: inherit;
-  }
-
-  .user-name {
-    display: inline;
   }
 
   .header-logout .button {

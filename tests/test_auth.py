@@ -182,6 +182,7 @@ def test_login_page_uses_shared_responsive_layout(
         assert 'action="http://testserver/login"' in response.text
         assert 'type="password"' in response.text
         assert 'aria-label="User navigation"' not in response.text
+        assert 'aria-label="Main navigation"' not in response.text
         assert stylesheet.status_code == 200
         assert "@media (min-width: 48rem)" in stylesheet.text
         assert "grid-template-columns" in stylesheet.text
@@ -208,8 +209,28 @@ def test_authenticated_home_renders_scoped_actions(
             response = await client.get("/")
 
         assert response.status_code == 200
-        assert 'aria-label="User navigation"' in response.text
+        navigation = re.search(
+            r'<nav class="desktop-main-nav" aria-label="Main navigation">(?P<body>.*?)</nav>',
+            response.text,
+            re.DOTALL,
+        )
+        assert navigation is not None
+        for label, url in (
+            ("Home", "/"),
+            ("Meeting", "/meetings/new"),
+            ("Outreach", "/outreach/today"),
+            ("My Week", "/my-week"),
+            ("Dashboard", "/dashboard"),
+        ):
+            assert f'href="http://testserver{url}"' in navigation.group("body")
+            assert f'>{label}</a>' in navigation.group("body")
+        assert len(re.findall(r"<a\b", navigation.group("body"))) == 5
+        assert 'href="http://testserver/targets"' not in navigation.group("body")
+        assert response.text.count('aria-label="Main navigation"') == 1
         assert 'action="http://testserver/logout"' in response.text
+        assert '<form class="header-logout" method="post"' in response.text
+        assert '<button class="button button-secondary" type="submit">Logout</button>' in response.text
+        assert "Active User" in response.text
         for heading in (
             "Meeting Entry",
             "Outreach Entry",
@@ -245,52 +266,45 @@ def test_authenticated_home_renders_scoped_actions(
     asyncio.run(scenario())
 
 
-def test_home_navigation_has_accessible_active_state() -> None:
-    """Home uses a distinct active treatment with hover and focus states."""
+def test_desktop_main_navigation_has_accessible_active_state() -> None:
+    """Desktop navigation is horizontal, stable, and visibly active."""
     css = STYLESHEET_PATH.read_text(encoding="utf-8")
     base_template = Path("app/templates/base.html").read_text(encoding="utf-8")
     mobile_css, _desktop_css = css.split("@media (min-width: 48rem)", 1)
-    home_link = css_rule(mobile_css, ".header-home-link")
-    header_content = css_rule(mobile_css, ".header-content")
-    header_top_row = css_rule(mobile_css, ".header-top-row")
+    primary_row = css_rule(mobile_css, ".header-primary-row")
+    site_header = css_rule(mobile_css, ".site-header")
     header_logout = css_rule(mobile_css, ".header-logout .button")
-    user_nav = css_rule(mobile_css, ".user-nav")
-    user_name = css_rule(mobile_css, ".user-name")
-    active = css_rule(mobile_css, ".header-home-link-active")
-    focus = css_rule(mobile_css, ".header-home-link:focus-visible")
-    hover = css_rule(mobile_css, ".header-home-link-active:hover")
-    inactive_hover = css_rule(mobile_css, ".header-home-link:hover")
+    mobile_nav = css_rule(mobile_css, ".mobile-user-nav")
+    active = css_rule(mobile_css, ".main-nav-link-active,\n.header-home-link-active")
+    focus = css_rule(mobile_css, ".main-nav-link:focus-visible,\n.account-link:focus-visible,\n.header-home-link:focus-visible")
     keyboard_focus = css_rule(mobile_css, ":focus-visible")
 
     assert "request.url.path == '/'" in base_template
-    assert "header-home-link-active" in base_template
-    assert "min-height: 2.5rem" in home_link
-    assert "padding: 0.45rem 0.65rem" in home_link
-    assert "border-radius: 0.5rem" in home_link
-    assert "text-decoration: none" in home_link
-    assert "display: grid" in header_content
-    assert "justify-content: space-between" in header_top_row
+    assert "main-nav-link-active" in base_template
+    assert "request.url.path.startswith('/targets')" in base_template
+    assert "position: sticky" not in site_header
+    assert "position: fixed" not in site_header
+    assert "<details" not in base_template
+    assert "<summary" not in base_template
+    assert "justify-content: space-between" in primary_row
     assert "min-height: 2.35rem" in header_logout
-    assert "flex-wrap: nowrap" in user_nav
-    assert "display: none" in user_name
+    assert "flex-wrap: wrap" in mobile_nav
     assert "background: #edf2ff" in active
+    assert "text-decoration: underline" in active
     assert "background: #dfe7ff" in focus
     assert "color: #12337f" in focus
-    assert "@media (hover: hover)" in mobile_css
-    assert "background: #dfe7ff" in hover
-    assert "color: #12337f" in hover
-    assert "background: var(--background)" in inactive_hover
-    assert "color: var(--primary-hover)" in inactive_hover
     assert "outline: 0.2rem solid var(--focus)" in keyboard_focus
-    assert "display: contents" in _desktop_css
-    assert "display: inline" in _desktop_css
+    assert "grid-template-columns: auto minmax(0, 1fr) auto" in _desktop_css
+    assert "flex-wrap: nowrap" in _desktop_css
+    assert "white-space: nowrap" in css_rule(mobile_css, ".site-brand")
+    assert "display: none" in _desktop_css
     assert "min-height: 2.75rem" in _desktop_css
 
 
-def test_home_navigation_is_active_only_on_home(
+def test_main_navigation_maps_each_section_to_one_active_link(
     auth_application: tuple[FastAPI, Engine],
 ) -> None:
-    """Only the exact home path marks the Home navigation link as current."""
+    """History, edit, and targets pages map to their primary section."""
     application, _ = auth_application
 
     async def scenario() -> tuple[httpx.Response, list[httpx.Response]]:
@@ -318,6 +332,8 @@ def test_home_navigation_is_active_only_on_home(
                 await client.get("/meetings/recent"),
                 await client.get("/outreach/recent"),
                 await client.get("/my-week"),
+                await client.get("/dashboard"),
+                await client.get("/targets"),
                 await client.get(f"/meetings/{meeting_id}/edit"),
                 await client.get(f"/outreach/{date.today().isoformat()}"),
             ]
@@ -325,19 +341,35 @@ def test_home_navigation_is_active_only_on_home(
 
     home, non_home_pages = asyncio.run(scenario())
     assert home.status_code == 200
-    assert re.search(
-        r'<a\s+class="header-home-link header-home-link-active"\s+'
-        r'href="http://testserver/"\s+aria-current="page"\s*>Home</a>',
+    home_navigation = re.search(
+        r'<nav class="desktop-main-nav" aria-label="Main navigation">(?P<body>.*?)</nav>',
         home.text,
+        re.DOTALL,
     )
-    for response in non_home_pages:
+    assert home_navigation is not None
+    assert home_navigation.group("body").count('aria-current="page"') == 1
+    expected_active_labels = [
+        "Meeting", "Outreach", "Meeting", "Outreach", "My Week", "Dashboard",
+        "My Week", "Meeting", "Outreach",
+    ]
+    for response, active_label in zip(
+        non_home_pages,
+        expected_active_labels,
+        strict=True,
+    ):
         assert response.status_code == 200
+        navigation = re.search(
+            r'<nav class="desktop-main-nav" aria-label="Main navigation">(?P<body>.*?)</nav>',
+            response.text,
+            re.DOTALL,
+        )
+        assert navigation is not None
+        assert navigation.group("body").count('aria-current="page"') == 1
         assert re.search(
-            r'<a\s+class="header-home-link"\s+'
-            r'href="http://testserver/"\s*>Home</a>',
+            rf'<a\s+class="main-nav-link main-nav-link-active"\s+[^>]*'
+            rf'aria-current="page"[^>]*>{active_label}</a>',
             response.text,
         )
-        assert "header-home-link-active" not in response.text
 
 
 def test_home_layout_and_actions_are_structurally_responsive() -> None:
@@ -672,6 +704,7 @@ def test_temporary_password_forces_change_and_blocks_private_routes(
             form = await client.get("/change-password")
             assert form.status_code == 200
             assert "Replace your temporary password" in form.text
+            assert 'aria-label="Main navigation"' not in form.text
             assert ">Home</a>" not in form.text
 
             async with httpx.AsyncClient(
