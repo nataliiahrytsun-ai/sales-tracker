@@ -20,6 +20,7 @@ from app.models import (
     NeedIdentified,
     PipelineMeeting,
     PipelineOutcome,
+    StoredPipelineOutcome,
     User,
     UserMood,
 )
@@ -40,6 +41,41 @@ def css_rule(css: str, selector: str) -> str:
     )
     assert match is not None
     return match.group("body")
+
+
+def assert_rendered_required_meeting_fields(html: str) -> None:
+    """Assert the create/edit form exposes only the current required inputs."""
+    assert re.findall(
+        r'name="outcome"\s+value="([^"]+)"',
+        html,
+    ) == [
+        "Waiting for further information",
+        "No outcome",
+        "Request sent",
+        "Manual alignment (discussion)",
+        "Unclear",
+    ]
+    for legacy_outcome in (
+        "No fit",
+        "Follow-up",
+        "Introduction",
+        "Proposal requested",
+        "Meeting booked",
+        "Opportunity identified",
+    ):
+        assert legacy_outcome not in html
+    assert 'name="company_name"' in html
+    assert 'id="company_name"' in html
+    assert 'name="company_name" type="text"' in html
+    assert 'required' in html.split('name="company_name"', 1)[1].split(">", 1)[0]
+    for removed_field in (
+        'name="user_mood"',
+        'name="blocker_tag"',
+        'name="country_code"',
+        'name="next_step_date"',
+        'name="note"',
+    ):
+        assert removed_field not in html
 
 
 @pytest.fixture
@@ -124,12 +160,8 @@ def test_authenticated_user_can_open_meeting_form(
             'class="field-section required-fields" '
             'aria-labelledby="required-fields-heading"'
         ) in response.text
-        assert (
-            'class="field-section optional-fields" '
-            'aria-labelledby="optional-fields-heading"'
-        ) in response.text
         assert response.text.count('<fieldset class="choice-section">') == 3
-        assert response.text.count('type="radio"') == 13
+        assert response.text.count('type="radio"') == 11
         for value in (
             "Low",
             "Medium",
@@ -137,28 +169,14 @@ def test_authenticated_user_can_open_meeting_form(
             "Yes",
             "No",
             "Unclear",
-            "No fit",
-            "Follow-up",
-            "Introduction",
-            "Proposal requested",
-            "Meeting booked",
-            "Opportunity identified",
-            "Difficult",
-            "Okay",
-            "Good",
-            "Brazil",
-            "Poland",
-            "No budget",
-            "Procurement/legal delay",
-            "Other",
+            "Waiting for further information",
+            "No outcome",
+            "Request sent",
+            "Manual alignment (discussion)",
         ):
             assert value in response.text
-        assert len(COUNTRY_OPTIONS) == 249
-        assert response.text.count('data-country-code="') == 249
-        assert 'type="search"' in response.text
-        assert 'list="meeting_country_options"' in response.text
-        assert 'name="country_code" value=""' in response.text
-        assert '/static/js/meeting_country.js' in response.text
+        assert_rendered_required_meeting_fields(response.text)
+        assert "Record the meeting outcome and company." in response.text
         normal_actions = re.search(
             r'<nav class="page-context-nav" aria-label="Meeting page actions">'
             r'(?P<actions>.*?)</nav>',
@@ -180,13 +198,40 @@ def test_authenticated_user_can_open_meeting_form(
             '<nav class="page-context-nav" aria-label="Meeting page actions">',
         ) == 1
         assert "Meeting saved successfully." not in response.text
-        for code, country_name in (("BR", "Brazil"), ("PL", "Poland")):
-            assert (
-                f'<option value="{country_name}" data-country-code="{code}">'
-                in response.text
-            )
-
     asyncio.run(scenario())
+
+
+def test_edit_form_renders_only_current_required_meeting_fields(
+    meeting_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    """An owned edit page has the same five outcomes and required Company."""
+    application, engine, first_user_id, _ = meeting_application
+    with Session(engine) as session:
+        meeting = PipelineMeeting(
+            user_id=first_user_id,
+            customer_engagement=CustomerEngagement.HIGH,
+            need_identified=NeedIdentified.YES,
+            outcome=PipelineOutcome.REQUEST_SENT,
+            company_name="Edit Company",
+        )
+        session.add(meeting)
+        session.commit()
+        session.refresh(meeting)
+        assert meeting.id is not None
+        meeting_id = meeting.id
+
+    async def scenario() -> httpx.Response:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            await login(client)
+            return await client.get(f"/meetings/{meeting_id}/edit")
+
+    response = asyncio.run(scenario())
+    assert response.status_code == 200
+    assert_rendered_required_meeting_fields(response.text)
 
 
 def test_meeting_form_uses_exact_approved_blocker_values() -> None:
@@ -226,6 +271,80 @@ def test_meeting_option_grids_are_structurally_responsive() -> None:
         mobile_css,
         ".field-section-heading p",
     )
+    optional_fields = css_rule(mobile_css, ".optional-fields")
+    page_actions = css_rule(mobile_css, ".page-context-nav")
+    page_action_children = css_rule(mobile_css, ".page-context-nav > *")
+    page_action_links = css_rule(mobile_css, ".page-context-nav a")
+    page_action_focus = css_rule(
+        mobile_css,
+        ".page-context-nav a:focus-visible",
+    )
+
+
+def test_meeting_company_and_current_outcomes_are_required_on_create(
+    meeting_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    """Create validation rejects blank Company and accepts each current outcome."""
+    application, engine, _, _ = meeting_application
+
+    async def scenario() -> list[httpx.Response]:
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            await login(client)
+            blank = await client.post(
+                "/meetings",
+                data={
+                    "customer_engagement": "High",
+                    "need_identified": "Yes",
+                    "outcome": "Request sent",
+                    "company_name": "   ",
+                },
+            )
+            saved = [
+                await client.post(
+                    "/meetings",
+                    data={
+                        "customer_engagement": "High",
+                        "need_identified": "Yes",
+                        "outcome": outcome.value,
+                        "company_name": f"  {outcome.value} GmbH  ",
+                    },
+                )
+                for outcome in PipelineOutcome
+            ]
+        return [blank, *saved]
+
+    responses = asyncio.run(scenario())
+    assert responses[0].status_code == 400
+    assert "Enter a company." in responses[0].text
+    assert all(response.status_code == 303 for response in responses[1:])
+    with Session(engine) as session:
+        meetings = session.exec(select(PipelineMeeting)).all()
+        assert len(meetings) == len(PipelineOutcome)
+        assert {meeting.outcome.value for meeting in meetings} == {
+            outcome.value for outcome in PipelineOutcome
+        }
+        assert all(meeting.company_name == meeting.company_name.strip() for meeting in meetings)
+    css = STYLESHEET_PATH.read_text(encoding="utf-8")
+    mobile_css, desktop_css = css.split("@media (min-width: 48rem)", 1)
+    universal_box = css_rule(mobile_css, "*")
+    body = css_rule(mobile_css, "body")
+    shell = css_rule(mobile_css, ".shell")
+    page_content = css_rule(mobile_css, ".page-content")
+    mobile_grid = css_rule(mobile_css, ".choice-grid")
+    form_card = css_rule(mobile_css, ".form-card")
+    meeting_form = css_rule(mobile_css, ".meeting-form")
+    meeting_form_children = css_rule(mobile_css, ".meeting-form > *")
+    field_section = css_rule(mobile_css, ".field-section")
+    section_heading = css_rule(mobile_css, ".field-section-heading")
+    section_heading_children = css_rule(
+        mobile_css,
+        ".field-section-heading > *",
+    )
+    section_heading_text = css_rule(mobile_css, ".field-section-heading p")
     optional_fields = css_rule(mobile_css, ".optional-fields")
     page_actions = css_rule(mobile_css, ".page-context-nav")
     page_action_children = css_rule(mobile_css, ".page-context-nav > *")
@@ -302,7 +421,7 @@ def test_meeting_option_grids_are_structurally_responsive() -> None:
     assert "white-space: normal" in option_target
 
     assert re.search(
-        r"\.choice-grid,\s*\.choice-grid-wide\s*\{[^}]*"
+        r"\.choice-grid\s*\{[^}]*"
         r"grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)",
         desktop_css,
     )
@@ -310,7 +429,6 @@ def test_meeting_option_grids_are_structurally_responsive() -> None:
     # Save, Record another meeting, and Undo retain the shared 44 px target.
     assert "min-height: 2.75rem" in action_button
     assert "padding: 0.65rem 1rem" in action_button
-
 
 def test_meeting_visual_states_use_accessible_existing_palette() -> None:
     """Visual emphasis preserves focus, contrast, and restrained sections."""
@@ -422,13 +540,8 @@ def test_successful_meeting_is_saved_for_current_user_only(
                     "user_id": str(second_user_id),
                     "customer_engagement": "High",
                     "need_identified": "Yes",
-                    "outcome": "Proposal requested",
-                    "user_mood": "Good",
-                    "blocker_tag": "Procurement/legal delay",
-                    "country_code": "BR",
+                    "outcome": "Request sent",
                     "company_name": "Example GmbH",
-                    "next_step_date": "2026-07-20",
-                    "note": "Send the requested overview.",
                 },
             )
             confirmation = await client.get(response.headers["location"])
@@ -500,19 +613,14 @@ def test_successful_meeting_is_saved_for_current_user_only(
         assert meeting.user_id != second_user_id
         assert meeting.customer_engagement is CustomerEngagement.HIGH
         assert meeting.need_identified is NeedIdentified.YES
-        assert meeting.outcome is PipelineOutcome.PROPOSAL_REQUESTED
-        assert meeting.user_mood is UserMood.GOOD
-        assert meeting.blocker_tag == "Procurement/legal delay"
-        assert meeting.country_code == "BR"
+        assert meeting.outcome is StoredPipelineOutcome.REQUEST_SENT
         assert meeting.company_name == "Example GmbH"
-        assert meeting.next_step_date == date(2026, 7, 20)
-        assert meeting.note == "Send the requested overview."
 
 
-def test_meeting_can_be_saved_with_only_required_fields(
+def test_meeting_can_be_saved_with_required_fields(
     meeting_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
-    """All optional product fields remain NULL when omitted."""
+    """A valid Company and current outcome are sufficient to save."""
     application, engine, first_user_id, _ = meeting_application
 
     async def scenario() -> None:
@@ -527,7 +635,8 @@ def test_meeting_can_be_saved_with_only_required_fields(
                 data={
                     "customer_engagement": "Low",
                     "need_identified": "Unclear",
-                    "outcome": "Follow-up",
+                    "outcome": "Request sent",
+                    "company_name": "Required Company",
                 },
             )
 
@@ -538,72 +647,7 @@ def test_meeting_can_be_saved_with_only_required_fields(
     with Session(engine) as session:
         meeting = session.exec(select(PipelineMeeting)).one()
         assert meeting.user_id == first_user_id
-        assert meeting.user_mood is None
-        assert meeting.blocker_tag is None
-        assert meeting.country_code is None
-        assert meeting.company_name is None
-        assert meeting.next_step_date is None
-        assert meeting.note is None
-
-
-def test_meeting_accepts_european_country_outside_dach(
-    meeting_application: tuple[FastAPI, Engine, int, int],
-) -> None:
-    """A valid worldwide ISO code is accepted outside the former DACH list."""
-    application, engine, _, _ = meeting_application
-
-    async def scenario() -> httpx.Response:
-        transport = httpx.ASGITransport(app=application)
-        async with httpx.AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            await login(client)
-            return await client.post(
-                "/meetings",
-                data={
-                    "customer_engagement": "Medium",
-                    "need_identified": "Yes",
-                    "outcome": "Follow-up",
-                    "country_code": "PL",
-                },
-            )
-
-    response = asyncio.run(scenario())
-    assert response.status_code == 303
-    with Session(engine) as session:
-        assert session.exec(select(PipelineMeeting)).one().country_code == "PL"
-
-
-def test_selected_country_is_preserved_after_other_validation_error(
-    meeting_application: tuple[FastAPI, Engine, int, int],
-) -> None:
-    """A valid country name and code survive a failed meeting submission."""
-    application, engine, _, _ = meeting_application
-
-    async def scenario() -> httpx.Response:
-        transport = httpx.ASGITransport(app=application)
-        async with httpx.AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            await login(client)
-            return await client.post(
-                "/meetings",
-                data={
-                    "customer_engagement": "invalid",
-                    "need_identified": "Yes",
-                    "outcome": "Follow-up",
-                    "country_code": "PL",
-                },
-            )
-
-    response = asyncio.run(scenario())
-    assert response.status_code == 400
-    assert 'value="Poland"' in response.text
-    assert 'name="country_code" value="PL"' in response.text
-    with Session(engine) as session:
-        assert session.exec(select(PipelineMeeting)).all() == []
+        assert meeting.company_name == "Required Company"
 
 
 def test_missing_required_fields_return_form_errors(
@@ -625,6 +669,7 @@ def test_missing_required_fields_return_form_errors(
         assert "Select customer engagement." in response.text
         assert "Select whether a need was identified." in response.text
         assert "Select a meeting outcome." in response.text
+        assert "Enter a company." in response.text
 
     asyncio.run(scenario())
 
@@ -651,26 +696,16 @@ def test_invalid_values_are_rejected_and_safe_values_are_preserved(
                     "customer_engagement": "Extreme",
                     "need_identified": "Yes",
                     "outcome": "Follow-up",
-                    "user_mood": "Neutral",
-                    "blocker_tag": "free-text-blocker",
-                    "country_code": "XX",
                     "company_name": '<script>alert("x")</script>',
-                    "next_step_date": "not-a-date",
-                    "note": "Safe retained note",
                 },
             )
 
         assert response.status_code == 400
         assert "Select customer engagement." in response.text
-        assert "Select a valid mood" in response.text
-        assert "Select a valid blocker" in response.text
-        assert "Select a valid country" in response.text
-        assert "Enter a valid next-step date." in response.text
-        assert "Safe retained note" in response.text
         assert "&lt;script&gt;" in response.text
         assert '<script>alert("x")</script>' not in response.text
         assert re.search(r'value="Yes"\s+checked', response.text)
-        assert re.search(r'value="Follow-up"\s+checked', response.text)
+        assert re.search(r'value="Follow-up"', response.text) is None
 
     asyncio.run(scenario())
 
@@ -697,6 +732,7 @@ def test_saved_meeting_can_be_undone_by_its_owner(
                     "customer_engagement": "Medium",
                     "need_identified": "No",
                     "outcome": "Unclear",
+                    "company_name": "Undo Company",
                 },
             )
             undo_url = created.headers["location"].replace(
@@ -735,6 +771,7 @@ def test_undo_rejects_get_requests(
                     "customer_engagement": "Medium",
                     "need_identified": "No",
                     "outcome": "Unclear",
+                    "company_name": "Undo Company",
                 },
             )
             meeting_id = int(created.headers["location"].rsplit("=", 1)[1])
@@ -766,7 +803,8 @@ def test_only_most_recently_created_meeting_can_be_undone(
                 data={
                     "customer_engagement": "Low",
                     "need_identified": "No",
-                    "outcome": "No fit",
+                    "outcome": "No outcome",
+                    "company_name": "First Company",
                 },
             )
             first_id = int(first.headers["location"].rsplit("=", 1)[1])
@@ -775,7 +813,8 @@ def test_only_most_recently_created_meeting_can_be_undone(
                 data={
                     "customer_engagement": "High",
                     "need_identified": "Yes",
-                    "outcome": "Follow-up",
+                    "outcome": "Request sent",
+                    "company_name": "Second Company",
                 },
             )
             second_id = int(second.headers["location"].rsplit("=", 1)[1])
@@ -812,9 +851,8 @@ def test_record_another_meeting_opens_clean_form_and_expires_undo(
                 data={
                     "customer_engagement": "High",
                     "need_identified": "Yes",
-                    "outcome": "Proposal requested",
+                    "outcome": "Request sent",
                     "company_name": "Must not carry over",
-                    "note": "Must also be cleared",
                 },
             )
             meeting_id = int(created.headers["location"].rsplit("=", 1)[1])
@@ -826,7 +864,6 @@ def test_record_another_meeting_opens_clean_form_and_expires_undo(
         assert 'href="http://testserver/meetings/recent"' in confirmation.text
         assert "Meeting saved successfully" not in fresh_form.text
         assert "Must not carry over" not in fresh_form.text
-        assert "Must also be cleared" not in fresh_form.text
         assert " checked" not in fresh_form.text
         assert expired_undo.status_code == 404
 
@@ -846,7 +883,7 @@ def test_user_cannot_undo_another_users_meeting(
             user_id=second_user_id,
             customer_engagement=CustomerEngagement.HIGH,
             need_identified=NeedIdentified.YES,
-            outcome=PipelineOutcome.FOLLOW_UP,
+            outcome=PipelineOutcome.REQUEST_SENT,
         )
         session.add(meeting)
         session.commit()
@@ -881,7 +918,7 @@ def test_save_confirmation_cannot_be_forged_or_viewed_by_another_user(
             user_id=second_user_id,
             customer_engagement=CustomerEngagement.LOW,
             need_identified=NeedIdentified.NO,
-            outcome=PipelineOutcome.NO_FIT,
+            outcome=PipelineOutcome.NO_OUTCOME,
         )
         session.add(meeting)
         session.commit()
@@ -923,7 +960,8 @@ def test_save_confirmation_is_limited_to_the_just_created_meeting(
                 data={
                     "customer_engagement": "Low",
                     "need_identified": "No",
-                    "outcome": "No fit",
+                    "outcome": "No outcome",
+                    "company_name": "First Company",
                 },
             )
             first_id = int(first.headers["location"].rsplit("=", 1)[1])
@@ -932,7 +970,8 @@ def test_save_confirmation_is_limited_to_the_just_created_meeting(
                 data={
                     "customer_engagement": "High",
                     "need_identified": "Yes",
-                    "outcome": "Follow-up",
+                    "outcome": "Request sent",
+                    "company_name": "Second Company",
                 },
             )
             second_id = int(second.headers["location"].rsplit("=", 1)[1])

@@ -73,7 +73,7 @@ def export_application(
                 country_code="AT",
                 customer_engagement=CustomerEngagement.HIGH,
                 need_identified=NeedIdentified.YES,
-                outcome=PipelineOutcome.FOLLOW_UP,
+                outcome=PipelineOutcome.REQUEST_SENT,
                 user_mood=None,
                 blocker_tag=None,
                 next_step_date=None,
@@ -86,7 +86,7 @@ def export_application(
                 country_code=None,
                 customer_engagement=CustomerEngagement.MEDIUM,
                 need_identified=NeedIdentified.UNCLEAR,
-                outcome=PipelineOutcome.INTRODUCTION,
+                outcome=PipelineOutcome.MANUAL_ALIGNMENT,
                 user_mood=UserMood.GOOD,
                 blocker_tag="Budget",
                 note="@unsafe note",
@@ -97,7 +97,7 @@ def export_application(
                 company_name="Previous company",
                 customer_engagement=CustomerEngagement.LOW,
                 need_identified=NeedIdentified.NO,
-                outcome=PipelineOutcome.NO_FIT,
+                outcome=PipelineOutcome.NO_OUTCOME,
             ),
             PipelineMeeting(
                 user_id=second.id,
@@ -105,7 +105,7 @@ def export_application(
                 company_name="Month company",
                 customer_engagement=CustomerEngagement.HIGH,
                 need_identified=NeedIdentified.YES,
-                outcome=PipelineOutcome.PROPOSAL_REQUESTED,
+                outcome=PipelineOutcome.REQUEST_SENT,
             ),
             PipelineMeeting(
                 user_id=first.id,
@@ -113,7 +113,7 @@ def export_application(
                 company_name="Month-end company",
                 customer_engagement=CustomerEngagement.MEDIUM,
                 need_identified=NeedIdentified.YES,
-                outcome=PipelineOutcome.FOLLOW_UP,
+                outcome=PipelineOutcome.REQUEST_SENT,
             ),
             PipelineMeeting(
                 user_id=first.id,
@@ -121,7 +121,7 @@ def export_application(
                 company_name="Outside company",
                 customer_engagement=CustomerEngagement.LOW,
                 need_identified=NeedIdentified.NO,
-                outcome=PipelineOutcome.NO_FIT,
+                outcome=PipelineOutcome.NO_OUTCOME,
             ),
             PipelineMeeting(
                 user_id=first.id,
@@ -129,7 +129,7 @@ def export_application(
                 company_name="After month company",
                 customer_engagement=CustomerEngagement.LOW,
                 need_identified=NeedIdentified.NO,
-                outcome=PipelineOutcome.NO_FIT,
+                outcome=PipelineOutcome.NO_OUTCOME,
             ),
         )
         session.add_all(meetings)

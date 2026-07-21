@@ -143,7 +143,7 @@ def test_model_relationships_round_trip(db_engine: Engine) -> None:
             user_id=user.id,
             customer_engagement=CustomerEngagement.HIGH,
             need_identified=NeedIdentified.YES,
-            outcome=PipelineOutcome.FOLLOW_UP,
+            outcome=PipelineOutcome.REQUEST_SENT,
         )
         outreach = make_outreach(user.id, date(2026, 7, 14))
         country = OutreachCountry(
@@ -212,7 +212,7 @@ def test_updated_at_changes_when_records_are_updated(
             user_id=user.id,
             customer_engagement=CustomerEngagement.HIGH,
             need_identified=NeedIdentified.YES,
-            outcome=PipelineOutcome.FOLLOW_UP,
+            outcome=PipelineOutcome.REQUEST_SENT,
         )
         outreach = make_outreach(user.id, date(2026, 7, 14))
         session.add(meeting)
@@ -297,7 +297,7 @@ def test_foreign_keys_are_enforced(db_engine: Engine) -> None:
                 user_id=999,
                 customer_engagement=CustomerEngagement.LOW,
                 need_identified=NeedIdentified.NO,
-                outcome=PipelineOutcome.NO_FIT,
+                outcome=PipelineOutcome.NO_OUTCOME,
             ),
         )
 
@@ -369,12 +369,10 @@ def test_documented_enum_values_are_exact() -> None:
         "Unclear",
     ]
     assert [item.value for item in PipelineOutcome] == [
-        "No fit",
-        "Follow-up",
-        "Introduction",
-        "Proposal requested",
-        "Meeting booked",
-        "Opportunity identified",
+        "Waiting for further information",
+        "No outcome",
+        "Request sent",
+        "Manual alignment (discussion)",
         "Unclear",
     ]
     assert [item.value for item in UserMood] == [

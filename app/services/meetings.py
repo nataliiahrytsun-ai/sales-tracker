@@ -53,7 +53,7 @@ class ValidatedMeetingValues:
     user_mood: UserMood | None
     blocker_tag: str | None
     country_code: str | None
-    company_name: str | None
+    company_name: str
     next_step_date: date | None
     note: str | None
 
@@ -167,6 +167,10 @@ def validate_meeting_form(
         outcome = None
         errors["outcome"] = "Select a meeting outcome."
 
+    company_name = values.company_name.strip()
+    if not company_name:
+        errors["company_name"] = "Enter a company."
+
     user_mood: UserMood | None = None
     if values.user_mood:
         try:
@@ -203,7 +207,7 @@ def validate_meeting_form(
             user_mood=user_mood,
             blocker_tag=blocker_tag,
             country_code=country_code,
-            company_name=_optional_text(values.company_name),
+            company_name=company_name,
             next_step_date=parsed_next_step_date,
             note=_optional_text(values.note),
         ),

@@ -58,7 +58,17 @@ class NeedIdentified(StrEnum):
 
 
 class PipelineOutcome(StrEnum):
-    """Allowed pipeline meeting outcomes."""
+    """Allowed outcomes for newly created or edited pipeline meetings."""
+
+    WAITING_FOR_FURTHER_INFORMATION = "Waiting for further information"
+    NO_OUTCOME = "No outcome"
+    REQUEST_SENT = "Request sent"
+    MANUAL_ALIGNMENT = "Manual alignment (discussion)"
+    UNCLEAR = "Unclear"
+
+
+class StoredPipelineOutcome(StrEnum):
+    """Current and legacy values retained so historical rows remain readable."""
 
     NO_FIT = "No fit"
     FOLLOW_UP = "Follow-up"
@@ -66,6 +76,10 @@ class PipelineOutcome(StrEnum):
     PROPOSAL_REQUESTED = "Proposal requested"
     MEETING_BOOKED = "Meeting booked"
     OPPORTUNITY_IDENTIFIED = "Opportunity identified"
+    WAITING_FOR_FURTHER_INFORMATION = "Waiting for further information"
+    NO_OUTCOME = "No outcome"
+    REQUEST_SENT = "Request sent"
+    MANUAL_ALIGNMENT = "Manual alignment (discussion)"
     UNCLEAR = "Unclear"
 
 
@@ -143,8 +157,8 @@ class PipelineMeeting(SQLModel, table=True):
     need_identified: NeedIdentified = Field(
         sa_column=enum_column(NeedIdentified, "need_identified"),
     )
-    outcome: PipelineOutcome = Field(
-        sa_column=enum_column(PipelineOutcome, "pipeline_outcome"),
+    outcome: StoredPipelineOutcome = Field(
+        sa_column=enum_column(StoredPipelineOutcome, "pipeline_outcome"),
     )
     user_mood: UserMood | None = Field(
         default=None,

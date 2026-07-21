@@ -363,7 +363,8 @@ def test_main_navigation_maps_each_section_to_one_active_link(
                 data={
                     "customer_engagement": "High",
                     "need_identified": "Yes",
-                    "outcome": "Follow-up",
+                    "outcome": "Request sent",
+                    "company_name": "Navigation Company",
                 },
             )
             meeting_id = int(created.headers["location"].rsplit("=", 1)[-1])

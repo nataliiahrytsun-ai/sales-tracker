@@ -104,7 +104,7 @@ def comments_application(
                 occurred_at=datetime(2026, 7, 15, 10, tzinfo=UTC),
                 customer_engagement=CustomerEngagement.HIGH,
                 need_identified=NeedIdentified.YES,
-                outcome=PipelineOutcome.FOLLOW_UP,
+                outcome=PipelineOutcome.REQUEST_SENT,
                 note="<script>alert('comment')</script>",
             ),
         )
@@ -202,7 +202,7 @@ def test_comments_default_invalid_fallback_sources_and_safe_rendering(
             assert grouping_url(response, label).fragment == "comments-overview"
         assert "Meeting" in response.text
         assert "Daily Outreach" in response.text
-        assert "Follow-up" in response.text
+        assert "Request sent" in response.text
         assert "&lt;script&gt;alert(&#39;comment&#39;)&lt;/script&gt;" in response.text
         assert "<script>alert('comment')</script>" not in response.text
         assert response.text.count("data-comment-source=") == 3
@@ -338,6 +338,7 @@ def test_grouping_links_preserve_period_dates_and_repeated_user_ids(
         "from": ["2026-07-13"],
         "to": ["2026-07-15"],
         "user_scope": ["selected"],
+        "outcome": ["all"],
         "user_id": [str(first_id), str(second_id)],
         "comment_group": ["source"],
     }

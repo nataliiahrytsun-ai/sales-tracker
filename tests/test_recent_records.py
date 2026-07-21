@@ -38,7 +38,8 @@ def meeting_data(**overrides: str) -> dict[str, str]:
     values = {
         "customer_engagement": "High",
         "need_identified": "Yes",
-        "outcome": "Follow-up",
+        "outcome": "Request sent",
+        "company_name": "Recent Company",
         "user_mood": "",
         "blocker_tag": "",
         "country_code": "AT",
@@ -147,7 +148,7 @@ def add_meeting(
         country_code=country_code,
         customer_engagement=CustomerEngagement.HIGH,
         need_identified=NeedIdentified.YES,
-        outcome=PipelineOutcome.FOLLOW_UP,
+        outcome=PipelineOutcome.REQUEST_SENT,
     )
     session.add(meeting)
     session.commit()
@@ -473,7 +474,7 @@ def test_meeting_edit_reuses_validation_and_preserves_values(
                 f"/meetings/{meeting_id}",
                 data=meeting_data(
                     customer_engagement="Medium",
-                    outcome="Proposal requested",
+                    outcome="Request sent",
                     company_name="After edit",
                 ),
             )
@@ -485,8 +486,6 @@ def test_meeting_edit_reuses_validation_and_preserves_values(
     assert "<strong>Editing:</strong>" in form.text
     assert "2026-07-12 12:00" in form.text
     assert "Before edit" in form.text
-    assert 'value="Poland"' in form.text
-    assert 'name="country_code" value="PL"' in form.text
     assert invalid.status_code == 400
     assert "Select customer engagement." in invalid.text
     assert 'value="Keep this value"' in invalid.text
@@ -500,7 +499,7 @@ def test_meeting_edit_reuses_validation_and_preserves_values(
         assert stored is not None
         assert stored.company_name == "After edit"
         assert stored.customer_engagement == CustomerEngagement.MEDIUM
-        assert stored.outcome == PipelineOutcome.PROPOSAL_REQUESTED
+        assert stored.outcome == PipelineOutcome.REQUEST_SENT
 
 
 def test_meeting_delete_is_post_only_and_confirms(

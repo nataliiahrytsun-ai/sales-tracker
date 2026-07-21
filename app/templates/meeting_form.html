@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 
 {% block title %}{% if editing %}Edit meeting{% else %}Record meeting{% endif %} - Sales Tracker{% endblock %}
-
 {% block content %}
   <section class="form-card" aria-labelledby="meeting-heading">
     <div class="section-heading">
@@ -11,7 +10,7 @@
         {% if editing %}
           Correct this meeting using the same structured fields.
         {% else %}
-          Record the structured outcome. Customer details and notes are optional.
+          Record the meeting outcome and company.
         {% endif %}
       </p>
       {% if editing %}
@@ -125,7 +124,7 @@
 
         <fieldset class="choice-section">
           <legend>Meeting outcome <span aria-hidden="true">*</span></legend>
-          <div class="choice-grid choice-grid-wide">
+          <div class="choice-grid">
             {% for option in outcome_options %}
               <label class="choice-button">
                 <input
@@ -143,74 +142,11 @@
             <p class="field-error">{{ errors.outcome }}</p>
           {% endif %}
         </fieldset>
-      </section>
-
-      <section class="field-section optional-fields" aria-labelledby="optional-fields-heading">
-        <div class="field-section-heading field-section-heading-full">
-          <div>
-            <p class="section-kicker">Optional</p>
-            <h2 id="optional-fields-heading">Context and follow-up</h2>
-          </div>
-          <p>Add only what helps with the next conversation.</p>
-        </div>
 
         <div class="field-group">
-          <label for="user_mood">User mood <span class="optional">Optional</span></label>
-          <select id="user_mood" name="user_mood">
-            <option value="">Not provided</option>
-            {% for option in mood_options %}
-              <option value="{{ option.value }}" {% if values.user_mood == option.value %}selected{% endif %}>{{ option.value }}</option>
-            {% endfor %}
-          </select>
-          {% if errors.user_mood %}<p class="field-error">{{ errors.user_mood }}</p>{% endif %}
-        </div>
-
-        <div class="field-group">
-          <label for="blocker_tag">Blocker <span class="optional">Optional</span></label>
-          <select id="blocker_tag" name="blocker_tag">
-            <option value="">No blocker</option>
-            {% for value, label in blocker_options %}
-              <option value="{{ value }}" {% if values.blocker_tag == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-          {% if errors.blocker_tag %}<p class="field-error">{{ errors.blocker_tag }}</p>{% endif %}
-        </div>
-
-        <div class="field-group">
-          <label for="meeting_country_search">Country <span class="optional">Optional</span></label>
-          <input
-            id="meeting_country_search"
-            type="search"
-            list="meeting_country_options"
-            value="{{ selected_country_name }}"
-            placeholder="Search country..."
-            autocomplete="off"
-            aria-autocomplete="list"
-            data-meeting-country-search
-          >
-          <input type="hidden" id="country_code" name="country_code" value="{{ values.country_code }}" data-meeting-country-code>
-          <datalist id="meeting_country_options">
-            {% for code, label in country_options %}
-              <option value="{{ label }}" data-country-code="{{ code }}"></option>
-            {% endfor %}
-          </datalist>
-          {% if errors.country_code %}<p class="field-error">{{ errors.country_code }}</p>{% endif %}
-        </div>
-
-        <div class="field-group">
-          <label for="company_name">Company <span class="optional">Optional</span></label>
-          <input id="company_name" name="company_name" type="text" value="{{ values.company_name }}">
-        </div>
-
-        <div class="field-group">
-          <label for="next_step_date">Next-step date <span class="optional">Optional</span></label>
-          <input id="next_step_date" name="next_step_date" type="date" value="{{ values.next_step_date }}">
-          {% if errors.next_step_date %}<p class="field-error">{{ errors.next_step_date }}</p>{% endif %}
-        </div>
-
-        <div class="field-group field-group-full">
-          <label for="note">Note <span class="optional">Optional</span></label>
-          <textarea id="note" name="note" rows="4">{{ values.note }}</textarea>
+          <label for="company_name">Company <span aria-hidden="true">*</span></label>
+          <input id="company_name" name="company_name" type="text" value="{{ values.company_name }}" required>
+          {% if errors.company_name %}<p class="field-error">{{ errors.company_name }}</p>{% endif %}
         </div>
       </section>
 
@@ -219,5 +155,4 @@
       </button>
     </form>
   </section>
-  <script src="{{ url_for('static', path='/js/meeting_country.js') }}" defer></script>
 {% endblock %}

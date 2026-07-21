@@ -312,9 +312,18 @@ Record each test with one of these statuses:
 #### Full MVP Workflow
 
 - A user can log in and log out.
-- A pipeline meeting can be created with only the three required selections.
-- A meeting can be saved without notes, company, country, mood, blocker, or next-step date.
-- A recent meeting can be edited.
+- A pipeline meeting requires Company plus the three required selections on create.
+- A recent meeting requires Company plus the three required selections on edit.
+- All five current Meeting outcomes are visible, save correctly, and display correctly.
+- Historical meetings without Company or with a legacy outcome still open without an error.
+
+#### Pipeline Meeting taxonomy update
+
+- Pending: Company appears in the required section and is required on create.
+- Pending: Company is required on edit and whitespace-only values are rejected.
+- Pending: Each of the five current Meeting outcomes saves and displays correctly.
+- Pending: Historical missing-Company and legacy-outcome meetings open safely.
+- Pending: Dashboard outcome filtering, legacy handling, and long labels remain usable on mobile.
 - A recent meeting can be deleted or undone according to the implemented behavior.
 - A daily outreach record can be created.
 - The same daily outreach record can be updated without creating a duplicate.

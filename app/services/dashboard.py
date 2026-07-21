@@ -46,6 +46,13 @@ PERIOD_OPTIONS = (
 PERIOD_LABELS = dict(PERIOD_OPTIONS)
 USER_SCOPE_ALL = "all"
 USER_SCOPE_SELECTED = "selected"
+OUTCOME_FILTER_ALL = "all"
+OUTCOME_FILTER_LEGACY = "legacy"
+OUTCOME_FILTER_OPTIONS = (
+    (OUTCOME_FILTER_ALL, "All outcomes"),
+    *((outcome.value, outcome.value) for outcome in PipelineOutcome),
+    (OUTCOME_FILTER_LEGACY, "Legacy outcome"),
+)
 ACTIVITY_GRANULARITY_DAY = "day"
 ACTIVITY_GRANULARITY_WEEK = "week"
 ACTIVITY_GRANULARITY_MONTH = "month"
@@ -158,11 +165,19 @@ class DashboardUserFilter:
 
 
 @dataclass(frozen=True)
+class DashboardOutcomeFilter:
+    """One Dashboard-only filter for current or historical meeting outcomes."""
+
+    value: str = OUTCOME_FILTER_ALL
+
+
+@dataclass(frozen=True)
 class ResolvedDashboardFilters:
     """Shared validated Dashboard filters for HTML and export routes."""
 
     selected_period: DashboardFilter | None
     user_filter: DashboardUserFilter | None
+    outcome_filter: DashboardOutcomeFilter | None
     user_options: tuple[DashboardUserOption, ...]
     error: str | None
 
@@ -298,10 +313,22 @@ class PipelineConversionMetric:
 
 @dataclass(frozen=True)
 class PipelineConversionSummary:
-    """Pipeline meeting count and conversion rates for the exact filters."""
+    """Current-outcome breakdown plus a separate historical record count."""
 
     total_meetings: int
+    current_outcome_total: int
+    legacy_outcome_count: int
     metrics: tuple[PipelineConversionMetric, ...]
+
+
+@dataclass(frozen=True)
+class DashboardMeeting:
+    """One matching Pipeline Meeting shown in the Dashboard table."""
+
+    date: date
+    company: str
+    outcome: str
+    is_legacy_outcome: bool
 
 
 @dataclass(frozen=True)
@@ -451,6 +478,7 @@ class DashboardSummary:
     discussion_prompts: tuple[DiscussionPrompt, ...]
     mood_summary: MoodSummary
     comments: tuple[DashboardComment, ...]
+    meetings: tuple[DashboardMeeting, ...]
     has_activity: bool
     has_selected_users: bool
 
@@ -611,6 +639,17 @@ def normalize_dashboard_user_filter(
     )
 
 
+def normalize_dashboard_outcome_filter(
+    value: str | None,
+) -> tuple[DashboardOutcomeFilter | None, str | None]:
+    """Validate Dashboard's current, legacy, and all-outcome choices."""
+    selected = value or OUTCOME_FILTER_ALL
+    allowed = {option_value for option_value, _label in OUTCOME_FILTER_OPTIONS}
+    if selected not in allowed:
+        return None, "Select a valid meeting outcome filter."
+    return DashboardOutcomeFilter(value=selected), None
+
+
 def resolve_dashboard_filters(
     session: Session,
     *,
@@ -620,6 +659,7 @@ def resolve_dashboard_filters(
     to_value: str = "",
     user_scope: str | None = None,
     user_ids: list[str] | tuple[str, ...] = (),
+    outcome: str | None = None,
 ) -> ResolvedDashboardFilters:
     """Resolve the complete shared Dashboard/export GET filter contract."""
     user_options = get_dashboard_user_options(session)
@@ -634,11 +674,13 @@ def resolve_dashboard_filters(
         from_value=from_value,
         to_value=to_value,
     )
+    outcome_filter, outcome_error = normalize_dashboard_outcome_filter(outcome)
     return ResolvedDashboardFilters(
         selected_period=selected_period,
         user_filter=user_filter,
+        outcome_filter=outcome_filter,
         user_options=user_options,
-        error=period_error or user_error,
+        error=period_error or user_error or outcome_error,
     )
 
 
@@ -730,7 +772,11 @@ def _dashboard_comments(
                     date=_local_meeting_date(meeting),
                     employee=user_names.get(meeting.user_id, "Unknown user"),
                     source_type="Meeting",
-                    outcome=meeting.outcome.value,
+                    outcome=(
+                        "Legacy outcome (update required)"
+                        if _is_legacy_outcome(meeting)
+                        else meeting.outcome.value
+                    ),
                     comment=note,
                 ),
             )
@@ -1172,72 +1218,35 @@ def _blocker_breakdown(outreach: list[DailyOutreach]) -> tuple[BreakdownItem, ..
 def _pipeline_conversion_summary(
     meetings: list[PipelineMeeting],
 ) -> PipelineConversionSummary:
-    """Calculate documented pipeline rates with one shared denominator."""
+    """Break down current outcomes without assigning legacy semantics."""
     total_meetings = len(meetings)
-    concrete_next_step_outcomes = {
-        PipelineOutcome.FOLLOW_UP,
-        PipelineOutcome.INTRODUCTION,
-        PipelineOutcome.PROPOSAL_REQUESTED,
-        PipelineOutcome.MEETING_BOOKED,
-        PipelineOutcome.OPPORTUNITY_IDENTIFIED,
-    }
-    definitions = (
+    current_values = {outcome.value for outcome in PipelineOutcome}
+    current_outcome_total = sum(
+        meeting.outcome.value in current_values for meeting in meetings
+    )
+    definitions = tuple(
         (
-            "high_engagement",
-            "High-engagement rate",
-            sum(
-                meeting.customer_engagement == CustomerEngagement.HIGH
-                for meeting in meetings
-            ),
-        ),
-        (
-            "need_identification",
-            "Need-identification rate",
-            sum(
-                meeting.need_identified == NeedIdentified.YES
-                for meeting in meetings
-            ),
-        ),
-        (
-            "concrete_next_step",
-            "Concrete-next-step rate",
-            sum(
-                meeting.outcome in concrete_next_step_outcomes
-                for meeting in meetings
-            ),
-        ),
-        (
-            "proposal",
-            "Proposal rate",
-            sum(
-                meeting.outcome == PipelineOutcome.PROPOSAL_REQUESTED
-                for meeting in meetings
-            ),
-        ),
-        (
-            "opportunity_identification",
-            "Opportunity identification rate",
-            sum(
-                meeting.outcome == PipelineOutcome.OPPORTUNITY_IDENTIFIED
-                for meeting in meetings
-            ),
-        ),
+            outcome.value,
+            outcome.value,
+            sum(meeting.outcome.value == outcome.value for meeting in meetings),
+        )
+        for outcome in PipelineOutcome
     )
     metrics = tuple(
         PipelineConversionMetric(
             key=key,
             label=label,
             numerator=numerator,
-            denominator=total_meetings,
+            denominator=current_outcome_total,
             percentage=(
                 int(
                     (
                         Decimal(numerator)
-                        / Decimal(total_meetings)
+                        / Decimal(current_outcome_total)
                         * Decimal(100)
                     ).quantize(Decimal("1"), rounding=ROUND_HALF_UP),
                 )
-                if total_meetings
+                if current_outcome_total
                 else None
             ),
         )
@@ -1245,7 +1254,36 @@ def _pipeline_conversion_summary(
     )
     return PipelineConversionSummary(
         total_meetings=total_meetings,
+        current_outcome_total=current_outcome_total,
+        legacy_outcome_count=total_meetings - current_outcome_total,
         metrics=metrics,
+    )
+
+
+def _is_legacy_outcome(meeting: PipelineMeeting) -> bool:
+    return meeting.outcome.value not in {outcome.value for outcome in PipelineOutcome}
+
+
+def _dashboard_meetings(
+    meetings: list[PipelineMeeting],
+) -> tuple[DashboardMeeting, ...]:
+    """Present every matching meeting while keeping legacy values neutral."""
+    return tuple(
+        DashboardMeeting(
+            date=_local_meeting_date(meeting),
+            company=(meeting.company_name or "").strip() or "Not provided",
+            outcome=(
+                "Legacy outcome (update required)"
+                if _is_legacy_outcome(meeting)
+                else meeting.outcome.value
+            ),
+            is_legacy_outcome=_is_legacy_outcome(meeting),
+        )
+        for meeting in sorted(
+            meetings,
+            key=lambda meeting: (meeting.occurred_at, meeting.id or 0),
+            reverse=True,
+        )
     )
 
 
@@ -1306,6 +1344,7 @@ def get_dashboard_summary(
     *,
     selected_period: DashboardFilter,
     user_filter: DashboardUserFilter | None = None,
+    outcome_filter: DashboardOutcomeFilter | None = None,
 ) -> DashboardSummary:
     """Build company aggregates without exposing employee or record details."""
     selected_user_ids = (
@@ -1320,6 +1359,17 @@ def get_dashboard_summary(
         end_date=selected_period.end_date,
         user_ids=selected_user_ids,
     )
+    selected_outcome = (
+        outcome_filter.value if outcome_filter is not None else OUTCOME_FILTER_ALL
+    )
+    if selected_outcome == OUTCOME_FILTER_LEGACY:
+        meetings = [meeting for meeting in meetings if _is_legacy_outcome(meeting)]
+    elif selected_outcome != OUTCOME_FILTER_ALL:
+        meetings = [
+            meeting
+            for meeting in meetings
+            if meeting.outcome.value == selected_outcome
+        ]
     current_outreach = [
         record
         for record in outreach
@@ -1340,6 +1390,16 @@ def get_dashboard_summary(
         end_date=comparison_periods.previous.end_date,
         user_ids=selected_user_ids,
     )
+    if selected_outcome == OUTCOME_FILTER_LEGACY:
+        previous_meetings = [
+            meeting for meeting in previous_meetings if _is_legacy_outcome(meeting)
+        ]
+    elif selected_outcome != OUTCOME_FILTER_ALL:
+        previous_meetings = [
+            meeting
+            for meeting in previous_meetings
+            if meeting.outcome.value == selected_outcome
+        ]
     actuals = aggregate_activity_actuals(outreach, meetings)
     comparison_actuals = aggregate_activity_actuals(
         current_outreach,
@@ -1408,13 +1468,9 @@ def get_dashboard_summary(
             position_count=comparison_periods.current.duration_days,
         ),
     )
-    pipeline_metrics = {
-        metric.key: metric for metric in pipeline_conversions.metrics
-    }
     outreach_metrics = {
         metric.key: metric for metric in outreach_conversions.metrics
     }
-    concrete_next_steps = pipeline_metrics["concrete_next_step"].numerator
     positive_replies = outreach_metrics["positive_reply"].numerator
     meetings_booked = outreach_metrics["meeting_booking"].numerator
     discussion_prompts = build_discussion_prompts(
@@ -1424,7 +1480,6 @@ def get_dashboard_summary(
             if record.user_mood == UserMood.DIFFICULT
         ),
         total_meetings=pipeline_conversions.total_meetings,
-        concrete_next_step_count=concrete_next_steps,
         positive_replies=positive_replies,
         meetings_booked=meetings_booked,
         blocker_counts=(
@@ -1451,6 +1506,7 @@ def get_dashboard_summary(
         discussion_prompts=discussion_prompts,
         mood_summary=mood_summary,
         comments=_dashboard_comments(session, outreach, meetings),
+        meetings=_dashboard_meetings(meetings),
         has_activity=bool(outreach or meetings),
         has_selected_users=(
             user_filter is None

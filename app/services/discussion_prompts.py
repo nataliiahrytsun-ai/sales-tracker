@@ -31,7 +31,6 @@ def build_discussion_prompts(
     *,
     difficult_mood_dates: Iterable[date],
     total_meetings: int,
-    concrete_next_step_count: int,
     positive_replies: int,
     meetings_booked: int,
     blocker_counts: Iterable[tuple[str | None, int]],
@@ -53,22 +52,6 @@ def build_discussion_prompts(
             ),
         )
 
-    if (
-        total_meetings >= 4
-        and concrete_next_step_count * 2 < total_meetings
-    ):
-        prompts.append(
-            DiscussionPrompt(
-                key="few_concrete_next_steps",
-                title="Few concrete next steps",
-                message=(
-                    f"Only {concrete_next_step_count} of {total_meetings} "
-                    "meetings had a concrete next step."
-                ),
-                priority=2,
-            ),
-        )
-
     if positive_replies >= 3 and meetings_booked == 0:
         prompts.append(
             DiscussionPrompt(
@@ -78,7 +61,7 @@ def build_discussion_prompts(
                     f"{positive_replies} positive replies were recorded, "
                     "but no meetings were booked."
                 ),
-                priority=3,
+                priority=2,
             ),
         )
 
@@ -97,7 +80,7 @@ def build_discussion_prompts(
                 key="repeated_blocker",
                 title="Repeated blocker",
                 message=f"{blocker_label} was reported {blocker_count} times.",
-                priority=4,
+                priority=3,
             ),
         )
 

@@ -127,7 +127,7 @@ def add_meeting(session: Session, *, user_id: int, occurred_at: datetime) -> Non
             occurred_at=occurred_at,
             customer_engagement=CustomerEngagement.HIGH,
             need_identified=NeedIdentified.YES,
-            outcome=PipelineOutcome.FOLLOW_UP,
+            outcome=PipelineOutcome.REQUEST_SENT,
         ),
     )
 

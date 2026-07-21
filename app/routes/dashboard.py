@@ -15,6 +15,8 @@ from app.database import get_session
 from app.models import User
 from app.services.dashboard import (
     CURRENT_WEEK,
+    OUTCOME_FILTER_ALL,
+    OUTCOME_FILTER_OPTIONS,
     PERIOD_OPTIONS,
     USER_SCOPE_ALL,
     get_dashboard_summary,
@@ -40,6 +42,7 @@ def dashboard_page(
     to_value: Annotated[str, Query(alias="to")] = "",
     user_scope: Annotated[str | None, Query()] = None,
     user_id: Annotated[list[str] | None, Query()] = None,
+    outcome: Annotated[str, Query()] = OUTCOME_FILTER_ALL,
     reset: Annotated[bool, Query()] = False,
     comment_group: Annotated[str, Query()] = "employee",
 ) -> Response:
@@ -47,6 +50,7 @@ def dashboard_page(
     if reset:
         period, from_value, to_value = CURRENT_WEEK, "", ""
         user_scope, user_id = USER_SCOPE_ALL, []
+        outcome = OUTCOME_FILTER_ALL
         comment_group = "employee"
     resolved = resolve_dashboard_filters(
         session,
@@ -56,6 +60,7 @@ def dashboard_page(
         to_value=to_value,
         user_scope=user_scope,
         user_ids=user_id or [],
+        outcome=outcome,
     )
     user_options = resolved.user_options
     selected_users = resolved.user_filter
@@ -81,6 +86,7 @@ def dashboard_page(
             session,
             selected_period=selected_period,
             user_filter=selected_users,
+            outcome_filter=resolved.outcome_filter,
         )
     )
     comment_grouping = (
@@ -98,6 +104,7 @@ def dashboard_page(
         comment_params: list[tuple[str, str | int]] = [
             ("period", selected_period.key),
             ("user_scope", selected_users.scope),
+            ("outcome", outcome),
         ]
         if selected_period.key == "custom":
             comment_params.extend(
@@ -157,6 +164,12 @@ def dashboard_page(
             ),
             "selected_user_ids": (
                 set(selected_users.user_ids) if selected_users else set()
+            ),
+            "outcome_options": OUTCOME_FILTER_OPTIONS,
+            "selected_outcome": (
+                resolved.outcome_filter.value
+                if resolved.outcome_filter is not None
+                else OUTCOME_FILTER_ALL
             ),
             "user_filter_summary": user_filter_summary,
             "filter_error": error,

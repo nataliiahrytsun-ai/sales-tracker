@@ -24,6 +24,7 @@ from app.models import (
     OutreachCountry,
     PipelineMeeting,
     PipelineOutcome,
+    StoredPipelineOutcome,
     Target,
     User,
     UserMood,
@@ -185,7 +186,7 @@ def add_meeting(
     note: str = "Private meeting note",
     engagement: CustomerEngagement = CustomerEngagement.HIGH,
     need: NeedIdentified = NeedIdentified.YES,
-    outcome: PipelineOutcome = PipelineOutcome.FOLLOW_UP,
+    outcome: PipelineOutcome = PipelineOutcome.REQUEST_SENT,
 ) -> None:
     session.add(
         PipelineMeeting(
@@ -570,31 +571,31 @@ def add_pipeline_conversion_records(
             first_id,
             CustomerEngagement.HIGH,
             NeedIdentified.YES,
-            PipelineOutcome.FOLLOW_UP,
+            PipelineOutcome.REQUEST_SENT,
         ),
         (
             first_id,
             CustomerEngagement.HIGH,
             NeedIdentified.NO,
-            PipelineOutcome.PROPOSAL_REQUESTED,
+            PipelineOutcome.REQUEST_SENT,
         ),
         (
             first_id,
             CustomerEngagement.LOW,
             NeedIdentified.YES,
-            PipelineOutcome.NO_FIT,
+            PipelineOutcome.NO_OUTCOME,
         ),
         (
             second_id,
             CustomerEngagement.MEDIUM,
             NeedIdentified.YES,
-            PipelineOutcome.OPPORTUNITY_IDENTIFIED,
+            PipelineOutcome.WAITING_FOR_FURTHER_INFORMATION,
         ),
         (
             second_id,
             CustomerEngagement.LOW,
             NeedIdentified.NO,
-            PipelineOutcome.INTRODUCTION,
+            PipelineOutcome.MANUAL_ALIGNMENT,
         ),
     )
     with Session(engine) as session:
@@ -613,7 +614,7 @@ def add_pipeline_conversion_records(
             occurred_at=datetime(2026, 7, 3, 12, tzinfo=UTC),
             engagement=CustomerEngagement.HIGH,
             need=NeedIdentified.YES,
-            outcome=PipelineOutcome.OPPORTUNITY_IDENTIFIED,
+            outcome=PipelineOutcome.WAITING_FOR_FURTHER_INFORMATION,
         )
         session.commit()
 
@@ -754,13 +755,13 @@ def test_discussion_prompts_render_in_fixed_location_with_neutral_empty_state(
     assert "text-align: left" in mobile_css
 
 
-def test_one_to_four_triggered_prompts_render_one_card_each(
+def test_one_to_three_triggered_prompts_render_one_card_each(
     dashboard_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
     application, engine, _, _ = dashboard_application
     user_ids: list[int] = []
     with Session(engine) as session:
-        for prompt_count in range(1, 5):
+        for prompt_count in range(1, 4):
             user = User(
                 name=f"Prompt Count {prompt_count}",
                 email=f"prompt-count-{prompt_count}@example.com",
@@ -798,27 +799,12 @@ def test_one_to_four_triggered_prompts_render_one_card_each(
                         "No response" if prompt_count >= 3 else None
                     ),
                 )
-            if prompt_count == 4:
-                for hour in range(9, 13):
-                    add_meeting(
-                        session,
-                        user_id=user.id,
-                        occurred_at=datetime(
-                            2026,
-                            7,
-                            15,
-                            hour,
-                            tzinfo=UTC,
-                        ),
-                        outcome=PipelineOutcome.NO_FIT,
-                    )
         session.commit()
 
     expected_keys = [
         "positive_replies_without_booked_meetings",
         "consecutive_difficult_days",
         "repeated_blocker",
-        "few_concrete_next_steps",
     ]
     for prompt_count, user_id in enumerate(user_ids, start=1):
         response = get_dashboard(
@@ -852,7 +838,7 @@ def test_one_to_four_triggered_prompts_render_one_card_each(
             in section
         )
 
-    four_prompt_section = discussion_prompts_section(
+    three_prompt_section = discussion_prompts_section(
         get_dashboard(
             application,
             "/dashboard?user_scope=selected"
@@ -861,10 +847,9 @@ def test_one_to_four_triggered_prompts_render_one_card_each(
     )
     assert re.findall(
         r'data-discussion-prompt="([^"]+)"',
-        four_prompt_section,
+        three_prompt_section,
     ) == [
         "consecutive_difficult_days",
-        "few_concrete_next_steps",
         "positive_replies_without_booked_meetings",
         "repeated_blocker",
     ]
@@ -902,7 +887,7 @@ def test_discussion_prompts_respect_filters_and_fixed_priority(
                 session,
                 user_id=second_id,
                 occurred_at=datetime(2026, 7, 15, hour, tzinfo=UTC),
-                outcome=PipelineOutcome.NO_FIT,
+                outcome=PipelineOutcome.NO_OUTCOME,
             )
         session.commit()
 
@@ -915,7 +900,6 @@ def test_discussion_prompts_respect_filters_and_fixed_priority(
 
     assert keys == [
         "consecutive_difficult_days",
-        "few_concrete_next_steps",
         "positive_replies_without_booked_meetings",
         "repeated_blocker",
     ]
@@ -923,11 +907,9 @@ def test_discussion_prompts_respect_filters_and_fixed_priority(
         "1",
         "2",
         "3",
-        "4",
     ]
     assert len(keys) == len(set(keys))
     assert "Difficult mood was recorded on 2 consecutive days." in section
-    assert "Only 2 of 5 meetings had a concrete next step." in section
     assert (
         "3 positive replies were recorded, but no meetings were booked."
         in section
@@ -950,7 +932,10 @@ def test_discussion_prompts_respect_filters_and_fixed_priority(
     assert re.findall(
         r'data-discussion-prompt="([^"]+)"',
         discussion_prompts_section(second_user),
-    ) == keys[:3]
+    ) == [
+        "consecutive_difficult_days",
+        "positive_replies_without_booked_meetings",
+    ]
 
     single_date = get_dashboard(
         application,
@@ -981,11 +966,11 @@ def test_pipeline_conversion_known_rates_and_safe_html(
     assert response.status_code == 200
     assert 'data-total-meetings="5"' in section
     expected = {
-        "high_engagement": (2, 40),
-        "need_identification": (3, 60),
-        "concrete_next_step": (4, 80),
-        "proposal": (1, 20),
-        "opportunity_identification": (1, 20),
+        "Waiting for further information": (1, 20),
+        "No outcome": (1, 20),
+        "Request sent": (2, 40),
+        "Manual alignment (discussion)": (1, 20),
+        "Unclear": (0, 0),
     }
     for metric, (numerator, percentage) in expected.items():
         row = pipeline_rate(response, metric)
@@ -1027,9 +1012,9 @@ def test_pipeline_conversion_filters_users_and_duplicate_ids(
     assert 'data-total-meetings="3"' in pipeline_conversion_section(first_user)
     assert 'data-percentage="67"' in pipeline_rate(
         first_user,
-        "high_engagement",
+        "Request sent",
     )
-    assert 'data-percentage="33"' in pipeline_rate(first_user, "proposal")
+    assert 'data-percentage="33"' in pipeline_rate(first_user, "No outcome")
     assert 'data-total-meetings="5"' in pipeline_conversion_section(multiple)
     assert 'data-total-meetings="3"' in pipeline_conversion_section(duplicate)
 
@@ -1057,11 +1042,11 @@ def test_pipeline_conversion_date_filter_excludes_other_dates(
     assert 'data-total-meetings="1"' in pipeline_conversion_section(next_day)
     assert 'data-numerator="1"' in pipeline_rate(
         next_day,
-        "opportunity_identification",
+        "Waiting for further information",
     )
     assert 'data-percentage="100"' in pipeline_rate(
         next_day,
-        "opportunity_identification",
+        "Waiting for further information",
     )
 
 
@@ -1107,11 +1092,11 @@ def test_pipeline_conversion_empty_period_renders_no_data(
     assert section.count('data-pipeline-rate="') == 5
     assert section.count("No data") == 5
     for metric in (
-        "high_engagement",
-        "need_identification",
-        "concrete_next_step",
-        "proposal",
-        "opportunity_identification",
+        "Waiting for further information",
+        "No outcome",
+        "Request sent",
+        "Manual alignment (discussion)",
+        "Unclear",
     ):
         row = pipeline_rate(response, metric)
         assert "0 of 0" in row
@@ -1307,8 +1292,11 @@ def test_conversion_sections_share_compact_responsive_mini_metrics(
         assert 'class="dashboard-mini-metric-rate"' in section
         assert "Result: " in section
         assert "Rate: " in section
-        assert "<table" not in section
         assert 'role="progressbar"' not in section
+    pipeline_section = pipeline_conversion_section(response)
+    assert 'class="dashboard-data-table dashboard-meetings-table"' in pipeline_section
+    assert "<table" in pipeline_section
+    assert "<table" not in outreach_conversion_section(response)
 
     template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
     assert "Company metrics" not in template
@@ -1376,7 +1364,6 @@ def test_current_week_aggregates_all_users_without_private_details(
         assert f'data-metric="{metric}"' in response.text
         assert f'data-actual="{actual}"' in response.text
     for private_value in (
-        "Do not expose company",
         ACTIVE_EMAIL,
         "foreign-dashboard@example.com",
     ):
@@ -2751,6 +2738,54 @@ def test_dashboard_secondary_navigation_links_stable_sections(
         < response.text.index('class="shell dashboard-section-navigation-inner"')
         < nav_start
     )
+
+
+def test_dashboard_outcome_filter_and_meeting_table_contract(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    """The Dashboard exposes only current values plus its legacy-only filter."""
+    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+    script = Path("app/static/js/dashboard_filter.js").read_text(encoding="utf-8")
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+    response = get_dashboard(dashboard_application[0])
+
+    assert 'id="dashboard-outcome" name="outcome" data-outcome-select' in template
+    assert "All outcomes" in response.text
+    assert "Legacy outcome" in response.text
+    for outcome in PipelineOutcome:
+        assert outcome.value in response.text
+    for retired_outcome in (
+        "No fit",
+        "Follow-up",
+        "Introduction",
+        "Proposal requested",
+        "Meeting booked",
+        "Opportunity identified",
+    ):
+        assert retired_outcome not in response.text
+    assert 'class="dashboard-data-table dashboard-meetings-table"' in template
+    assert "Meeting date" in template
+    assert "Company" in template
+    assert "Meeting outcome" in template
+    assert "Concrete-next-step rate" not in template
+    assert "Proposal rate" not in template
+    assert "Opportunity identification rate" not in template
+    assert "data-outcome-select" in script
+    assert ".dashboard-meetings-table-wrap" in css
+    assert ".dashboard-meetings-table" in css
+    navigation_css = css.split(".dashboard-section-navigation {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    shell_css = css.split(".dashboard-section-navigation-shell {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    inner_css = css.split(".dashboard-section-navigation-inner {", 1)[1].split(
+        "}",
+        1,
+    )[0]
+    shared_shell_css = css.split(".shell {", 1)[1].split("}", 1)[0]
     assert "width: 100%" in shell_css
     assert "width: 100vw" not in shell_css
     assert "position: fixed" not in shell_css
