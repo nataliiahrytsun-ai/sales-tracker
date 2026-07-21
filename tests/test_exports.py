@@ -581,5 +581,15 @@ def test_dashboard_export_links_preserve_applied_filters(
     assert f'href="http://testserver/exports/outreach.csv?{expected_query}"' in (
         response.text
     )
+    assert (
+        f'class="dashboard-csv-download" '
+        f'href="http://testserver/exports/pipeline.csv?{expected_query}"'
+        in response.text
+    )
+    assert (
+        f'class="dashboard-csv-download" '
+        f'href="http://testserver/exports/outreach.csv?{expected_query}"'
+        in response.text
+    )
     assert "Pipeline CSV" in response.text
     assert "Outreach CSV" in response.text

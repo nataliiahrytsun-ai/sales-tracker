@@ -2801,6 +2801,64 @@ def test_dashboard_secondary_navigation_scroll_spy_contract() -> None:
     assert '.dashboard-section-navigation a[aria-current="location"]' in css
 
 
+def test_dashboard_export_controls_have_explicit_interaction_states() -> None:
+    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+    script = Path("app/static/js/dashboard_filter.js").read_text(encoding="utf-8")
+    base_template = Path("app/templates/base.html").read_text(encoding="utf-8")
+
+    assert '<summary class="dashboard-export-trigger">' in template
+    assert template.count('class="dashboard-csv-download"') == 2
+    assert 'href="{{ export_urls.pipeline }}"' in template
+    assert 'href="{{ export_urls.outreach }}"' in template
+    assert "dashboard-csv-download" not in base_template
+    assert ".dashboard-export-panel a" not in css
+
+    trigger_default_css = css.split(
+        ".dashboard-export-trigger {",
+        1,
+    )[1].split("}", 1)[0]
+    csv_default_css = css.split(
+        ".dashboard-csv-download {",
+        1,
+    )[1].split("}", 1)[0]
+    focus_css = css.split(
+        ".dashboard-export-trigger:focus-visible,\n.dashboard-csv-download:focus-visible {",
+        1,
+    )[1].split("}", 1)[0]
+    hover_css = css.split("@media (hover: hover) {", 1)[1].split(
+        "@media (prefers-reduced-motion: reduce)",
+        1,
+    )[0]
+    trigger_active_css = css.split(
+        ".dashboard-export-trigger:active {",
+        1,
+    )[1].split("}", 1)[0]
+    csv_active_css = css.split(
+        ".dashboard-csv-download:active {",
+        1,
+    )[1].split("}", 1)[0]
+
+    assert "background: var(--surface)" in trigger_default_css
+    assert "color: var(--text)" in csv_default_css
+    assert "transition:" in trigger_default_css
+    assert "transition:" in csv_default_css
+    assert ".dashboard-export-trigger:hover" in hover_css
+    assert ".dashboard-csv-download:hover" in hover_css
+    assert "outline:" in focus_css
+    assert "var(--focus)" in focus_css
+    assert "background:" in trigger_active_css
+    assert "background:" in csv_active_css
+    assert "@media (prefers-reduced-motion: reduce)" in css
+    assert ".dashboard-export-trigger:disabled" not in css
+    assert ".dashboard-csv-download:disabled" not in css
+    assert "outline: none" not in css
+    assert "outline: 0;" not in css
+    assert "width: 100vw" not in css
+    assert "position: fixed" not in css
+    assert "dashboard-export" not in script
+
+
 def test_sticky_navigation_height_measurement_contract() -> None:
     css = Path("app/static/css/app.css").read_text(encoding="utf-8")
     script = Path("app/static/js/sticky_navigation.js").read_text(
@@ -3036,6 +3094,8 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
         in css
     )
     assert 'class="dashboard-export-dropdown"' in template
+    assert 'class="dashboard-export-trigger"' in template
+    assert template.count('class="dashboard-csv-download"') == 2
     assert "Pipeline CSV" in template
     assert "Outreach CSV" in template
     assert "width: 100%" in tablet_css
