@@ -51,6 +51,8 @@ started because prior visual checks repeatedly closed Codex.
 | Server-derived companies contacted | Pass | Focused tests verify the saved value equals the country sum, including add/change/remove and an empty breakdown. |
 | Forged legacy company-total value | Pass | A submitted legacy `unique_companies` value is ignored by the server. |
 | No separate aggregate input or mismatch warning | Pass | Companies contacted is derived from the country breakdown, so the totals cannot diverge. |
+| Required outreach results | Not run | Verify Replies received, Positive replies, and Meetings booked reject empty values and accept zero; covered by automated tests. |
+| Added row placement and completeness | Not run | Verify added Country + Companies count rows render above Add country and incomplete rows cannot be saved; covered by automated tests. |
 | Replies relationship validation | Pass | Focused tests cover positive replies below, equal to, above, and present without replies received. Invalid submissions are not saved. |
 | Forged ownership and date fields | Pass | Submitted `user_id` and `activity_date` values were ignored; ownership and date came from the authenticated session and application-local date. |
 | Clean-database migrations | Pass | Revisions `20260714_0001` through `20260715_0004` create the product tables and both required outreach uniqueness constraints. |

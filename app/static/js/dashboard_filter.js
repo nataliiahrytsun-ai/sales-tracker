@@ -158,7 +158,6 @@ document.querySelectorAll("[data-dashboard-filter]").forEach((form) => {
     form.querySelectorAll("[data-user-checkbox]"),
   );
   const userScope = form.querySelector("[data-user-scope]");
-  const outcomeSelect = form.querySelector("[data-outcome-select]");
   const usersOpenStorageKey = "dashboard-users-dropdown-open";
   let customDatesEditing = form.dataset.customApplied !== "true";
 
@@ -271,11 +270,6 @@ document.querySelectorAll("[data-dashboard-filter]").forEach((form) => {
     params.set("period", period.value);
     navigateWithParams(url, params);
   };
-  const applyOutcomeFilter = () => {
-    const {url, params} = currentUrlAndParams();
-    params.set("outcome", outcomeSelect.value);
-    navigateWithParams(url, params);
-  };
   const applyCustomRange = () => {
     const {url, params} = currentUrlAndParams();
     params.set("period", "custom");
@@ -321,7 +315,6 @@ document.querySelectorAll("[data-dashboard-filter]").forEach((form) => {
     update();
     if (!isCustom()) applyPresetPeriod();
   });
-  outcomeSelect.addEventListener("change", applyOutcomeFilter);
   editDatesButton.addEventListener("click", (event) => {
     event.preventDefault();
     customDatesEditing = true;

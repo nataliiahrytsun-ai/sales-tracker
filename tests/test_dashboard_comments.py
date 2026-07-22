@@ -338,7 +338,6 @@ def test_grouping_links_preserve_period_dates_and_repeated_user_ids(
         "from": ["2026-07-13"],
         "to": ["2026-07-15"],
         "user_scope": ["selected"],
-        "outcome": ["all"],
         "user_id": [str(first_id), str(second_id)],
         "comment_group": ["source"],
     }

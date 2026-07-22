@@ -186,7 +186,7 @@ def add_meeting(
     note: str = "Private meeting note",
     engagement: CustomerEngagement = CustomerEngagement.HIGH,
     need: NeedIdentified = NeedIdentified.YES,
-    outcome: PipelineOutcome = PipelineOutcome.REQUEST_SENT,
+    outcome: PipelineOutcome | StoredPipelineOutcome = PipelineOutcome.REQUEST_SENT,
 ) -> None:
     session.add(
         PipelineMeeting(
@@ -571,31 +571,31 @@ def add_pipeline_conversion_records(
             first_id,
             CustomerEngagement.HIGH,
             NeedIdentified.YES,
-            PipelineOutcome.REQUEST_SENT,
+            StoredPipelineOutcome.FOLLOW_UP,
         ),
         (
             first_id,
             CustomerEngagement.HIGH,
             NeedIdentified.NO,
-            PipelineOutcome.REQUEST_SENT,
+            StoredPipelineOutcome.PROPOSAL_REQUESTED,
         ),
         (
             first_id,
             CustomerEngagement.LOW,
             NeedIdentified.YES,
-            PipelineOutcome.NO_OUTCOME,
+            StoredPipelineOutcome.NO_FIT,
         ),
         (
             second_id,
             CustomerEngagement.MEDIUM,
             NeedIdentified.YES,
-            PipelineOutcome.WAITING_FOR_FURTHER_INFORMATION,
+            StoredPipelineOutcome.OPPORTUNITY_IDENTIFIED,
         ),
         (
             second_id,
             CustomerEngagement.LOW,
             NeedIdentified.NO,
-            PipelineOutcome.MANUAL_ALIGNMENT,
+            StoredPipelineOutcome.INTRODUCTION,
         ),
     )
     with Session(engine) as session:
@@ -614,7 +614,7 @@ def add_pipeline_conversion_records(
             occurred_at=datetime(2026, 7, 3, 12, tzinfo=UTC),
             engagement=CustomerEngagement.HIGH,
             need=NeedIdentified.YES,
-            outcome=PipelineOutcome.WAITING_FOR_FURTHER_INFORMATION,
+            outcome=StoredPipelineOutcome.OPPORTUNITY_IDENTIFIED,
         )
         session.commit()
 
@@ -965,12 +965,13 @@ def test_pipeline_conversion_known_rates_and_safe_html(
 
     assert response.status_code == 200
     assert 'data-total-meetings="5"' in section
+    assert "Total meetings" not in section
     expected = {
-        "Waiting for further information": (1, 20),
-        "No outcome": (1, 20),
-        "Request sent": (2, 40),
-        "Manual alignment (discussion)": (1, 20),
-        "Unclear": (0, 0),
+        "high_engagement": (2, 40),
+        "need_identification": (3, 60),
+        "concrete_next_step": (4, 80),
+        "proposal": (1, 20),
+        "opportunity_identification": (1, 20),
     }
     for metric, (numerator, percentage) in expected.items():
         row = pipeline_rate(response, metric)
@@ -1012,9 +1013,9 @@ def test_pipeline_conversion_filters_users_and_duplicate_ids(
     assert 'data-total-meetings="3"' in pipeline_conversion_section(first_user)
     assert 'data-percentage="67"' in pipeline_rate(
         first_user,
-        "Request sent",
+        "high_engagement",
     )
-    assert 'data-percentage="33"' in pipeline_rate(first_user, "No outcome")
+    assert 'data-percentage="33"' in pipeline_rate(first_user, "proposal")
     assert 'data-total-meetings="5"' in pipeline_conversion_section(multiple)
     assert 'data-total-meetings="3"' in pipeline_conversion_section(duplicate)
 
@@ -1042,11 +1043,11 @@ def test_pipeline_conversion_date_filter_excludes_other_dates(
     assert 'data-total-meetings="1"' in pipeline_conversion_section(next_day)
     assert 'data-numerator="1"' in pipeline_rate(
         next_day,
-        "Waiting for further information",
+        "opportunity_identification",
     )
     assert 'data-percentage="100"' in pipeline_rate(
         next_day,
-        "Waiting for further information",
+        "opportunity_identification",
     )
 
 
@@ -1092,11 +1093,11 @@ def test_pipeline_conversion_empty_period_renders_no_data(
     assert section.count('data-pipeline-rate="') == 5
     assert section.count("No data") == 5
     for metric in (
-        "Waiting for further information",
-        "No outcome",
-        "Request sent",
-        "Manual alignment (discussion)",
-        "Unclear",
+        "high_engagement",
+        "need_identification",
+        "concrete_next_step",
+        "proposal",
+        "opportunity_identification",
     ):
         row = pipeline_rate(response, metric)
         assert "0 of 0" in row
@@ -1293,14 +1294,19 @@ def test_conversion_sections_share_compact_responsive_mini_metrics(
         assert "Result: " in section
         assert "Rate: " in section
         assert 'role="progressbar"' not in section
-    pipeline_section = pipeline_conversion_section(response)
-    assert 'class="dashboard-data-table dashboard-meetings-table"' in pipeline_section
-    assert "<table" in pipeline_section
-    assert "<table" not in outreach_conversion_section(response)
+        assert "<table" not in section
 
     template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
+    script = Path("app/static/js/dashboard_filter.js").read_text(encoding="utf-8")
     assert "Company metrics" not in template
     assert "Activity &amp; target progress" in template
+    assert "Meeting outcomes" not in template
+    assert "Total meetings" not in template
+    assert "data-pipeline-legacy-outcomes" not in template
+    assert "dashboard-meetings-table" not in template
+    assert "dashboard-outcome" not in template
+    assert "data-outcome-select" not in script
+    assert ".dashboard-meetings-table" not in css
     assert template.count("dashboard-section-heading") == 8
     assert template.count("dashboard-conversion-card") == 3
     activity_heading = template.index('id="company-metrics-heading"')
@@ -1364,6 +1370,7 @@ def test_current_week_aggregates_all_users_without_private_details(
         assert f'data-metric="{metric}"' in response.text
         assert f'data-actual="{actual}"' in response.text
     for private_value in (
+        "Do not expose company",
         ACTIVE_EMAIL,
         "foreign-dashboard@example.com",
     ):
@@ -2558,7 +2565,7 @@ def test_dashboard_secondary_dashboard_typography_uses_quiet_weights() -> None:
     assert "background:" not in attention_css
     assert "border:" not in attention_css
     assert "font-weight: 400" in mini_result_css
-    assert "Total meetings <span>" in template
+    assert "Total meetings <span>" not in template
     assert "Total meetings <strong>" not in template
 
 
@@ -2738,54 +2745,6 @@ def test_dashboard_secondary_navigation_links_stable_sections(
         < response.text.index('class="shell dashboard-section-navigation-inner"')
         < nav_start
     )
-
-
-def test_dashboard_outcome_filter_and_meeting_table_contract(
-    dashboard_application: tuple[FastAPI, Engine, int, int],
-) -> None:
-    """The Dashboard exposes only current values plus its legacy-only filter."""
-    template = Path("app/templates/dashboard.html").read_text(encoding="utf-8")
-    script = Path("app/static/js/dashboard_filter.js").read_text(encoding="utf-8")
-    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
-    response = get_dashboard(dashboard_application[0])
-
-    assert 'id="dashboard-outcome" name="outcome" data-outcome-select' in template
-    assert "All outcomes" in response.text
-    assert "Legacy outcome" in response.text
-    for outcome in PipelineOutcome:
-        assert outcome.value in response.text
-    for retired_outcome in (
-        "No fit",
-        "Follow-up",
-        "Introduction",
-        "Proposal requested",
-        "Meeting booked",
-        "Opportunity identified",
-    ):
-        assert retired_outcome not in response.text
-    assert 'class="dashboard-data-table dashboard-meetings-table"' in template
-    assert "Meeting date" in template
-    assert "Company" in template
-    assert "Meeting outcome" in template
-    assert "Concrete-next-step rate" not in template
-    assert "Proposal rate" not in template
-    assert "Opportunity identification rate" not in template
-    assert "data-outcome-select" in script
-    assert ".dashboard-meetings-table-wrap" in css
-    assert ".dashboard-meetings-table" in css
-    navigation_css = css.split(".dashboard-section-navigation {", 1)[1].split(
-        "}",
-        1,
-    )[0]
-    shell_css = css.split(".dashboard-section-navigation-shell {", 1)[1].split(
-        "}",
-        1,
-    )[0]
-    inner_css = css.split(".dashboard-section-navigation-inner {", 1)[1].split(
-        "}",
-        1,
-    )[0]
-    shared_shell_css = css.split(".shell {", 1)[1].split("}", 1)[0]
     assert "width: 100%" in shell_css
     assert "width: 100vw" not in shell_css
     assert "position: fixed" not in shell_css

@@ -904,8 +904,7 @@ textarea {
 }
 
 .dashboard-period-field,
-.dashboard-users-control-row,
-.dashboard-outcome-field {
+.dashboard-users-control-row {
   display: grid;
   min-width: 0;
   grid-template-columns: minmax(3.75rem, max-content) minmax(0, 1fr);
@@ -988,8 +987,7 @@ textarea {
 }
 
 .dashboard-users-trigger,
-.dashboard-period-select-control select,
-.dashboard-outcome-field select {
+.dashboard-period-select-control select {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -1014,8 +1012,7 @@ textarea {
   text-align: left;
 }
 
-.dashboard-period-select-control select,
-.dashboard-outcome-field select {
+.dashboard-period-select-control select {
   appearance: none;
 }
 
@@ -2031,22 +2028,6 @@ textarea {
   table-layout: fixed;
 }
 
-.dashboard-meetings-table-wrap {
-  min-width: 0;
-  margin-top: 0.75rem;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-}
-
-.dashboard-meetings-table {
-  min-width: 34rem;
-  table-layout: fixed;
-}
-
-.dashboard-meetings-table th:nth-child(1) { width: 22%; }
-.dashboard-meetings-table th:nth-child(2) { width: 36%; }
-.dashboard-meetings-table th:nth-child(3) { width: 42%; }
-
 .dashboard-comments-column-date {
   width: 12%;
 }
@@ -3052,10 +3033,8 @@ textarea {
   .dashboard-custom-date-fields,
   .dashboard-custom-apply,
   .dashboard-users-fieldset,
-  .dashboard-outcome-field,
   .dashboard-users-dropdown,
   .dashboard-users-trigger,
-  .dashboard-outcome-field select,
   .dashboard-users-panel,
   .dashboard-user-options,
   .dashboard-reset-filters,

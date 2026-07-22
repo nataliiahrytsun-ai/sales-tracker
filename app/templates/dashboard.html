@@ -142,14 +142,6 @@
               </div>
             </div>
           </fieldset>
-          <div class="field-group dashboard-outcome-field">
-            <label for="dashboard-outcome">Meeting outcome</label>
-            <select id="dashboard-outcome" name="outcome" data-outcome-select>
-              {% for value, label in outcome_options %}
-                <option value="{{ value }}"{% if selected_outcome == value %} selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
           <a class="dashboard-reset-filters" href="{{ url_for('dashboard_page') }}?period=current-week&amp;user_scope=all&amp;comment_group=employee">Reset filters</a>
           {% if export_urls %}
             <details class="dashboard-export-dropdown">
@@ -322,8 +314,7 @@
         data-total-meetings="{{ summary.pipeline_conversions.total_meetings }}"
       >
         <div class="report-section-heading">
-          <h2 id="pipeline-conversion-heading" class="dashboard-section-heading">Meeting outcomes</h2>
-          <p class="report-section-note">Total meetings <span>{{ summary.pipeline_conversions.total_meetings }}</span></p>
+          <h2 id="pipeline-conversion-heading" class="dashboard-section-heading">Pipeline conversion metrics</h2>
         </div>
         <dl class="dashboard-mini-metric-grid dashboard-mini-metric-grid-pipeline">
           {% for metric in summary.pipeline_conversions.metrics %}
@@ -341,29 +332,13 @@
               <dd class="dashboard-mini-metric-rate">
                 <span class="visually-hidden">Rate: </span>{{ metric.percentage_text }}
               </dd>
-              {% if metric.comparison %}<dd
+              <dd
                 class="dashboard-comparison dashboard-comparison-{{ metric.comparison.state }}"
                 aria-label="{{ metric.comparison.accessible_label }}"
-              ><span aria-hidden="true">{{ metric.comparison.text }}</span></dd>{% endif %}
+              ><span aria-hidden="true">{{ metric.comparison.text }}</span></dd>
             </div>
           {% endfor %}
-          <div class="dashboard-mini-metric" data-pipeline-legacy-outcomes="{{ summary.pipeline_conversions.legacy_outcome_count }}">
-            <dt>Legacy outcomes</dt>
-            <dd class="dashboard-mini-metric-result">{{ summary.pipeline_conversions.legacy_outcome_count }}</dd>
-          </div>
         </dl>
-        <div class="dashboard-table-wrap dashboard-meetings-table-wrap">
-          <table class="dashboard-data-table dashboard-meetings-table">
-            <thead><tr><th scope="col">Meeting date</th><th scope="col">Company</th><th scope="col">Meeting outcome</th></tr></thead>
-            <tbody>
-              {% for meeting in summary.meetings %}
-                <tr><td data-label="Meeting date">{{ meeting.date.isoformat() }}</td><td data-label="Company">{{ meeting.company }}</td><td data-label="Meeting outcome">{{ meeting.outcome }}</td></tr>
-              {% else %}
-                <tr><td colspan="3">No Pipeline Meetings match these filters.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
       </section>
 
       <section

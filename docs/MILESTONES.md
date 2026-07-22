@@ -35,6 +35,8 @@ An authenticated user can:
 * Meeting entry supports the three required selections
 * Outreach entry supports counters and company counts by country
 * Companies contacted is calculated automatically as the sum of country company counts and is not entered separately
+* Country rows are optional; added rows require a country and a non-negative whole-number company count
+* Replies received, positive replies, and meetings booked from outreach are required
 * The application does not collect company names or identifiers for outreach and does not verify uniqueness or perform deduplication
 * The internal `unique_companies` field may be retained for backward compatibility; its user-facing meaning is the automatically calculated Companies contacted metric
 * Only one outreach record exists per user and date
@@ -70,7 +72,7 @@ Record each test as:
 - Today's outreach record can be created.
 - Today's outreach record can be updated without creating a duplicate.
 - Companies contacted equals the sum of the submitted country company counts and is not entered separately.
-- Optional mood, blocker, company, country, next-step date, and note fields may be empty.
+- Optional mood, blocker, meeting company/country, next-step date, outreach country rows, and note fields may be empty.
 - Main data-entry screens are usable on a mobile-sized viewport.
   
 The milestone is complete only when all required unit tests pass and all manual tests are recorded as Pass.
@@ -323,7 +325,6 @@ Record each test with one of these statuses:
 - Pending: Company is required on edit and whitespace-only values are rejected.
 - Pending: Each of the five current Meeting outcomes saves and displays correctly.
 - Pending: Historical missing-Company and legacy-outcome meetings open safely.
-- Pending: Dashboard outcome filtering, legacy handling, and long labels remain usable on mobile.
 - A recent meeting can be deleted or undone according to the implemented behavior.
 - A daily outreach record can be created.
 - The same daily outreach record can be updated without creating a duplicate.

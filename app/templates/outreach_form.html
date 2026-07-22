@@ -99,40 +99,13 @@
             <output class="country-summary-value" data-countries-selected>{{ country_rows|length }}</output>
           </div>
           <div class="country-summary-card">
-            <span class="country-summary-label">Companies contacted</span>
+            <span class="country-summary-label">Total Companies</span>
             <output class="country-summary-value" data-companies-contacted>{{ country_total }}</output>
           </div>
         </div>
         <p class="country-summary-help">
           Enter the number of companies contacted in each country.<br>
           The total is calculated automatically.
-        </p>
-
-        <div class="country-add-row" data-country-add-row>
-          <div class="field-group country-search-field">
-            <label for="country_search">Country</label>
-            <input
-              id="country_search"
-              type="search"
-              list="country_options"
-              placeholder="Search country..."
-              autocomplete="off"
-              data-country-search
-            >
-            <datalist id="country_options">
-              {% for code, label in country_options %}
-                <option value="{{ label }}" data-country-code="{{ code }}"></option>
-              {% endfor %}
-            </datalist>
-          </div>
-          <div class="field-group country-add-count-field">
-            <label for="country_add_count">Companies count</label>
-            <input id="country_add_count" type="number" min="0" step="1" value="0" data-country-add-count>
-          </div>
-          <button class="button button-secondary country-add-button" type="button" data-country-add>Add</button>
-        </div>
-        <p class="field-error country-inline-message" role="status" data-country-message>
-          {% if errors.countries %}{{ errors.countries }}{% endif %}
         </p>
 
         <div class="country-rows" data-country-rows>
@@ -161,6 +134,33 @@
           {% endfor %}
         </div>
 
+        <div class="country-add-row" data-country-add-row>
+          <div class="field-group country-search-field">
+            <label for="country_search">Country</label>
+            <input
+              id="country_search"
+              type="search"
+              list="country_options"
+              placeholder="Search country..."
+              autocomplete="off"
+              data-country-search
+            >
+            <datalist id="country_options">
+              {% for code, label in country_options %}
+                <option value="{{ label }}" data-country-code="{{ code }}"></option>
+              {% endfor %}
+            </datalist>
+          </div>
+          <div class="field-group country-add-count-field">
+            <label for="country_add_count">Companies count</label>
+            <input id="country_add_count" type="number" min="0" step="1" value="0" data-country-add-count>
+          </div>
+          <button class="button button-secondary country-add-button" type="button" data-country-add>Add</button>
+        </div>
+        <p class="field-error country-inline-message" role="status" data-country-message>
+          {% if errors.countries %}{{ errors.countries }}{% endif %}
+        </p>
+
       </section>
 
       <section
@@ -169,21 +169,21 @@
       >
         <div class="field-section-heading field-section-heading-full">
           <div>
-            <p class="section-kicker">Optional</p>
+            <p class="section-kicker">Required results</p>
             <h2 id="outreach-optional-heading">Results and context</h2>
           </div>
-          <p>Leave any unavailable result or sentiment value empty.</p>
+          <p>Enter all result counts. Sentiment and context may be left empty.</p>
         </div>
 
         <div class="reply-fields">
           <div class="field-group">
-            <label for="replies">Replies received <span class="optional">Optional</span></label>
-            <input id="replies" name="replies" type="number" min="0" step="1" value="{{ values.replies }}" {% if errors.replies %}aria-describedby="replies_error"{% endif %}>
+            <label for="replies">Replies received</label>
+            <input id="replies" name="replies" type="number" min="0" step="1" value="{{ values.replies }}" required {% if errors.replies %}aria-describedby="replies_error"{% endif %}>
           </div>
 
           <div class="field-group">
-            <label for="positive_replies">Positive replies <span class="optional">Optional</span></label>
-            <input id="positive_replies" name="positive_replies" type="number" min="0" step="1" value="{{ values.positive_replies }}" aria-describedby="positive_replies_error">
+            <label for="positive_replies">Positive replies</label>
+            <input id="positive_replies" name="positive_replies" type="number" min="0" step="1" value="{{ values.positive_replies }}" aria-describedby="positive_replies_error" required>
           </div>
 
           <div class="reply-errors" aria-live="polite">
@@ -193,8 +193,8 @@
         </div>
 
         <div class="field-group">
-          <label for="meetings_booked">Meetings booked <span class="optional">Optional</span></label>
-          <input id="meetings_booked" name="meetings_booked" type="number" min="0" step="1" value="{{ values.meetings_booked }}">
+          <label for="meetings_booked">Meetings booked</label>
+          <input id="meetings_booked" name="meetings_booked" type="number" min="0" step="1" value="{{ values.meetings_booked }}" required>
           {% if errors.meetings_booked %}<p class="field-error">{{ errors.meetings_booked }}</p>{% endif %}
         </div>
 

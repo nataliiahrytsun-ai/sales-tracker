@@ -125,22 +125,21 @@ The daily record can be updated throughout the day.
 
 ### Required fields
 
-| Field                          | Input                                                     |
-| ------------------------------ | --------------------------------------------------------- |
-| Total outreach activities      | Number counter                                            |
-| Companies contacted by country | Country and company count                                 |
-| Companies contacted            | Automatically calculated as sum of country company counts |
+| Field                         | Input          |
+| ----------------------------- | -------------- |
+| Total outreach activities     | Number counter |
+| Replies received              | Number counter |
+| Positive replies              | Number counter |
+| Meetings booked from outreach | Number counter |
 
 ### Optional fields
 
-| Field                         | Input                 |
-| ----------------------------- | --------------------- |
-| Replies received              | Number counter        |
-| Positive replies              | Number counter        |
-| Meetings booked from outreach | Number counter        |
-| User mood                     | Difficult, Okay, Good |
-| Main blocker                  | Predefined tag        |
-| Note                          | Short optional text   |
+| Field                          | Input                     |
+| ------------------------------ | ------------------------- |
+| Companies contacted by country | Country and company count |
+| User mood                      | Difficult, Okay, Good     |
+| Main blocker                   | Predefined tag            |
+| Note                           | Short optional text       |
 
 ### Example country breakdown
 
@@ -152,7 +151,11 @@ The daily record can be updated throughout the day.
 
 The system should allow only one outreach record per user and date.
 
-Users enter the number of companies contacted for each selected country. Companies contacted is calculated automatically as the sum of those country company counts. Users do not enter the aggregate value separately. Because the application does not collect company names or identifiers for outreach, it does not verify uniqueness or perform deduplication. The internal unique_companies field may be retained for backward compatibility; its user-facing meaning is the automatically calculated Companies contacted metric.
+Country rows are optional. When a row is added, both Country and Companies count are required, and the count must be a non-negative whole number; zero is valid. Added rows appear above the Add country control.
+
+Total Companies is displayed read-only and calculated live as the sum of all country company counts. With no country rows, Total Companies is zero. The server recalculates the same value before every save and ignores any submitted aggregate value. Because the total is derived, no country-total mismatch warning is shown. The internal `unique_companies` field is retained for backward compatibility and stores this server-derived Total Companies value.
+
+Because the application does not collect company names or identifiers for outreach, it does not verify uniqueness or perform deduplication.
 
 ## 7. Dashboard
 

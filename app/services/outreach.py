@@ -42,9 +42,9 @@ class ValidatedOutreachValues:
 
     total_activities: int
     country_counts: tuple[tuple[str, int], ...]
-    replies: int | None
-    positive_replies: int | None
-    meetings_booked: int | None
+    replies: int
+    positive_replies: int
+    meetings_booked: int
     user_mood: UserMood | None
     blocker_tag: str | None
     note: str | None
@@ -149,14 +149,14 @@ def validate_outreach_form(
         values.replies,
         field="replies",
         label="replies received",
-        required=False,
+        required=True,
         errors=errors,
     )
     positive_replies = _parse_counter(
         values.positive_replies,
         field="positive_replies",
         label="positive replies",
-        required=False,
+        required=True,
         errors=errors,
     )
     if positive_replies is not None:
@@ -172,7 +172,7 @@ def validate_outreach_form(
         values.meetings_booked,
         field="meetings_booked",
         label="meetings booked",
-        required=False,
+        required=True,
         errors=errors,
     )
 
@@ -191,6 +191,9 @@ def validate_outreach_form(
         return None, errors
 
     assert total_activities is not None
+    assert replies is not None
+    assert positive_replies is not None
+    assert meetings_booked is not None
     return (
         ValidatedOutreachValues(
             total_activities=total_activities,
