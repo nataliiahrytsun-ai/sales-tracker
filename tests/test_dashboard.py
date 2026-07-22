@@ -35,6 +35,7 @@ from app.services.dashboard import (
     CURRENT_WEEK,
     CUSTOM_RANGE,
     DASHBOARD_TARGET_ATTENTION_RATIO,
+    DASHBOARD_TARGET_FIELDS,
     PREVIOUS_WEEK,
     ACTIVITY_GRANULARITY_MONTH,
     ACTIVITY_GRANULARITY_PERIOD,
@@ -49,7 +50,7 @@ from app.services.dashboard import (
     resolve_dashboard_filter,
 )
 from app.services.passwords import hash_password
-from app.services.targets import TARGET_FIELDS, TARGET_METRICS
+from app.services.targets import EDITABLE_TARGET_METRICS
 
 ACTIVE_EMAIL = "dashboard-user@example.com"
 TEST_PASSWORD = "dashboard-test-password"
@@ -155,7 +156,7 @@ def add_outreach(
     record = DailyOutreach(
         user_id=user_id,
         activity_date=activity_date,
-        total_activities=total,
+        total_activities=companies,
         unique_companies=companies,
         replies=replies,
         positive_replies=positive,
@@ -186,7 +187,7 @@ def add_meeting(
     note: str = "Private meeting note",
     engagement: CustomerEngagement = CustomerEngagement.HIGH,
     need: NeedIdentified = NeedIdentified.YES,
-    outcome: PipelineOutcome | StoredPipelineOutcome = PipelineOutcome.REQUEST_SENT,
+    outcome: PipelineOutcome = PipelineOutcome.REQUEST_SENT,
 ) -> None:
     session.add(
         PipelineMeeting(
@@ -300,13 +301,12 @@ def dashboard_application(
             occurred_at=datetime(2026, 7, 6, 12, tzinfo=UTC),
         )
         for user_id in (first.id, second.id):
-            for metric in TARGET_METRICS:
-                value = 0 if metric == "companies_contacted" else 2
+            for metric in EDITABLE_TARGET_METRICS:
                 session.add(
                     Target(
                         user_id=user_id,
                         metric_name=metric,
-                        target_value=value,
+                        target_value=2,
                         week_start=date(2026, 7, 13),
                         effective_from=date(2026, 7, 13),
                         effective_until=date(2026, 7, 19),
@@ -403,29 +403,97 @@ def test_dashboard_comparisons_use_elapsed_period_and_same_user_filter(
         if metric.comparison is not None
     }
     assert metric_comparisons == {
-        "total_activities": "↓ 77",
         "companies_contacted": "↓ 4",
         "replies": "↑ 3",
         "positive_replies": "↑ 2",
         "meetings_booked": "↑ 1",
         "meetings_held": "↑ 2",
+        "requests_sent": "↑ 2",
     }
     assert all_users.comparison_periods.previous.display_range == "Jul 6–8, 2026"
     assert one_user.metrics[0].comparison is not None
-    assert one_user.metrics[0].comparison.text == "↑ 3"
+    assert one_user.metrics[0].comparison.text == "↑ 1"
     assert (
         one_user.metrics[0].comparison.accessible_label
-        == "Increased by 3 compared with the previous period"
+        == "Increased by 1 compared with the previous period"
     )
     assert [
         metric.comparison.text for metric in all_users.outreach_conversions.metrics
     ] == [
-        "↑ 12 pp",
-        "↑ 7 pp",
+        "↑ 42 pp",
+        "↑ 25 pp",
         "↑ 13 pp",
     ]
     assert all_users.mood_summary.comparison is not None
     assert all_users.mood_summary.comparison.text == "— No previous mood data"
+
+
+def test_meeting_comparison_uses_local_date_helper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = create_db_engine(
+        f"sqlite:///{(tmp_path / 'dashboard-local-date.db').as_posix()}",
+    )
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        user = User(
+            name="Local Date User",
+            email="local-date@example.com",
+            password_hash=hash_password(TEST_PASSWORD),
+        )
+        session.add(user)
+        session.flush()
+        assert user.id is not None
+        add_meeting(
+            session,
+            user_id=user.id,
+            occurred_at=datetime(2026, 7, 13, 12, tzinfo=UTC),
+        )
+        add_meeting(
+            session,
+            user_id=user.id,
+            occurred_at=datetime(2026, 7, 14, 23, 30, tzinfo=UTC),
+        )
+        session.commit()
+
+        selected, error = resolve_dashboard_filter(
+            today=TEST_DATE,
+            period=CUSTOM_RANGE,
+            from_value="2026-07-14",
+            to_value="2026-07-14",
+        )
+        assert error is None and selected is not None
+
+        def local_date_for_test(meeting: PipelineMeeting) -> date:
+            return (
+                date(2026, 7, 15)
+                if meeting.occurred_at.hour == 23
+                else date(2026, 7, 13)
+            )
+
+        monkeypatch.setattr(
+            "app.services.dashboard._local_meeting_date",
+            local_date_for_test,
+        )
+        monkeypatch.setattr(
+            "app.services.dashboard.meeting_date_bounds",
+            lambda start_date, end_date: (
+                datetime.combine(start_date, datetime.min.time(), tzinfo=UTC),
+                datetime.combine(
+                    end_date + timedelta(days=1),
+                    datetime.min.time(),
+                    tzinfo=UTC,
+                ),
+            ),
+        )
+        summary = get_dashboard_summary(session, selected_period=selected)
+
+    high_engagement = summary.pipeline_conversions.metrics[0]
+    assert high_engagement.denominator == 1
+    assert high_engagement.comparison is not None
+    assert high_engagement.comparison.state == "unavailable"
+    engine.dispose()
 
 
 def test_dashboard_compact_comparisons_have_complete_accessible_labels(
@@ -433,14 +501,14 @@ def test_dashboard_compact_comparisons_have_complete_accessible_labels(
 ) -> None:
     application, _, _, _ = dashboard_application
     response = get_dashboard(application)
-    total_card = metric_card(response, "total_activities")
+    companies_card = metric_card(response, "companies_contacted")
     pipeline_section = pipeline_conversion_section(response)
 
-    assert "vs previous period" not in total_card
-    assert "↑ +" not in total_card
-    assert "↓ −" not in total_card
-    assert 'aria-label="Increased by 23 compared with the previous period"' in total_card
-    assert "↑ 23" in total_card
+    assert "vs previous period" not in companies_card
+    assert "↑ +" not in companies_card
+    assert "↓ −" not in companies_card
+    assert 'aria-label="Increased by 6 compared with the previous period"' in companies_card
+    assert "↑ 6" in companies_card
     assert "— No comparable rate" not in pipeline_section
     assert "percentage points compared with the previous period" in response.text
 
@@ -533,7 +601,7 @@ def assert_empty_selected_dashboard(response: httpx.Response) -> None:
     assert TARGET_CALCULATION_NOTICE in response.text
     assert 'data-users-summary>Select users</span>' in response.text
     assert response.text.count('class="week-metric-card dashboard-metric-card"') == 6
-    for metric, _label in TARGET_FIELDS:
+    for metric, _label in DASHBOARD_TARGET_FIELDS:
         card = metric_card(response, metric)
         assert 'data-actual="0"' in card
         assert 'data-target="0"' in card
@@ -555,8 +623,8 @@ def assert_empty_selected_dashboard(response: httpx.Response) -> None:
         "No discussion prompts for the selected period."
         in response.text
     )
-    assert "Outreach activities: 10" not in response.text
-    assert "Outreach activities: 20" not in response.text
+    assert "Companies contacted: 3" not in response.text
+    assert "Companies contacted: 5" not in response.text
 
 
 def add_pipeline_conversion_records(
@@ -571,31 +639,31 @@ def add_pipeline_conversion_records(
             first_id,
             CustomerEngagement.HIGH,
             NeedIdentified.YES,
-            StoredPipelineOutcome.FOLLOW_UP,
+            PipelineOutcome.REQUEST_SENT,
         ),
         (
             first_id,
             CustomerEngagement.HIGH,
             NeedIdentified.NO,
-            StoredPipelineOutcome.PROPOSAL_REQUESTED,
+            PipelineOutcome.MANUAL_ALIGNMENT,
         ),
         (
             first_id,
             CustomerEngagement.LOW,
             NeedIdentified.YES,
-            StoredPipelineOutcome.NO_FIT,
+            PipelineOutcome.NO_OUTCOME,
         ),
         (
             second_id,
             CustomerEngagement.MEDIUM,
             NeedIdentified.YES,
-            StoredPipelineOutcome.OPPORTUNITY_IDENTIFIED,
+            PipelineOutcome.WAITING_FOR_FURTHER_INFORMATION,
         ),
         (
             second_id,
             CustomerEngagement.LOW,
             NeedIdentified.NO,
-            StoredPipelineOutcome.INTRODUCTION,
+            PipelineOutcome.UNCLEAR,
         ),
     )
     with Session(engine) as session:
@@ -614,7 +682,7 @@ def add_pipeline_conversion_records(
             occurred_at=datetime(2026, 7, 3, 12, tzinfo=UTC),
             engagement=CustomerEngagement.HIGH,
             need=NeedIdentified.YES,
-            outcome=StoredPipelineOutcome.OPPORTUNITY_IDENTIFIED,
+            outcome=PipelineOutcome.REQUEST_SENT,
         )
         session.commit()
 
@@ -670,6 +738,8 @@ def add_outreach_conversion_records(
             activity_date=date(2026, 7, 4),
             total=0,
             companies=0,
+            replies=4,
+            positive=2,
         )
         session.commit()
 
@@ -969,9 +1039,6 @@ def test_pipeline_conversion_known_rates_and_safe_html(
     expected = {
         "high_engagement": (2, 40),
         "need_identification": (3, 60),
-        "concrete_next_step": (4, 80),
-        "proposal": (1, 20),
-        "opportunity_identification": (1, 20),
     }
     for metric, (numerator, percentage) in expected.items():
         row = pipeline_rate(response, metric)
@@ -983,6 +1050,8 @@ def test_pipeline_conversion_known_rates_and_safe_html(
     assert "nan" not in section.lower()
     assert "infinity" not in section.lower()
     assert "performance" not in section.lower()
+    assert "Proposal rate" not in section
+    assert "Opportunity identification rate" not in section
 
 
 def test_pipeline_conversion_filters_users_and_duplicate_ids(
@@ -1015,7 +1084,6 @@ def test_pipeline_conversion_filters_users_and_duplicate_ids(
         first_user,
         "high_engagement",
     )
-    assert 'data-percentage="33"' in pipeline_rate(first_user, "proposal")
     assert 'data-total-meetings="5"' in pipeline_conversion_section(multiple)
     assert 'data-total-meetings="3"' in pipeline_conversion_section(duplicate)
 
@@ -1041,14 +1109,8 @@ def test_pipeline_conversion_date_filter_excludes_other_dates(
 
     assert 'data-total-meetings="5"' in pipeline_conversion_section(included)
     assert 'data-total-meetings="1"' in pipeline_conversion_section(next_day)
-    assert 'data-numerator="1"' in pipeline_rate(
-        next_day,
-        "opportunity_identification",
-    )
-    assert 'data-percentage="100"' in pipeline_rate(
-        next_day,
-        "opportunity_identification",
-    )
+    assert 'data-numerator="1"' in pipeline_rate(next_day, "high_engagement")
+    assert 'data-percentage="100"' in pipeline_rate(next_day, "high_engagement")
 
 
 def test_pipeline_conversion_zero_denominator_is_safe(
@@ -1066,7 +1128,7 @@ def test_pipeline_conversion_zero_denominator_is_safe(
         summary = get_dashboard_summary(session, selected_period=selected)
 
     assert summary.pipeline_conversions.total_meetings == 0
-    assert len(summary.pipeline_conversions.metrics) == 5
+    assert len(summary.pipeline_conversions.metrics) == 2
     assert all(
         metric.denominator == 0
         and metric.numerator == 0
@@ -1090,14 +1152,11 @@ def test_pipeline_conversion_empty_period_renders_no_data(
 
     assert response.status_code == 200
     assert 'data-total-meetings="0"' in section
-    assert section.count('data-pipeline-rate="') == 5
-    assert section.count("No data") == 5
+    assert section.count('data-pipeline-rate="') == 2
+    assert section.count("No data") == 2
     for metric in (
         "high_engagement",
         "need_identification",
-        "concrete_next_step",
-        "proposal",
-        "opportunity_identification",
     ):
         row = pipeline_rate(response, metric)
         assert "0 of 0" in row
@@ -1125,8 +1184,8 @@ def test_outreach_conversion_known_rates_and_distinct_denominators(
     assert response.status_code == 200
     assert 'data-outreach-record-count="2"' in section
     expected = {
-        "reply": (8, 40, 20),
-        "positive_reply": (3, 40, 8),
+        "reply": (8, 10, 80),
+        "positive_reply": (3, 10, 30),
         "meeting_booking": (4, 10, 40),
     }
     for metric, (numerator, denominator, percentage) in expected.items():
@@ -1169,11 +1228,11 @@ def test_outreach_conversion_filters_users_and_duplicate_ids(
     assert 'data-outreach-record-count="2"' in outreach_conversion_section(
         all_users,
     )
-    assert 'data-percentage="20"' in outreach_rate(all_users, "reply")
+    assert 'data-percentage="80"' in outreach_rate(all_users, "reply")
     assert 'data-outreach-record-count="1"' in outreach_conversion_section(
         first_user,
     )
-    assert 'data-percentage="50"' in outreach_rate(first_user, "reply")
+    assert 'data-percentage="125"' in outreach_rate(first_user, "reply")
     assert 'data-percentage="25"' in outreach_rate(
         first_user,
         "meeting_booking",
@@ -1184,7 +1243,7 @@ def test_outreach_conversion_filters_users_and_duplicate_ids(
     assert 'data-outreach-record-count="1"' in outreach_conversion_section(
         duplicate,
     )
-    assert 'data-percentage="50"' in outreach_rate(duplicate, "reply")
+    assert 'data-percentage="125"' in outreach_rate(duplicate, "reply")
 
 
 def test_outreach_conversion_date_filter_and_missing_values(
@@ -1208,13 +1267,13 @@ def test_outreach_conversion_date_filter_and_missing_values(
 
     assert 'data-numerator="8"' in outreach_rate(first_day, "reply")
     assert 'data-numerator="20"' in outreach_rate(second_day, "reply")
-    assert 'data-denominator="30"' in outreach_rate(second_day, "reply")
-    assert 'data-percentage="67"' in outreach_rate(second_day, "reply")
+    assert 'data-denominator="10"' in outreach_rate(second_day, "reply")
+    assert 'data-percentage="200"' in outreach_rate(second_day, "reply")
     assert 'data-numerator="10"' in outreach_rate(
         second_day,
         "positive_reply",
     )
-    assert 'data-percentage="33"' in outreach_rate(
+    assert 'data-percentage="100"' in outreach_rate(
         second_day,
         "positive_reply",
     )
@@ -1245,9 +1304,11 @@ def test_outreach_conversion_zero_denominators_show_no_data(
 
     assert response.status_code == 200
     assert 'data-outreach-record-count="1"' in section
+    assert 'data-actual="4"' in metric_card(response, "replies")
     for metric in ("reply", "positive_reply", "meeting_booking"):
         row = outreach_rate(response, metric)
-        assert 'data-numerator="0"' in row
+        expected_numerator = "4" if metric == "reply" else "2" if metric == "positive_reply" else "0"
+        assert f'data-numerator="{expected_numerator}"' in row
         assert 'data-denominator="0"' in row
         assert 'data-percentage="none"' in row
         assert "No data" in row
@@ -1346,7 +1407,7 @@ def test_conversion_sections_share_compact_responsive_mini_metrics(
     assert "grid-column: 1 / -1" in tablet_css
     desktop_css = css.split("@media (min-width: 64rem)", 1)[1]
     assert ".dashboard-mini-metric-grid-pipeline" in desktop_css
-    assert "grid-template-columns: repeat(5, minmax(0, 1fr))" in desktop_css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in desktop_css
     assert ".dashboard-mini-metric-grid-outreach" in desktop_css
     assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in desktop_css
 
@@ -1359,22 +1420,58 @@ def test_current_week_aggregates_all_users_without_private_details(
     assert response.status_code == 200
     assert "13 Jul – 19 Jul 2026" in response.text
     expected = {
-        "total_activities": 30,
         "companies_contacted": 8,
         "replies": 4,
         "positive_replies": 2,
         "meetings_booked": 1,
         "meetings_held": 3,
+        "requests_sent": 3,
     }
     for metric, actual in expected.items():
         assert f'data-metric="{metric}"' in response.text
         assert f'data-actual="{actual}"' in response.text
+    assert re.findall(r'data-metric="([^"]+)"', response.text) == [
+        "companies_contacted",
+        "replies",
+        "positive_replies",
+        "meetings_booked",
+        "meetings_held",
+        "requests_sent",
+    ]
     for private_value in (
         "Do not expose company",
         ACTIVE_EMAIL,
         "foreign-dashboard@example.com",
     ):
         assert private_value not in response.text
+
+
+def test_requests_sent_counts_only_current_request_sent_outcome(
+    dashboard_application: tuple[FastAPI, Engine, int, int],
+) -> None:
+    application, engine, first_id, _ = dashboard_application
+    with Session(engine) as session:
+        add_meeting(
+            session,
+            user_id=first_id,
+            occurred_at=datetime(2026, 7, 15, 10, tzinfo=UTC),
+            outcome=PipelineOutcome.NO_OUTCOME,
+        )
+        session.add(
+            PipelineMeeting(
+                user_id=first_id,
+                occurred_at=datetime(2026, 7, 15, 11, tzinfo=UTC),
+                customer_engagement=CustomerEngagement.HIGH,
+                need_identified=NeedIdentified.YES,
+                outcome=StoredPipelineOutcome.FOLLOW_UP,
+                company_name="Legacy outcome company",
+            ),
+        )
+        session.commit()
+
+    response = get_dashboard(application)
+    assert 'data-actual="5"' in metric_card(response, "meetings_held")
+    assert 'data-actual="3"' in metric_card(response, "requests_sent")
 
 
 @pytest.mark.parametrize("grouping", ("employee", "date", "source"))
@@ -1408,15 +1505,21 @@ def test_current_week_company_targets_are_summed_and_progress_is_safe(
 ) -> None:
     application, _, _, _ = dashboard_application
     response = get_dashboard(application)
-    assert 'data-metric="total_activities"' in response.text
-    assert 'data-target="4"' in response.text
+    assert 'data-metric="total_activities"' not in response.text
+    companies_card = metric_card(response, "companies_contacted")
+    assert 'data-target="4"' in companies_card
     assert 'data-remaining="0"' in response.text
-    assert 'data-percentage="750"' in response.text
+    assert 'data-percentage="200"' in companies_card
     assert 'data-bar-percentage="100"' in response.text
-    assert "26 above target" in response.text
-    assert 'data-metric="companies_contacted"' in response.text
-    assert 'data-target="0"' in response.text
-    assert "No target" in response.text
+    assert "4 above target" in companies_card
+    assert response.text.count('data-metric="companies_contacted"') == 1
+    assert "Total outreach activities" not in response.text
+    requests_card = metric_card(response, "requests_sent")
+    assert "Requests sent" in requests_card
+    assert 'data-actual="3"' in requests_card
+    assert 'data-target="4"' in requests_card
+    assert 'data-percentage="75"' in requests_card
+    assert "1 remaining" in requests_card
     assert TARGET_CALCULATION_NOTICE in response.text
 
 
@@ -1447,15 +1550,17 @@ def test_selected_user_filters_actuals_meetings_and_target(
     )
 
     assert response.status_code == 200
-    assert 'data-actual="10"' in metric_card(response, "total_activities")
-    assert 'data-target="2"' in metric_card(response, "total_activities")
+    assert 'data-actual="3"' in metric_card(response, "companies_contacted")
+    assert 'data-target="2"' in metric_card(response, "companies_contacted")
     assert 'data-actual="1"' in metric_card(response, "meetings_held")
+    assert 'data-actual="1"' in metric_card(response, "requests_sent")
+    assert 'data-target="2"' in metric_card(response, "requests_sent")
     assert (
-        "2026-07-13 — Outreach activities: 10; "
+        "2026-07-13 — Companies contacted: 3; "
         "Pipeline meetings held: 1"
     ) in response.text
     assert (
-        "2026-07-14 — Outreach activities: 0; "
+        "2026-07-14 — Companies contacted: 0; "
         "Pipeline meetings held: 0"
     ) in response.text
     assert 'data-country="BR"' in response.text
@@ -1481,10 +1586,12 @@ def test_multiple_and_duplicate_user_ids_use_each_user_once(
         f"&user_id={first_id}&user_id={first_id}",
     )
 
-    assert 'data-actual="30"' in metric_card(multiple, "total_activities")
-    assert 'data-target="4"' in metric_card(multiple, "total_activities")
-    assert 'data-actual="10"' in metric_card(duplicate, "total_activities")
-    assert 'data-target="2"' in metric_card(duplicate, "total_activities")
+    assert 'data-actual="8"' in metric_card(multiple, "companies_contacted")
+    assert 'data-target="4"' in metric_card(multiple, "companies_contacted")
+    assert 'data-actual="3"' in metric_card(duplicate, "companies_contacted")
+    assert 'data-target="2"' in metric_card(duplicate, "companies_contacted")
+    assert 'data-actual="3"' in metric_card(multiple, "requests_sent")
+    assert 'data-actual="1"' in metric_card(duplicate, "requests_sent")
 
 
 def test_period_and_selected_users_filter_together_with_prorated_targets(
@@ -1507,12 +1614,12 @@ def test_period_and_selected_users_filter_together_with_prorated_targets(
         f"&user_scope=selected&user_id={second_id}",
     )
 
-    assert 'data-actual="7"' in metric_card(previous, "total_activities")
-    assert 'data-target="7"' in metric_card(previous, "total_activities")
-    assert 'data-actual="29"' in metric_card(month, "total_activities")
-    assert 'data-target="11"' in metric_card(month, "total_activities")
-    assert 'data-actual="20"' in metric_card(custom, "total_activities")
-    assert 'data-target="0.3"' in metric_card(custom, "total_activities")
+    assert 'data-actual="2"' in metric_card(previous, "companies_contacted")
+    assert 'data-target="7"' in metric_card(previous, "companies_contacted")
+    assert 'data-actual="9"' in metric_card(month, "companies_contacted")
+    assert 'data-target="11"' in metric_card(month, "companies_contacted")
+    assert 'data-actual="5"' in metric_card(custom, "companies_contacted")
+    assert 'data-target="0.3"' in metric_card(custom, "companies_contacted")
     for response in (previous, month):
         assert response.status_code == 200
         assert TARGET_CALCULATION_NOTICE in response.text
@@ -1539,9 +1646,9 @@ def test_unknown_and_malformed_user_ids_are_safe(
     )
 
     assert with_valid_user.status_code == 200
-    assert 'data-actual="20"' in metric_card(
+    assert 'data-actual="5"' in metric_card(
         with_valid_user,
-        "total_activities",
+        "companies_contacted",
     )
     assert_empty_selected_dashboard(no_valid_user)
 
@@ -1558,8 +1665,8 @@ def test_empty_selected_scope_is_applied_and_user_can_be_selected_afterward(
 
     assert_empty_selected_dashboard(empty)
     assert "Select at least one user to view data." not in selected.text
-    assert 'data-actual="10"' in metric_card(selected, "total_activities")
-    assert 'data-target="2"' in metric_card(selected, "total_activities")
+    assert 'data-actual="3"' in metric_card(selected, "companies_contacted")
+    assert 'data-target="2"' in metric_card(selected, "companies_contacted")
     assert 'data-country="AT"' not in selected.text
     assert 'data-mood="difficult"' not in selected.text
 
@@ -1807,15 +1914,15 @@ def test_activity_country_blocker_and_mood_aggregates_use_required_sources(
     application, _, _, _ = dashboard_application
     response = get_dashboard(application)
     assert 'data-start="2026-07-13"' in response.text
-    assert "Outreach activities" in response.text
+    assert "Companies contacted" in response.text
     assert "Pipeline meetings held" in response.text
     assert (
-        "Outreach activities: 10; Pipeline meetings held: 1"
+        "Companies contacted: 3; Pipeline meetings held: 1"
         in response.text
     )
     assert 'aria-label="Chart legend"' in response.text
     assert 'class="visually-hidden"' in response.text
-    assert 'class="dashboard-chart-value">10</span>' in response.text
+    assert 'class="dashboard-chart-value">3</span>' in response.text
     assert 'class="dashboard-chart-value">1</span>' in response.text
     assert 'data-country="BR"' in response.text
     assert "Brazil" in response.text
@@ -1855,6 +1962,7 @@ def test_analysis_grid_preserves_values_empty_states_and_responsive_markup(
     assert response.text.count("dashboard-analysis-section") == 2
     assert '>Countries</h3>' in response.text
     assert '>Blockers</h3>' in response.text
+    assert "Outreach entries" in response.text
     assert '>Mood summary</h2>' in response.text
     assert '>Mood distribution</h3>' in response.text
     assert '>Daily mood trend</h3>' in response.text
@@ -2036,8 +2144,8 @@ def test_aggregate_breakdown_values_and_separate_daily_series(
         date(2026, 7, day)
         for day in range(13, 20)
     }
-    assert daily[date(2026, 7, 13)] == (10, 1)
-    assert daily[date(2026, 7, 14)] == (20, 2)
+    assert daily[date(2026, 7, 13)] == (3, 1)
+    assert daily[date(2026, 7, 14)] == (5, 2)
     assert daily[date(2026, 7, 19)] == (0, 0)
     assert {item.key: item.value for item in summary.countries} == {
         "AT": 2,
@@ -2102,9 +2210,9 @@ def test_activity_chart_groups_long_periods_by_calendar_week(
             for bucket in month_summary.activity_buckets
         ]
         assert month_values == [
-            (date(2026, 7, 1), date(2026, 7, 5), 3, 0),
-            (date(2026, 7, 6), date(2026, 7, 12), 16, 1),
-            (date(2026, 7, 13), date(2026, 7, 19), 30, 3),
+                (date(2026, 7, 1), date(2026, 7, 5), 1, 0),
+                (date(2026, 7, 6), date(2026, 7, 12), 6, 1),
+                (date(2026, 7, 13), date(2026, 7, 19), 8, 3),
             (date(2026, 7, 20), date(2026, 7, 26), 0, 0),
             (date(2026, 7, 27), date(2026, 7, 31), 0, 0),
         ]
@@ -2240,21 +2348,19 @@ def test_previous_week_and_month_use_saved_and_prorated_targets(
 ) -> None:
     application, _, _, _ = dashboard_application
     previous = get_dashboard(application, "/dashboard?period=previous-week")
-    assert 'data-metric="total_activities"' in previous.text
-    assert 'data-actual="16"' in previous.text
-    assert 'data-actual="19"' not in previous.text
-    assert 'data-target="16"' in metric_card(previous, "total_activities")
-    assert 'data-percentage="100"' in metric_card(previous, "total_activities")
+    assert 'data-metric="total_activities"' not in previous.text
+    assert 'data-actual="6"' in metric_card(previous, "companies_contacted")
+    assert 'data-target="16"' in metric_card(previous, "companies_contacted")
+    assert 'data-percentage="38"' in metric_card(previous, "companies_contacted")
     assert TARGET_CALCULATION_NOTICE in previous.text
     assert previous.text.count('role="progressbar"') == 6
 
     month = get_dashboard(application, "/dashboard?period=current-month")
-    assert 'data-metric="total_activities"' in month.text
-    assert 'data-actual="49"' in month.text
-    assert 'data-actual="148"' not in month.text
-    assert 'data-target="20"' in metric_card(month, "total_activities")
-    assert 'data-percentage="245"' in metric_card(month, "total_activities")
-    assert "29 above target" in metric_card(month, "total_activities")
+    assert 'data-metric="total_activities"' not in month.text
+    assert 'data-actual="15"' in metric_card(month, "companies_contacted")
+    assert 'data-target="20"' in metric_card(month, "companies_contacted")
+    assert 'data-percentage="75"' in metric_card(month, "companies_contacted")
+    assert "5 remaining" in metric_card(month, "companies_contacted")
 
 
 def test_custom_targets_prorate_one_and_multiple_overlapping_weeks(
@@ -2270,15 +2376,15 @@ def test_custom_targets_prorate_one_and_multiple_overlapping_weeks(
         "/dashboard?period=custom&from=2026-07-12&to=2026-07-13",
     )
 
-    one_day_card = metric_card(one_day, "total_activities")
+    one_day_card = metric_card(one_day, "companies_contacted")
     assert 'data-target="0.6"' in one_day_card
-    assert 'data-percentage="1750"' in one_day_card
-    assert "9.4 above target" in one_day_card
+    assert 'data-percentage="525"' in one_day_card
+    assert "2.4 above target" in one_day_card
 
-    two_week_card = metric_card(two_weeks, "total_activities")
+    two_week_card = metric_card(two_weeks, "companies_contacted")
     assert 'data-target="2.9"' in two_week_card
-    assert 'data-percentage="665"' in two_week_card
-    assert "16.1 above target" in two_week_card
+    assert 'data-percentage="245"' in two_week_card
+    assert "4.1 above target" in two_week_card
 
 
 def test_month_prorates_partial_first_and_last_weeks(
@@ -2289,7 +2395,7 @@ def test_month_prorates_partial_first_and_last_weeks(
         session.add(
             Target(
                 user_id=first_id,
-                metric_name="total_activities",
+                metric_name="companies_contacted",
                 target_value=14,
                 week_start=date(2026, 6, 29),
                 effective_from=date(2026, 6, 29),
@@ -2299,7 +2405,7 @@ def test_month_prorates_partial_first_and_last_weeks(
         session.add(
             Target(
                 user_id=first_id,
-                metric_name="total_activities",
+                metric_name="companies_contacted",
                 target_value=21,
                 week_start=date(2026, 7, 27),
                 effective_from=date(2026, 7, 27),
@@ -2312,13 +2418,13 @@ def test_month_prorates_partial_first_and_last_weeks(
         application,
         f"/dashboard?period=current-month&user_scope=selected&user_id={first_id}",
     )
-    card = metric_card(response, "total_activities")
+    card = metric_card(response, "companies_contacted")
     # 14 * 5/7 + 7 + 2 + 21 * 5/7 = 34.
     assert 'data-target="34"' in card
-    assert 'data-actual="20"' in card
-    assert 'data-remaining="14"' in card
-    assert 'data-percentage="59"' in card
-    assert "14 remaining" in card
+    assert 'data-actual="6"' in card
+    assert 'data-remaining="28"' in card
+    assert 'data-percentage="18"' in card
+    assert "28 remaining" in card
 
 
 def test_proration_crosses_month_and_iso_year_boundaries(
@@ -2330,7 +2436,7 @@ def test_proration_crosses_month_and_iso_year_boundaries(
             session.add(
                 Target(
                     user_id=first_id,
-                    metric_name="total_activities",
+                    metric_name="companies_contacted",
                     target_value=14,
                     week_start=week_start,
                     effective_from=week_start,
@@ -2349,11 +2455,11 @@ def test_proration_crosses_month_and_iso_year_boundaries(
         "/dashboard?period=custom&from=2026-06-30&to=2026-07-01"
         f"&user_scope=selected&user_id={first_id}",
     )
-    assert 'data-target="6"' in metric_card(iso_year, "total_activities")
-    assert 'data-target="4"' in metric_card(month_boundary, "total_activities")
-    assert 'data-actual="102"' in metric_card(
+    assert 'data-target="6"' in metric_card(iso_year, "companies_contacted")
+    assert 'data-target="4"' in metric_card(month_boundary, "companies_contacted")
+    assert 'data-actual="100"' in metric_card(
         month_boundary,
-        "total_activities",
+        "companies_contacted",
     )
 
 
@@ -2391,13 +2497,13 @@ def test_user_without_target_does_not_inherit_another_users_target(
     )
     all_users = get_dashboard(application)
 
-    assert 'data-target="0"' in metric_card(only_no_target, "total_activities")
-    assert 'data-actual="11"' in metric_card(only_no_target, "total_activities")
-    assert "No target" in metric_card(only_no_target, "total_activities")
-    assert 'data-target="2"' in metric_card(with_target, "total_activities")
-    assert 'data-actual="21"' in metric_card(with_target, "total_activities")
-    assert 'data-target="4"' in metric_card(all_users, "total_activities")
-    assert 'data-actual="41"' in metric_card(all_users, "total_activities")
+    assert 'data-target="0"' in metric_card(only_no_target, "companies_contacted")
+    assert 'data-actual="1"' in metric_card(only_no_target, "companies_contacted")
+    assert "No target" in metric_card(only_no_target, "companies_contacted")
+    assert 'data-target="2"' in metric_card(with_target, "companies_contacted")
+    assert 'data-actual="4"' in metric_card(with_target, "companies_contacted")
+    assert 'data-target="4"' in metric_card(all_users, "companies_contacted")
+    assert 'data-actual="9"' in metric_card(all_users, "companies_contacted")
 
 
 def test_prorated_remaining_and_zero_target_progress_states(
@@ -2408,7 +2514,7 @@ def test_prorated_remaining_and_zero_target_progress_states(
         session.add(
             Target(
                 user_id=first_id,
-                metric_name="total_activities",
+                metric_name="companies_contacted",
                 target_value=14,
                 week_start=date(2026, 6, 29),
                 effective_from=date(2026, 6, 29),
@@ -2422,7 +2528,7 @@ def test_prorated_remaining_and_zero_target_progress_states(
         "/dashboard?period=custom&from=2026-07-02&to=2026-07-02"
         f"&user_scope=selected&user_id={first_id}",
     )
-    remaining_card = metric_card(remaining, "total_activities")
+    remaining_card = metric_card(remaining, "companies_contacted")
     assert 'data-target="2"' in remaining_card
     assert 'data-remaining="2"' in remaining_card
     assert 'data-percentage="0"' in remaining_card
@@ -2430,7 +2536,10 @@ def test_prorated_remaining_and_zero_target_progress_states(
     assert "2 remaining" in remaining_card
     assert "Needs attention" in remaining_card
 
-    zero_target = get_dashboard(application)
+    zero_target = get_dashboard(
+        application,
+        "/dashboard?period=custom&from=2026-05-01&to=2026-05-01",
+    )
     zero_card = metric_card(zero_target, "companies_contacted")
     assert 'data-target="0"' in zero_card
     assert 'data-percentage="none"' in zero_card
@@ -2604,10 +2713,10 @@ def test_custom_range_and_validation_preserve_dates(
     )
     assert custom.status_code == 200
     assert custom.text.count("1 Jul – 1 Jul 2026") == 1
-    assert 'data-actual="3"' in custom.text
+    assert 'data-actual="1"' in metric_card(custom, "companies_contacted")
     assert "Targets adjusted to 1 selected day" in custom.text
     assert "Compared with Jun 30, 2026" in custom.text
-    assert 'data-target="0"' in metric_card(custom, "total_activities")
+    assert 'data-target="0"' in metric_card(custom, "companies_contacted")
     assert 'data-custom-applied="true"' in custom.text
     assert "Edit dates" in custom.text
     period_control_start = custom.text.index('class="dashboard-period-control-row"')
@@ -2672,7 +2781,7 @@ def test_empty_dashboard_and_reset(
     assert "Reset filters" in reset.text
     assert "?period=current-week&amp;user_scope=all" in reset.text
     assert 'data-initial-user-scope="all"' in reset.text
-    assert 'data-actual="30"' in metric_card(reset, "total_activities")
+    assert 'data-actual="8"' in metric_card(reset, "companies_contacted")
 
 
 def test_dashboard_secondary_navigation_links_stable_sections(
@@ -3059,7 +3168,7 @@ def test_home_links_to_dashboard_and_filter_is_responsive(
     assert 'class="report-section-note"' in template
     assert "Outreach and meetings shown separately." in template
     assert (
-        "Outreach activities and Meetings held are separate series."
+        "Companies contacted and Meetings held are separate series."
         not in template
     )
     assert ".report-section-heading" in css

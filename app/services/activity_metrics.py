@@ -2,14 +2,14 @@
 
 from collections.abc import Iterable
 
-from app.models import DailyOutreach, PipelineMeeting
+from app.models import DailyOutreach, PipelineMeeting, PipelineOutcome
 
 
 def aggregate_activity_actuals(
     outreach_records: Iterable[DailyOutreach],
     meetings: Iterable[PipelineMeeting],
 ) -> dict[str, int]:
-    """Calculate the six canonical activity metrics from their single sources."""
+    """Calculate canonical activity actuals from their single sources."""
     outreach = list(outreach_records)
     meeting_records = list(meetings)
     return {
@@ -19,6 +19,10 @@ def aggregate_activity_actuals(
         "positive_replies": sum(record.positive_replies or 0 for record in outreach),
         "meetings_booked": sum(record.meetings_booked or 0 for record in outreach),
         "meetings_held": len(meeting_records),
+        "requests_sent": sum(
+            meeting.outcome.value == PipelineOutcome.REQUEST_SENT.value
+            for meeting in meeting_records
+        ),
     }
 
 

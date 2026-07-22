@@ -15,7 +15,7 @@ from app.database import get_session
 from app.models import User
 from app.services.outreach import current_local_date
 from app.services.targets import (
-    TARGET_FIELDS,
+    EDITABLE_TARGET_FIELDS,
     TargetFormValues,
     TargetWeek,
     current_week_bounds,
@@ -50,7 +50,7 @@ def target_template_context(
         "values": values,
         "errors": errors or {},
         "saved": saved,
-        "target_fields": TARGET_FIELDS,
+        "target_fields": EDITABLE_TARGET_FIELDS,
         "selected_week": selected_week,
         "week_presentation": week_presentation,
         "is_past_week": selected_week.start_date < current_week_start,
@@ -120,6 +120,7 @@ def save_targets(
     positive_replies: Annotated[str, Form()] = "",
     meetings_booked: Annotated[str, Form()] = "",
     meetings_held: Annotated[str, Form()] = "",
+    requests_sent: Annotated[str, Form()] = "",
 ) -> Response:
     """Validate and upsert the current user's weekly targets."""
     values = TargetFormValues(
@@ -129,6 +130,7 @@ def save_targets(
         positive_replies=positive_replies,
         meetings_booked=meetings_booked,
         meetings_held=meetings_held,
+        requests_sent=requests_sent,
     )
     selected_week, week_error = resolve_target_week(week, today=today)
     validated, errors = validate_target_form(values)

@@ -66,7 +66,7 @@ def comments_application(
             DailyOutreach(
                 user_id=first.id,
                 activity_date=date(2026, 7, 13),
-                total_activities=3,
+                total_activities=1,
                 unique_companies=1,
                 note="Anna outreach comment",
             ),
@@ -75,7 +75,7 @@ def comments_application(
             DailyOutreach(
                 user_id=second.id,
                 activity_date=date(2026, 7, 14),
-                total_activities=4,
+                total_activities=2,
                 unique_companies=2,
                 note="Ben outreach comment",
             ),
@@ -84,7 +84,7 @@ def comments_application(
             DailyOutreach(
                 user_id=second.id,
                 activity_date=date(2026, 7, 7),
-                total_activities=2,
+                total_activities=1,
                 unique_companies=1,
                 note="Previous period comment",
             ),
@@ -208,7 +208,8 @@ def test_comments_default_invalid_fallback_sources_and_safe_rendering(
         assert response.text.count("data-comment-source=") == 3
         assert "Target history" not in response.text
         assert "ISO KW" not in response.text
-        assert 'data-metric="total_activities"' in response.text
+        assert 'data-metric="total_activities"' not in response.text
+        assert response.text.count('data-metric="companies_contacted"') == 1
 
 
 def test_comments_group_by_date_and_source(

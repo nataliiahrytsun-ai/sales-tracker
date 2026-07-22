@@ -20,7 +20,10 @@ from app.main import create_app
 from app.models import Target, User
 from app.routes.outreach import current_local_date
 from app.services.passwords import hash_password
-from app.services.targets import TARGET_METRICS, resolve_target_week
+from app.services.targets import (
+    EDITABLE_TARGET_METRICS as TARGET_METRICS,
+    resolve_target_week,
+)
 
 ACTIVE_EMAIL = "targets-user@example.com"
 OTHER_EMAIL = "other-targets-user@example.com"
@@ -43,6 +46,7 @@ def target_data(**overrides: str) -> dict[str, str]:
         "positive_replies": "10",
         "meetings_booked": "5",
         "meetings_held": "4",
+        "requests_sent": "6",
     }
     values.update(overrides)
     return values
@@ -129,7 +133,7 @@ def test_targets_require_authentication(
         assert response.headers["location"] == "/login"
 
 
-def test_first_save_creates_six_targets_for_monday_to_sunday(
+def test_first_save_creates_seven_targets_for_monday_to_sunday(
     targets_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
     """The first save creates one owned row for every supported metric."""
@@ -153,7 +157,7 @@ def test_first_save_creates_six_targets_for_monday_to_sunday(
             select(Target).where(Target.user_id == active_user_id),
         ).all()
         assert {target.metric_name for target in targets} == set(TARGET_METRICS)
-        assert len(targets) == 6
+        assert len(targets) == 7
         assert {target.week_start for target in targets} == {date(2026, 7, 13)}
         assert {target.effective_from for target in targets} == {date(2026, 7, 13)}
         assert {target.effective_until for target in targets} == {date(2026, 7, 19)}
@@ -199,6 +203,8 @@ def test_weekly_target_current_week_default_and_iso_boundary_is_server_derived(
     assert "Week 31 · 27 Jul – 2 Aug 2026" in visible_text(other)
     assert "KW" not in current.text
     assert 'type="week"' not in current.text
+    assert 'name="requests_sent"' in current.text
+    assert "Requests sent" in visible_text(current)
 
     week, error = resolve_target_week("2026-W01", today=TEST_DATE)
     assert error is None and week is not None
@@ -404,7 +410,11 @@ def test_repeated_save_updates_without_duplicates_and_displays_values(
         ) as client:
             await login(client)
             await client.post("/targets", data=target_data())
-            updated = target_data(total_activities="120", meetings_held="8")
+            updated = target_data(
+                total_activities="120",
+                meetings_held="8",
+                requests_sent="9",
+            )
             await client.post("/targets", data=updated)
             return await client.get("/targets?saved=true")
 
@@ -415,15 +425,18 @@ def test_repeated_save_updates_without_duplicates_and_displays_values(
     assert 'value="120"' in page.text
     assert 'name="meetings_held"' in page.text
     assert 'value="8"' in page.text
+    assert 'name="requests_sent"' in page.text
+    assert 'value="9"' in page.text
 
     with Session(engine) as session:
         targets = session.exec(
             select(Target).where(Target.user_id == active_user_id),
         ).all()
-        assert len(targets) == 6
+        assert len(targets) == 7
         stored = {target.metric_name: target.target_value for target in targets}
         assert stored["total_activities"] == 120
         assert stored["meetings_held"] == 8
+        assert stored["requests_sent"] == 9
 
 
 def test_zero_values_are_accepted(
@@ -447,7 +460,7 @@ def test_zero_values_are_accepted(
         targets = session.exec(
             select(Target).where(Target.user_id == active_user_id),
         ).all()
-        assert len(targets) == 6
+        assert len(targets) == 7
         assert all(target.target_value == 0 for target in targets)
 
 
@@ -528,8 +541,8 @@ def test_targets_are_scoped_to_the_authenticated_owner(
         other_targets = session.exec(
             select(Target).where(Target.user_id == other_user_id),
         ).all()
-        assert len(own_targets) == 6
-        assert len(other_targets) == 6
+        assert len(own_targets) == 7
+        assert len(other_targets) == 7
         assert all(target.target_value == 91 for target in other_targets)
 
 

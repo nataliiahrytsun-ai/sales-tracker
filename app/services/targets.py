@@ -17,6 +17,11 @@ TARGET_FIELDS = (
     ("meetings_held", "Meetings held"),
 )
 TARGET_METRICS = tuple(metric for metric, _label in TARGET_FIELDS)
+REQUESTS_SENT_TARGET_FIELD = ("requests_sent", "Requests sent")
+EDITABLE_TARGET_FIELDS = (*TARGET_FIELDS, REQUESTS_SENT_TARGET_FIELD)
+EDITABLE_TARGET_METRICS = tuple(
+    metric for metric, _label in EDITABLE_TARGET_FIELDS
+)
 
 
 @dataclass(frozen=True)
@@ -29,6 +34,7 @@ class TargetFormValues:
     positive_replies: str = ""
     meetings_booked: str = ""
     meetings_held: str = ""
+    requests_sent: str = ""
 
 
 @dataclass(frozen=True)
@@ -153,7 +159,7 @@ def get_user_targets(
             .where(
                 Target.user_id == user_id,
                 Target.week_start == week_start,
-                Target.metric_name.in_(TARGET_METRICS),
+                Target.metric_name.in_(EDITABLE_TARGET_METRICS),
             )
             .order_by(Target.id),
         ),
@@ -165,7 +171,7 @@ def form_values_from_targets(targets: list[Target]) -> TargetFormValues:
     values = {
         target.metric_name: str(int(target.target_value))
         for target in targets
-        if target.metric_name in TARGET_METRICS
+        if target.metric_name in EDITABLE_TARGET_METRICS
     }
     return TargetFormValues(
         **{field.name: values.get(field.name, "") for field in fields(TargetFormValues)},
@@ -175,10 +181,10 @@ def form_values_from_targets(targets: list[Target]) -> TargetFormValues:
 def validate_target_form(
     values: TargetFormValues,
 ) -> tuple[dict[str, int] | None, dict[str, str]]:
-    """Require a non-negative whole number for all six target metrics."""
+    """Require a non-negative whole number for every editable target metric."""
     validated: dict[str, int] = {}
     errors: dict[str, str] = {}
-    for metric in TARGET_METRICS:
+    for metric in EDITABLE_TARGET_METRICS:
         raw_value = getattr(values, metric).strip()
         try:
             parsed_value = int(raw_value)
@@ -209,7 +215,7 @@ def upsert_user_targets(
             week_start=week_start,
         )
     }
-    for metric in TARGET_METRICS:
+    for metric in EDITABLE_TARGET_METRICS:
         target = existing.get(metric)
         if target is None:
             target = Target(
@@ -228,6 +234,9 @@ def upsert_user_targets(
 __all__ = [
     "TARGET_FIELDS",
     "TARGET_METRICS",
+    "EDITABLE_TARGET_FIELDS",
+    "EDITABLE_TARGET_METRICS",
+    "REQUESTS_SENT_TARGET_FIELD",
     "TargetFormValues",
     "TargetWeek",
     "TargetWeekPresentation",

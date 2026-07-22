@@ -16,7 +16,6 @@ from app.models import (
     NeedIdentified,
     OutreachCountry,
     PipelineMeeting,
-    StoredPipelineOutcome,
     Target,
     User,
     UserMood,
@@ -27,7 +26,11 @@ from app.services.discussion_prompts import (
     build_discussion_prompts,
 )
 from app.services.meetings import BLOCKER_OPTIONS, meeting_date_bounds
-from app.services.targets import TARGET_FIELDS, TARGET_METRICS, current_week_bounds
+from app.services.targets import (
+    REQUESTS_SENT_TARGET_FIELD,
+    TARGET_FIELDS,
+    current_week_bounds,
+)
 
 CURRENT_WEEK = "current-week"
 PREVIOUS_WEEK = "previous-week"
@@ -37,6 +40,10 @@ DASHBOARD_METRIC_LABEL_OVERRIDES = {
     "meetings_booked": "Meetings booked from outreach",
     "meetings_held": "Pipeline meetings held",
 }
+DASHBOARD_TARGET_FIELDS = (*TARGET_FIELDS[1:], REQUESTS_SENT_TARGET_FIELD)
+DASHBOARD_TARGET_METRICS = tuple(
+    metric for metric, _label in DASHBOARD_TARGET_FIELDS
+)
 PERIOD_OPTIONS = (
     (CURRENT_WEEK, "Current week"),
     (PREVIOUS_WEEK, "Previous week"),
@@ -678,13 +685,13 @@ def _company_targets(
     user_ids: tuple[int, ...] | None,
 ) -> dict[str, Decimal]:
     """Prorate every weekly target by its inclusive period overlap."""
-    totals = {metric: Decimal(0) for metric in TARGET_METRICS}
+    totals = {metric: Decimal(0) for metric in DASHBOARD_TARGET_METRICS}
     first_week_start = start_date - timedelta(days=start_date.weekday())
     last_week_start = end_date - timedelta(days=end_date.weekday())
     query = select(Target).where(
         Target.week_start >= first_week_start,
         Target.week_start <= last_week_start,
-        Target.metric_name.in_(TARGET_METRICS),
+        Target.metric_name.in_(DASHBOARD_TARGET_METRICS),
     )
     if user_ids is not None:
         query = query.where(Target.user_id.in_(user_ids))
@@ -821,7 +828,7 @@ def _activity_buckets(
 ) -> tuple[ActivityBucket, ...]:
     outreach_by_day: Counter[date] = Counter()
     for record in outreach:
-        outreach_by_day[record.activity_date] += record.total_activities
+        outreach_by_day[record.activity_date] += record.unique_companies
     meetings_by_day: Counter[date] = Counter(
         _local_meeting_date(meeting) for meeting in meetings
     )
@@ -1174,13 +1181,6 @@ def _pipeline_conversion_summary(
 ) -> PipelineConversionSummary:
     """Calculate documented pipeline rates with one shared denominator."""
     total_meetings = len(meetings)
-    concrete_next_step_outcomes = {
-        StoredPipelineOutcome.FOLLOW_UP,
-        StoredPipelineOutcome.INTRODUCTION,
-        StoredPipelineOutcome.PROPOSAL_REQUESTED,
-        StoredPipelineOutcome.MEETING_BOOKED,
-        StoredPipelineOutcome.OPPORTUNITY_IDENTIFIED,
-    }
     definitions = (
         (
             "high_engagement",
@@ -1195,30 +1195,6 @@ def _pipeline_conversion_summary(
             "Need-identification rate",
             sum(
                 meeting.need_identified == NeedIdentified.YES
-                for meeting in meetings
-            ),
-        ),
-        (
-            "concrete_next_step",
-            "Concrete-next-step rate",
-            sum(
-                meeting.outcome in concrete_next_step_outcomes
-                for meeting in meetings
-            ),
-        ),
-        (
-            "proposal",
-            "Proposal rate",
-            sum(
-                meeting.outcome == StoredPipelineOutcome.PROPOSAL_REQUESTED
-                for meeting in meetings
-            ),
-        ),
-        (
-            "opportunity_identification",
-            "Opportunity identification rate",
-            sum(
-                meeting.outcome == StoredPipelineOutcome.OPPORTUNITY_IDENTIFIED
                 for meeting in meetings
             ),
         ),
@@ -1253,20 +1229,19 @@ def _outreach_conversion_summary(
     outreach: list[DailyOutreach],
 ) -> OutreachConversionSummary:
     """Calculate rates after summing every selected record's components."""
-    total_activities = sum(record.total_activities for record in outreach)
     companies_contacted = sum(record.unique_companies for record in outreach)
     definitions = (
         (
             "reply",
             "Reply rate",
             sum(record.replies or 0 for record in outreach),
-            total_activities,
+            companies_contacted,
         ),
         (
             "positive_reply",
             "Positive reply rate",
             sum(record.positive_replies or 0 for record in outreach),
-            total_activities,
+            companies_contacted,
         ),
         (
             "meeting_booking",
@@ -1331,7 +1306,7 @@ def get_dashboard_summary(
         meeting
         for meeting in meetings
         if comparison_periods.current.start_date
-        <= meeting.occurred_at.date()
+        <= _local_meeting_date(meeting)
         <= comparison_periods.current.end_date
     ]
     previous_outreach, previous_meetings = _company_records(
@@ -1367,7 +1342,7 @@ def get_dashboard_summary(
                 Decimal(comparison_actuals[metric] - previous_actuals[metric]),
             ),
         )
-        for metric, label in TARGET_FIELDS
+        for metric, label in DASHBOARD_TARGET_FIELDS
     )
     pipeline_conversions = _pipeline_conversion_summary(meetings)
     outreach_conversions = _outreach_conversion_summary(outreach)

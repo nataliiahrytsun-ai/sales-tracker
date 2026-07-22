@@ -242,7 +242,7 @@
           <p class="dashboard-card-note">No activity to display.</p>
         {% else %}
         <div class="dashboard-chart-legend" aria-label="Chart legend">
-          <span><i class="dashboard-chart-key dashboard-chart-key-outreach" aria-hidden="true"></i>Outreach activities</span>
+          <span><i class="dashboard-chart-key dashboard-chart-key-outreach" aria-hidden="true"></i>Companies contacted</span>
           <span><i class="dashboard-chart-key dashboard-chart-key-meetings" aria-hidden="true"></i>Pipeline meetings held</span>
         </div>
         <div
@@ -251,14 +251,14 @@
           data-columns="{{ summary.activity_buckets | length }}"
           data-label-stride="{{ summary.activity_label_stride }}"
           role="group"
-          aria-label="Grouped bar chart of Outreach activities and Pipeline meetings held for {{ summary.selected_period.start_date.isoformat() }} to {{ summary.selected_period.end_date.isoformat() }}"
+          aria-label="Grouped bar chart of Companies contacted and Pipeline meetings held for {{ summary.selected_period.start_date.isoformat() }} to {{ summary.selected_period.end_date.isoformat() }}"
         >
           {% for bucket in summary.activity_buckets %}
             <div
               class="dashboard-chart-group"
               tabindex="0"
-              title="{{ bucket.range_label }} — Outreach activities: {{ bucket.outreach_activities }}; Pipeline meetings held: {{ bucket.meetings_held }}"
-              aria-label="{{ bucket.range_label }}. Outreach activities: {{ bucket.outreach_activities }}. Pipeline meetings held: {{ bucket.meetings_held }}."
+              title="{{ bucket.range_label }} — Companies contacted: {{ bucket.outreach_activities }}; Pipeline meetings held: {{ bucket.meetings_held }}"
+              aria-label="{{ bucket.range_label }}. Companies contacted: {{ bucket.outreach_activities }}. Pipeline meetings held: {{ bucket.meetings_held }}."
               data-start="{{ bucket.start_date.isoformat() }}"
               data-end="{{ bucket.end_date.isoformat() }}"
             >
@@ -288,7 +288,7 @@
             <thead>
               <tr>
                 <th scope="col">Date or week</th>
-                <th scope="col">Outreach activities</th>
+                <th scope="col">Companies contacted</th>
                 <th scope="col">Pipeline meetings held</th>
               </tr>
             </thead>
@@ -623,7 +623,7 @@
           <div class="dashboard-analysis-body">
             {% if summary.blockers %}
               <div class="dashboard-ranked-header" aria-hidden="true">
-                <span>Blocker</span><span></span><span>Companies</span><span>Share</span>
+                <span>Blocker</span><span></span><span>Outreach entries</span><span>Share</span>
               </div>
               <div id="dashboard-blocker-list" class="dashboard-ranked-list dashboard-blocker-list">
                 {% for item in summary.blockers %}
