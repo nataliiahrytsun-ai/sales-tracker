@@ -114,7 +114,6 @@ def save_targets(
     session: Annotated[Session, Depends(get_session)],
     today: Annotated[date, Depends(current_local_date)],
     week: Annotated[str, Form()] = "",
-    total_activities: Annotated[str, Form()] = "",
     companies_contacted: Annotated[str, Form()] = "",
     replies: Annotated[str, Form()] = "",
     positive_replies: Annotated[str, Form()] = "",
@@ -124,7 +123,6 @@ def save_targets(
 ) -> Response:
     """Validate and upsert the current user's weekly targets."""
     values = TargetFormValues(
-        total_activities=total_activities,
         companies_contacted=companies_contacted,
         replies=replies,
         positive_replies=positive_replies,

@@ -9,26 +9,22 @@ from app.models import Target
 
 
 TARGET_FIELDS = (
-    ("total_activities", "Total outreach activities"),
     ("companies_contacted", "Companies contacted"),
     ("replies", "Replies received"),
     ("positive_replies", "Positive replies"),
     ("meetings_booked", "Meetings booked"),
     ("meetings_held", "Meetings held"),
+    ("requests_sent", "Requests sent"),
 )
 TARGET_METRICS = tuple(metric for metric, _label in TARGET_FIELDS)
-REQUESTS_SENT_TARGET_FIELD = ("requests_sent", "Requests sent")
-EDITABLE_TARGET_FIELDS = (*TARGET_FIELDS, REQUESTS_SENT_TARGET_FIELD)
-EDITABLE_TARGET_METRICS = tuple(
-    metric for metric, _label in EDITABLE_TARGET_FIELDS
-)
+EDITABLE_TARGET_FIELDS = TARGET_FIELDS
+EDITABLE_TARGET_METRICS = TARGET_METRICS
 
 
 @dataclass(frozen=True)
 class TargetFormValues:
     """Raw weekly-target values retained for form redisplay."""
 
-    total_activities: str = ""
     companies_contacted: str = ""
     replies: str = ""
     positive_replies: str = ""
@@ -236,7 +232,6 @@ __all__ = [
     "TARGET_METRICS",
     "EDITABLE_TARGET_FIELDS",
     "EDITABLE_TARGET_METRICS",
-    "REQUESTS_SENT_TARGET_FIELD",
     "TargetFormValues",
     "TargetWeek",
     "TargetWeekPresentation",

@@ -10,13 +10,16 @@ week boundaries, aggregation, and progress calculations are covered by tests.
 | Anonymous `/my-week` redirects to login | Pass | Focused integration coverage verifies the private route. |
 | Home opens My Week and retains Set weekly targets | Pass | Home integration coverage verifies both links. |
 | Current week displays Monday through Sunday | Pass | Deterministic coverage verifies 2026-07-13 through 2026-07-19. |
-| Outreach totals include both week boundaries | Pass | Monday and Sunday fixture records are included. |
+| Companies contacted includes both week boundaries and uses `DailyOutreach.unique_companies` | Pass | Monday and Sunday fixture records are included; deliberately different legacy totals do not affect the result. |
 | Records before Monday or after Sunday are excluded | Pass | Focused aggregation coverage includes both outside-boundary cases. |
 | Other users' records and targets are excluded | Pass | Foreign data with deliberately large values does not affect results. |
 | Empty optional outreach counters count as zero | Pass | Monday fixture leaves optional counters empty without changing totals. |
 | Meetings held counts owned Meeting rows once | Pass | Focused coverage verifies two in-week meetings and excludes outside/foreign rows. |
+| Requests sent counts only the current `Request sent` outcome | Pass | Focused coverage counts the current outcome and excludes a legacy Meeting outcome. |
 | Existing Weekly Targets continue across later weeks | Pass | Targets with older effective dates remain active in focused coverage. |
-| Actual, Target, Remaining, and percentage are correct | Pass | Focused coverage verifies all six comparisons. |
+| The six cards appear as Companies contacted, Replies received, Positive replies, Meetings booked, Meetings held, Requests sent | Pass | Rendered-order coverage verifies the shared metric contract. |
+| Total outreach activities is absent | Pass | Template and rendered-page coverage verify the retired user-facing metric is not shown. |
+| Actual, Target, Remaining, and percentage are correct | Pass | Focused coverage verifies all six current comparisons, including Requests sent. |
 | Actual above Target shows Remaining 0 and a capped bar | Pass | Meetings held renders 200% text with a 100% bar. |
 | Target 0 shows No target set without division | Pass | Neutral-state coverage verifies zero targets. |
 | Progress states use orange, amber, light-green, green, and neutral styles | Pass | Unit and structural coverage verify thresholds and CSS classes. |
@@ -30,9 +33,10 @@ week boundaries, aggregation, and progress calculations are covered by tests.
 
 ## Automated Test Record
 
-- `.venv\Scripts\python.exe -m pytest tests\test_my_week.py tests\test_targets.py tests\test_auth.py -q --basetemp=.pytest-my-week`: **41 passed, 1 xfailed**.
-- `python -m pytest --basetemp=C:\pytest-sales-tracker`: **121 passed, 1 xfailed**.
-- `.venv\Scripts\python.exe -m compileall app tests`: **passed**.
+- Focused My Week and Weekly targets tests: **18 passed**.
+- Focused My Week, Weekly targets, and Dashboard regression tests: **96 passed**.
+- Full test suite: **241 passed, 1 xfailed**.
+- `python -m compileall app tests migrations`: **passed**.
 - The expected xfail is the existing documented copied-cookie logout limitation.
 
 ## Unresolved Manual Checks

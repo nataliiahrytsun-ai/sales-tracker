@@ -14,7 +14,7 @@ Browser retest recorded on 2026-07-16 in Chrome. Viewports: 375 x 667,
 | Home shows exactly four primary cards | Pass | The rendered HTML contains Meeting Entry, Outreach Entry, My Week, and Dashboard, with exactly four `action-card` elements. |
 | Meeting actions have the correct destinations | Pass | Record meeting links to `/meetings/new`; View / edit meetings links to the existing `/meetings/recent` workflow. |
 | Outreach actions have the correct destinations | Pass | Update today’s outreach links to `/outreach/today`; View / edit outreach links to the existing `/outreach/recent` workflow. |
-| Future actions have the correct states | Pass | My Week and Dashboard each show a disabled Coming soon action; no future route is exposed. |
+| Reporting actions have the correct destinations | Pass | My Week and Dashboard are available application actions and open their implemented routes. |
 | Home uses a 2 x 2 grid on desktop and tablet | Pass | Chrome retest confirmed the 2 x 2 grid on desktop and tablet. |
 | Home uses one column on mobile | Pass | Chrome retest confirmed the Home layout at 375 x 812. |
 | Logout returns the user to `/login` | Pass | `POST /logout` returned `303`, cleared the session cookie, and the next `/` request redirected to `/login`. |

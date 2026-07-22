@@ -40,7 +40,6 @@ def visible_text(response: httpx.Response) -> str:
 def target_data(**overrides: str) -> dict[str, str]:
     """Return a complete valid target submission."""
     values = {
-        "total_activities": "100",
         "companies_contacted": "40",
         "replies": "20",
         "positive_replies": "10",
@@ -133,7 +132,7 @@ def test_targets_require_authentication(
         assert response.headers["location"] == "/login"
 
 
-def test_first_save_creates_seven_targets_for_monday_to_sunday(
+def test_first_save_creates_six_targets_for_monday_to_sunday(
     targets_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
     """The first save creates one owned row for every supported metric."""
@@ -146,7 +145,10 @@ def test_first_save_creates_seven_targets_for_monday_to_sunday(
             base_url="http://testserver",
         ) as client:
             await login(client)
-            return await client.post("/targets", data=target_data())
+            return await client.post(
+                "/targets",
+                data=target_data(total_activities="999"),
+            )
 
     response = asyncio.run(scenario())
     assert response.status_code == 303
@@ -157,7 +159,7 @@ def test_first_save_creates_seven_targets_for_monday_to_sunday(
             select(Target).where(Target.user_id == active_user_id),
         ).all()
         assert {target.metric_name for target in targets} == set(TARGET_METRICS)
-        assert len(targets) == 7
+        assert len(targets) == 6
         assert {target.week_start for target in targets} == {date(2026, 7, 13)}
         assert {target.effective_from for target in targets} == {date(2026, 7, 13)}
         assert {target.effective_until for target in targets} == {date(2026, 7, 19)}
@@ -205,6 +207,21 @@ def test_weekly_target_current_week_default_and_iso_boundary_is_server_derived(
     assert 'type="week"' not in current.text
     assert 'name="requests_sent"' in current.text
     assert "Requests sent" in visible_text(current)
+    assert 'name="total_activities"' not in current.text
+    assert "Total outreach activities" not in visible_text(current)
+    field_positions = [
+        current.text.index(f'name="{metric}"')
+        for metric in TARGET_METRICS
+    ]
+    assert field_positions == sorted(field_positions)
+    assert TARGET_METRICS == (
+        "companies_contacted",
+        "replies",
+        "positive_replies",
+        "meetings_booked",
+        "meetings_held",
+        "requests_sent",
+    )
 
     week, error = resolve_target_week("2026-W01", today=TEST_DATE)
     assert error is None and week is not None
@@ -228,11 +245,11 @@ def test_weekly_target_future_post_redirect_and_reload_preserve_week(
             await login(client)
             await client.post(
                 "/targets",
-                data=target_data(week="2026-W29", total_activities="100"),
+                data=target_data(week="2026-W29", companies_contacted="100"),
             )
             saved = await client.post(
                 "/targets",
-                data=target_data(week="2026-W30", total_activities="230"),
+                data=target_data(week="2026-W30", companies_contacted="230"),
             )
             reloaded = await client.get(saved.headers["location"])
             return saved, reloaded
@@ -247,14 +264,14 @@ def test_weekly_target_future_post_redirect_and_reload_preserve_week(
     assert "Next week · Week 30 · 20 Jul – 26 Jul 2026" in visible_text(
         reloaded,
     )
-    assert 'name="total_activities"' in reloaded.text
+    assert 'name="companies_contacted"' in reloaded.text
     assert 'value="230"' in reloaded.text
 
     with Session(engine) as session:
         rows = session.exec(
             select(Target).where(
                 Target.user_id == active_user_id,
-                Target.metric_name == "total_activities",
+                Target.metric_name == "companies_contacted",
             ),
         ).all()
         assert {(row.week_start, row.target_value) for row in rows} == {
@@ -279,8 +296,8 @@ def test_weekly_target_validation_retains_future_week_and_values(
                 "/targets",
                 data=target_data(
                     week="2026-W30",
-                    total_activities="-1",
-                    companies_contacted="37",
+                    companies_contacted="-1",
+                    requests_sent="37",
                 ),
             )
 
@@ -341,19 +358,19 @@ def test_different_weeks_keep_independent_values_and_past_is_read_only(
             await login(client)
             current = await client.post(
                 "/targets",
-                data=target_data(week="2026-W29", total_activities="100"),
+                data=target_data(week="2026-W29", companies_contacted="100"),
             )
             future = await client.post(
                 "/targets",
-                data=target_data(week="2026-W30", total_activities="200"),
+                data=target_data(week="2026-W30", companies_contacted="200"),
             )
             await client.post(
                 "/targets",
-                data=target_data(week="2026-W29", total_activities="120"),
+                data=target_data(week="2026-W29", companies_contacted="120"),
             )
             past = await client.post(
                 "/targets",
-                data=target_data(week="2026-W28", total_activities="999"),
+                data=target_data(week="2026-W28", companies_contacted="999"),
             )
             return current, future, past
 
@@ -367,7 +384,7 @@ def test_different_weeks_keep_independent_values_and_past_is_read_only(
         rows = session.exec(
             select(Target).where(
                 Target.user_id == active_user_id,
-                Target.metric_name == "total_activities",
+                Target.metric_name == "companies_contacted",
             ),
         ).all()
         assert {(row.week_start, row.target_value) for row in rows} == {
@@ -411,7 +428,7 @@ def test_repeated_save_updates_without_duplicates_and_displays_values(
             await login(client)
             await client.post("/targets", data=target_data())
             updated = target_data(
-                total_activities="120",
+                companies_contacted="120",
                 meetings_held="8",
                 requests_sent="9",
             )
@@ -421,7 +438,7 @@ def test_repeated_save_updates_without_duplicates_and_displays_values(
     page = asyncio.run(scenario())
     assert page.status_code == 200
     assert "Weekly targets saved successfully." in page.text
-    assert 'name="total_activities"' in page.text
+    assert 'name="companies_contacted"' in page.text
     assert 'value="120"' in page.text
     assert 'name="meetings_held"' in page.text
     assert 'value="8"' in page.text
@@ -432,9 +449,9 @@ def test_repeated_save_updates_without_duplicates_and_displays_values(
         targets = session.exec(
             select(Target).where(Target.user_id == active_user_id),
         ).all()
-        assert len(targets) == 7
+        assert len(targets) == 6
         stored = {target.metric_name: target.target_value for target in targets}
-        assert stored["total_activities"] == 120
+        assert stored["companies_contacted"] == 120
         assert stored["meetings_held"] == 8
         assert stored["requests_sent"] == 9
 
@@ -460,7 +477,7 @@ def test_zero_values_are_accepted(
         targets = session.exec(
             select(Target).where(Target.user_id == active_user_id),
         ).all()
-        assert len(targets) == 7
+        assert len(targets) == 6
         assert all(target.target_value == 0 for target in targets)
 
 
@@ -480,10 +497,10 @@ def test_validation_preserves_entered_values_and_does_not_save(
             return await client.post(
                 "/targets",
                 data=target_data(
-                    total_activities="-1",
+                    companies_contacted="-1",
                     replies="1.5",
                     meetings_held="",
-                    companies_contacted="37",
+                    requests_sent="37",
                 ),
             )
 
@@ -541,8 +558,8 @@ def test_targets_are_scoped_to_the_authenticated_owner(
         other_targets = session.exec(
             select(Target).where(Target.user_id == other_user_id),
         ).all()
-        assert len(own_targets) == 7
-        assert len(other_targets) == 7
+        assert len(own_targets) == 6
+        assert len(other_targets) == 6
         assert all(target.target_value == 91 for target in other_targets)
 
 
@@ -581,6 +598,8 @@ def test_targets_form_is_responsive_and_links_home() -> None:
     assert 'type="number"' in template
     assert 'min="0"' in template
     assert 'step="1"' in template
+    assert "Total outreach activities" not in template
+    assert "total_activities" not in template
     assert ".targets-form" in mobile_css
     assert ".targets-grid" in mobile_css
     assert ".report-heading-row" in mobile_css

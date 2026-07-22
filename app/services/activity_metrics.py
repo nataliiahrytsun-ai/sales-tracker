@@ -13,7 +13,6 @@ def aggregate_activity_actuals(
     outreach = list(outreach_records)
     meeting_records = list(meetings)
     return {
-        "total_activities": sum(record.total_activities for record in outreach),
         "companies_contacted": sum(record.unique_companies for record in outreach),
         "replies": sum(record.replies or 0 for record in outreach),
         "positive_replies": sum(record.positive_replies or 0 for record in outreach),

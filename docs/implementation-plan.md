@@ -85,11 +85,12 @@ After each meeting, the user records a small set of structured fields.
 
 ### Required fields
 
-| Field               | Options                                                                                              |
-| ------------------- | ---------------------------------------------------------------------------------------------------- |
-| Customer engagement | Low, Medium, High                                                                                    |
-| Need identified     | Yes, No, Unclear                                                                                     |
-| Outcome             | No fit, Follow-up, Introduction, Proposal requested, Meeting booked, Opportunity identified, Unclear |
+| Field               | Options                                                                     |
+| ------------------- | --------------------------------------------------------------------------- |
+| Company             | Required short text                                                         |
+| Customer engagement | Low, Medium, High                                                           |
+| Need identified     | Yes, No, Unclear                                                            |
+| Outcome             | Waiting for further information, No outcome, Request sent, Manual alignment (discussion), Unclear |
 
 ### Optional fields
 
@@ -98,7 +99,6 @@ After each meeting, the user records a small set of structured fields.
 | User mood      | Difficult, Okay, Good |
 | Blocker        | Predefined tag        |
 | Country        | Country selector      |
-| Company        | Short text            |
 | Next-step date | Date                  |
 | Note           | Short optional text   |
 
@@ -125,12 +125,12 @@ The daily record can be updated throughout the day.
 
 ### Required fields
 
-| Field                         | Input          |
-| ----------------------------- | -------------- |
-| Total outreach activities     | Number counter |
-| Replies received              | Number counter |
-| Positive replies              | Number counter |
-| Meetings booked from outreach | Number counter |
+| Field                       | Input                         |
+| --------------------------- | ----------------------------- |
+| Companies contacted today   | Read-only calculated indicator |
+| Replies received            | Number counter                |
+| Positive replies            | Number counter                |
+| Meetings booked             | Number counter                |
 
 ### Optional fields
 
@@ -153,7 +153,7 @@ The system should allow only one outreach record per user and date.
 
 Country rows are optional. When a row is added, both Country and Companies count are required, and the count must be a non-negative whole number; zero is valid. Added rows appear above the Add country control.
 
-Total Companies is displayed read-only and calculated live as the sum of all country company counts. With no country rows, Total Companies is zero. The server recalculates the same value before every save and ignores any submitted aggregate value. Because the total is derived, no country-total mismatch warning is shown. The internal `unique_companies` field is retained for backward compatibility and stores this server-derived Total Companies value.
+Companies contacted today is displayed read-only and calculated live as the sum of all country company counts. With no country rows, Companies contacted today is zero. The server recalculates the same value before every save and ignores any submitted aggregate value. Replies and the other result counters do not increase the company total. The internal `total_activities` field is retained only for technical compatibility; both it and `unique_companies` store the server-derived company total.
 
 Because the application does not collect company names or identifiers for outreach, it does not verify uniqueness or perform deduplication.
 
@@ -174,25 +174,40 @@ The dashboard is available to all authenticated users.
 
 ### Dashboard sections
 
-#### Activity
+#### Activity & target progress
 
-- Pipeline meetings held
-- Outreach activities
-- Companies contacted
-- Activity per day
-- Activity compared with target
+Use the same six metrics and order as `My Week` and `Weekly targets`:
 
-#### Customer response and progress
+1. Companies contacted
+2. Replies received
+3. Positive replies
+4. Meetings booked
+5. Meetings held
+6. Requests sent
 
-- High-engagement meetings
-- Meetings where a need was identified
-- Meetings with a concrete next step
-- Proposals requested
-- Opportunities identified
-- Replies received
-- Positive replies
-- Meetings booked from outreach
-- Companies contacted by country
+The activity chart uses Companies contacted and Pipeline meetings held. Replies
+and other result counters do not increase Companies contacted.
+
+#### Conversion metrics
+
+Pipeline conversion metrics contain only:
+
+- High-engagement rate
+- Need-identification rate
+
+Outreach conversion rates contain only:
+
+- Reply rate
+- Positive reply rate
+- Meeting booking rate
+
+Companies contacted by country remains visible in the country breakdown.
+
+#### Comments overview
+
+Comments overview displays only non-empty `DailyOutreach.note` values. Pipeline
+Meeting notes and outcomes are not included. Comments may be grouped by Employee
+or Date; Source is neither a grouping option nor a displayed column.
 
 #### Sentiment
 
@@ -237,26 +252,23 @@ Data from other users must not enter an individual comparison. The same rule app
 
 Show previous-period comparisons for these `Activity and target progress` metrics:
 
-- Total outreach activities
 - Companies contacted
 - Replies received
 - Positive replies
-- Meetings booked from outreach
-- Pipeline meetings held
+- Meetings booked
+- Meetings held
+- Requests sent
 
 Show previous-period comparisons for these `Pipeline conversion metrics`:
 
 - High-engagement rate
 - Need-identification rate
-- Concrete-next-step rate
-- Proposal rate
-- Opportunity-identification rate
 
 Show previous-period comparisons for these `Outreach conversion rates`:
 
 - Reply rate
 - Positive reply rate
-- Outreach meeting booking rate
+- Meeting booking rate
 
 Also compare:
 
@@ -384,30 +396,37 @@ The chart must meet these accessibility and responsive requirements:
 
 ### Pipeline metrics
 
-- Total meetings
+- Meetings held
+- Requests sent
 - High-engagement rate
-- Need identification rate
-- Concrete next-step rate
-- Proposal rate
-- Opportunity identification rate
+- Need-identification rate
 
-A concrete next step includes:
+**Meetings held** = count of filtered `PipelineMeeting` records.
 
-- Follow-up
-- Introduction
-- Proposal requested
-- Meeting booked
-- Opportunity identified
+**Requests sent** = count of filtered `PipelineMeeting` records whose current
+outcome is exactly `Request sent`. Legacy Meeting outcomes remain readable for
+compatibility but do not contribute to Requests sent or another current metric.
 
 ### Outreach metrics
 
-**Reply rate** = `replies / total outreach activities`
+**Companies contacted** = sum of `DailyOutreach.unique_companies`.
 
-**Positive reply rate** = `positive replies / total outreach activities`
+**Replies received** = sum of `DailyOutreach.replies`.
 
-**Outreach meeting booking rate** = `meetings booked from outreach / companies contacted`
+**Positive replies** = sum of `DailyOutreach.positive_replies`.
 
-Meetings booked from outreach remains the sum of Daily Outreach `meetings_booked`. Pipeline meetings held remains the count of filtered Pipeline Meeting records. These clarified user-facing names do not change either data source or calculation.
+**Meetings booked** = sum of `DailyOutreach.meetings_booked`.
+
+**Reply rate** = `replies received / companies contacted`
+
+**Positive reply rate** = `positive replies / companies contacted`
+
+**Meeting booking rate** = `meetings booked / companies contacted`
+
+Replies do not increase Companies contacted. `Total outreach activities` is no
+longer a user-facing metric. The legacy model and database fields may remain
+only for technical compatibility; no database migration is required for this
+metric alignment.
 
 The application must safely handle empty values and division by zero.
 
@@ -458,32 +477,7 @@ Prompt message:
 
 `Difficult mood was recorded on {streak_length} consecutive days.`
 
-#### 2. Few concrete next steps
-
-Trigger when:
-
-- total pipeline meetings is at least 4;
-- concrete-next-step rate is strictly below 50%.
-
-Exactly 50% must not trigger the prompt.
-
-Use the existing definition of a concrete next step:
-
-- Follow-up
-- Introduction
-- Proposal requested
-- Meeting booked
-- Opportunity identified
-
-Prompt title:
-
-`Few concrete next steps`
-
-Prompt message:
-
-`Only {concrete_next_step_count} of {total_meetings} meetings had a concrete next step.`
-
-#### 3. Positive replies without booked meetings
+#### 2. Positive replies without booked meetings
 
 Trigger when:
 
@@ -498,7 +492,7 @@ Prompt message:
 
 `{positive_replies} positive replies were recorded, but no meetings were booked.`
 
-#### 4. Repeated blocker
+#### 3. Repeated blocker
 
 Trigger when the same non-empty blocker is recorded at least 3 times within the selected data.
 
@@ -521,15 +515,14 @@ Prompt message:
 Use this fixed priority order:
 
 1. Consecutive difficult days
-2. Few concrete next steps
-3. Positive replies without booked meetings
-4. Repeated blocker
+2. Positive replies without booked meetings
+3. Repeated blocker
 
-The current MVP supports four prompt types. Display all triggered MVP prompts in the fixed priority order above.
+The current MVP supports three prompt types. Display all triggered MVP prompts in the fixed priority order above.
 
 Do not display duplicate prompt types.
 
-Place the section after `Outreach conversion rates` and before `Mood summary`.
+Place the section immediately before `Comments overview`.
 
 When no rule triggers, display:
 
@@ -652,6 +645,16 @@ target_value
 effective_from
 effective_until
 ```
+
+`Weekly targets`, `My Week`, and Dashboard `Activity & target progress` use the
+same ordered metrics: Companies contacted, Replies received, Positive replies,
+Meetings booked, Meetings held, and Requests sent. The actual-value formulas are
+defined in Core Metrics. Historical `total_activities` target rows may remain
+stored for compatibility, but these pages do not display, calculate, or update
+that metric. This alignment does not require a database migration.
+
+On desktop, `Weekly targets` fields and `My Week` progress cards use two columns
+in the listed order. On mobile, both use a vertical one-column layout.
 
 ## 12. Main Application Screens
 
@@ -786,6 +789,10 @@ The MVP is complete when:
 - Outreach can be recorded in one daily summary
 - Only one outreach record exists per user and date
 - The current week is visible immediately
+- `Weekly targets`, `My Week`, and Dashboard target progress show the same six metrics in the documented order
+- A Requests sent target saves and reloads, and My Week shows its progress
+- Total outreach activities is absent as a user-facing target and progress metric
+- Companies contacted is derived only from country company counts stored in `DailyOutreach.unique_companies`
 - Activity, progress, customer engagement, and sentiment are shown separately
 - Countries and common blockers are visible
 - Users can correct their own recent entries

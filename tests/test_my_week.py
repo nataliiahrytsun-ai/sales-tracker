@@ -19,7 +19,7 @@ from app.models import (
     DailyOutreach,
     NeedIdentified,
     PipelineMeeting,
-    PipelineOutcome,
+    StoredPipelineOutcome,
     Target,
     User,
 )
@@ -119,7 +119,13 @@ def add_outreach(
     )
 
 
-def add_meeting(session: Session, *, user_id: int, occurred_at: datetime) -> None:
+def add_meeting(
+    session: Session,
+    *,
+    user_id: int,
+    occurred_at: datetime,
+    outcome: StoredPipelineOutcome = StoredPipelineOutcome.REQUEST_SENT,
+) -> None:
     """Persist one meeting for weekly boundary and ownership tests."""
     session.add(
         PipelineMeeting(
@@ -127,7 +133,7 @@ def add_meeting(session: Session, *, user_id: int, occurred_at: datetime) -> Non
             occurred_at=occurred_at,
             customer_engagement=CustomerEngagement.HIGH,
             need_identified=NeedIdentified.YES,
-            outcome=PipelineOutcome.REQUEST_SENT,
+            outcome=outcome,
         ),
     )
 
@@ -157,12 +163,12 @@ def test_weekly_totals_boundaries_targets_and_ownership(
     """Only owned Monday-Sunday records feed the six metric comparisons."""
     application, engine, active_user_id, other_user_id = my_week_application
     targets = {
-        "total_activities": 60,
         "companies_contacted": 25,
         "replies": 5,
         "positive_replies": 0,
         "meetings_booked": 1,
         "meetings_held": 1,
+        "requests_sent": 2,
     }
     with Session(engine) as session:
         add_outreach(
@@ -203,11 +209,17 @@ def test_weekly_totals_boundaries_targets_and_ownership(
             positive_replies=900,
             meetings_booked=900,
         )
-        for occurred_at in (
-            datetime(2026, 7, 13, 12, tzinfo=UTC),
-            datetime(2026, 7, 19, 12, tzinfo=UTC),
-        ):
-            add_meeting(session, user_id=active_user_id, occurred_at=occurred_at)
+        add_meeting(
+            session,
+            user_id=active_user_id,
+            occurred_at=datetime(2026, 7, 13, 12, tzinfo=UTC),
+        )
+        add_meeting(
+            session,
+            user_id=active_user_id,
+            occurred_at=datetime(2026, 7, 19, 12, tzinfo=UTC),
+            outcome=StoredPipelineOutcome.FOLLOW_UP,
+        )
         add_meeting(
             session,
             user_id=active_user_id,
@@ -257,16 +269,13 @@ def test_weekly_totals_boundaries_targets_and_ownership(
     assert summary.has_activity
     metrics = {metric.key: metric for metric in summary.metrics}
     assert {key: metric.actual for key, metric in metrics.items()} == {
-        "total_activities": 30,
         "companies_contacted": 10,
         "replies": 5,
         "positive_replies": 2,
         "meetings_booked": 1,
         "meetings_held": 2,
+        "requests_sent": 1,
     }
-    assert (metrics["total_activities"].target, metrics["total_activities"].remaining) == (60, 30)
-    assert metrics["total_activities"].percentage == 50
-    assert metrics["total_activities"].progress_state == "amber"
     assert metrics["companies_contacted"].progress_state == "orange"
     assert metrics["replies"].progress_state == "green"
     assert metrics["positive_replies"].percentage is None
@@ -274,6 +283,9 @@ def test_weekly_totals_boundaries_targets_and_ownership(
     assert metrics["meetings_held"].remaining == 0
     assert metrics["meetings_held"].percentage == 200
     assert metrics["meetings_held"].bar_percentage == 100
+    assert metrics["requests_sent"].target == 2
+    assert metrics["requests_sent"].remaining == 1
+    assert metrics["requests_sent"].percentage == 50
 
     async def scenario() -> httpx.Response:
         transport = httpx.ASGITransport(app=application)
@@ -289,6 +301,9 @@ def test_weekly_totals_boundaries_targets_and_ownership(
     assert "Current week" in page.text
     assert "13 Jul – 19 Jul 2026" in page.text
     assert 'data-metric="meetings_held"' in page.text
+    assert 'data-metric="requests_sent"' in page.text
+    assert "Requests sent" in page.text
+    assert "Total outreach activities" not in page.text
     assert 'data-actual="2"' in page.text
     assert 'data-percentage="200"' in page.text
     assert 'data-bar-percentage="100"' in page.text
@@ -296,6 +311,20 @@ def test_weekly_totals_boundaries_targets_and_ownership(
     assert "No target set" in page.text
     assert 'role="progressbar"' in page.text
     assert 'href="http://testserver/targets"' in page.text
+
+    metric_positions = [
+        page.text.index(f'data-metric="{metric}"')
+        for metric in TARGET_METRICS
+    ]
+    assert metric_positions == sorted(metric_positions)
+    assert TARGET_METRICS == (
+        "companies_contacted",
+        "replies",
+        "positive_replies",
+        "meetings_booked",
+        "meetings_held",
+        "requests_sent",
+    )
 
 
 def test_empty_week_and_missing_targets_have_neutral_state(
@@ -355,6 +384,7 @@ def test_my_week_layout_is_responsive_and_accessible() -> None:
     )
     assert 'class="week-metric-percentage"' in template
     assert 'class="week-no-target"' in template
+    assert "Total outreach activities" not in template
     assert ".week-metric-grid" in mobile_css
     assert ".week-metric-card" in mobile_css
     page_context_nav_css = css.split(".page-context-nav {", 1)[1].split(

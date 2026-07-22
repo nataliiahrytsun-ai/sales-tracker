@@ -8,9 +8,9 @@ ownership, persistence, and responsive structure are covered by automated tests.
 | Test | Status | Evidence / next action |
 | --- | --- | --- |
 | Anonymous GET and POST `/targets` redirect to login | Pass | Focused integration coverage verifies both private endpoints. |
-| My Week retains its disabled Coming soon action | Pass | Home integration coverage verifies the future primary action remains disabled. |
-| My Week links to Set weekly targets | Pass | Home integration coverage verifies the link to `/targets`. |
-| The form shows all six weekly metrics | Pass | Template and integration coverage verify the six required numeric fields. |
+| Home opens My Week and My Week links to Set weekly targets | Pass | Integration coverage verifies both routes and links. |
+| The form shows Companies contacted, Replies received, Positive replies, Meetings booked, Meetings held, Requests sent in this order | Pass | Template and integration coverage verify the shared six-field contract. |
+| Total outreach activities is absent | Pass | The route, form values, template, and persisted current metric set exclude it. |
 | The displayed week runs Monday through Sunday | Pass | Deterministic integration coverage verifies 2026-07-13 through 2026-07-19. |
 | First save creates one row per metric | Pass | Focused integration coverage verifies six owned Target rows. |
 | Repeated save updates without duplicates | Pass | Focused integration coverage verifies the row count remains six. |
@@ -18,6 +18,7 @@ ownership, persistence, and responsive structure are covered by automated tests.
 | Negative, decimal, and missing values are rejected | Pass | Focused integration coverage verifies HTTP 400, field errors, and no saved rows. |
 | Entered values remain after validation errors | Pass | Focused integration coverage verifies submitted values in the returned form. |
 | Saved values appear when reopening the page | Pass | Focused integration coverage verifies stored values and confirmation text. |
+| Requests sent saves and reloads | Pass | Repeated-save coverage verifies its persisted value after reopening the page. |
 | Users cannot see or overwrite another user's targets | Pass | Focused integration coverage verifies user-scoped reads and updates. |
 | Back to Home works | Pass | The template contains the shared Home link. |
 | Current week period aligns beside Weekly targets on desktop/tablet | Pass | Shared report-heading structural coverage verifies the compact title/period row. |
@@ -27,10 +28,11 @@ ownership, persistence, and responsive structure are covered by automated tests.
 
 ## Automated Test Record
 
-- `.venv\Scripts\python.exe -m pytest tests\test_targets.py tests\test_auth.py tests\test_models.py tests\test_database.py -q --basetemp=.pytest-targets`: **53 passed, 1 xfailed**.
-- `python -m pytest --basetemp=C:\pytest-sales-tracker`: **116 passed, 1 xfailed**.
-- `.venv\Scripts\python.exe -m compileall app tests`: **passed**.
-- Migration `20260715_0005 -> 20260715_0006` preserved an existing Target row and created `uq_targets_user_metric`; `alembic check`: **No new upgrade operations detected**.
+- Focused My Week and Weekly targets tests: **18 passed**.
+- Focused My Week, Weekly targets, and Dashboard regression tests: **96 passed**.
+- Full test suite: **241 passed, 1 xfailed**.
+- `python -m compileall app tests migrations`: **passed**.
+- No migration was created for the six-metric alignment. Historical `total_activities` fields and target rows remain available only for technical compatibility.
 - The expected xfail is the existing documented copied-cookie logout limitation.
 
 ## Unresolved Manual Checks

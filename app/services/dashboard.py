@@ -27,7 +27,6 @@ from app.services.discussion_prompts import (
 )
 from app.services.meetings import BLOCKER_OPTIONS, meeting_date_bounds
 from app.services.targets import (
-    REQUESTS_SENT_TARGET_FIELD,
     TARGET_FIELDS,
     current_week_bounds,
 )
@@ -40,7 +39,7 @@ DASHBOARD_METRIC_LABEL_OVERRIDES = {
     "meetings_booked": "Meetings booked from outreach",
     "meetings_held": "Pipeline meetings held",
 }
-DASHBOARD_TARGET_FIELDS = (*TARGET_FIELDS[1:], REQUESTS_SENT_TARGET_FIELD)
+DASHBOARD_TARGET_FIELDS = TARGET_FIELDS
 DASHBOARD_TARGET_METRICS = tuple(
     metric for metric, _label in DASHBOARD_TARGET_FIELDS
 )

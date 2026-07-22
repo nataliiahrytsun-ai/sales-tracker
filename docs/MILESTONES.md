@@ -113,6 +113,12 @@ Authenticated users can review the current week, filter results, compare activit
 - Date filters support current week, last week, current month, and a custom date range.
 - Data can be filtered by all users or an individual user.
 - Activity, customer response, progress, and sentiment are displayed separately.
+- Dashboard `Activity & target progress`, `My Week`, and `Weekly targets` use the same six metrics in this order: Companies contacted, Replies received, Positive replies, Meetings booked, Meetings held, Requests sent.
+- Companies contacted uses `DailyOutreach.unique_companies`; replies do not increase it.
+- Requests sent counts only current `Request sent` Meeting outcomes; legacy outcomes do not contribute.
+- Pipeline conversion metrics contain only High-engagement rate and Need-identification rate.
+- Outreach conversion rates contain Reply rate, Positive reply rate, and Meeting booking rate.
+- Comments overview contains only non-empty `DailyOutreach.note` comments, with grouping by Employee or Date; Meeting comments and Source grouping are not displayed.
 - Pipeline metrics use the definitions from the Implementation Plan.
 - Outreach rates use the formulas from the Implementation Plan.
 - Missing data, empty values, and zero denominators are handled safely.
@@ -205,11 +211,10 @@ Record each test with one of these statuses:
 - Pipeline meeting totals match manually prepared test records.
 - High-engagement rate matches a manual calculation.
 - Need-identification rate matches a manual calculation.
-- Concrete-next-step rate uses only the outcomes defined in the Implementation Plan.
-- Proposal and opportunity rates match manually prepared test records.
+- Requests sent matches the count of current `Request sent` outcomes and excludes other current and legacy outcomes.
 - Outreach reply rate matches a manual calculation.
 - Positive reply rate matches a manual calculation.
-- Outreach meeting booking rate matches a manual calculation.
+- Meeting booking rate matches a manual calculation.
 - Dashboard loads without errors when no records exist for the selected period.
 - Dashboard loads without errors when a rate denominator is zero.
 - Country breakdown shows the correct activity and results.
@@ -218,7 +223,6 @@ Record each test with one of these statuses:
 - Records with missing mood are not included as Okay or another neutral value.
 - Common blockers are displayed with correct counts.
 - Consecutive difficult days triggers according to the exact rule in `docs/implementation-plan.md`.
-- Few concrete next steps triggers according to the exact rule in `docs/implementation-plan.md`.
 - Positive replies without booked meetings triggers according to the exact rule in `docs/implementation-plan.md`.
 - Repeated blocker triggers and applies its deterministic selection and tie-break rules according to `docs/implementation-plan.md`.
 - Every Discussion prompt threshold is tested immediately below, at, and, where applicable, above its boundary.
@@ -226,7 +230,7 @@ Record each test with one of these statuses:
 - Discussion prompt calculations for an individual user include only that user's data.
 - Discussion prompt calculations for All users use the combined filtered data.
 - Qualifying Discussion prompts follow the fixed priority order in `docs/implementation-plan.md`.
-- All four Discussion prompt cards are displayed when all four rules qualify, in the documented fixed priority order.
+- All three Discussion prompt cards are displayed when all three rules qualify, in the documented fixed priority order.
 - No duplicate Discussion prompt types are displayed.
 - The neutral empty state is displayed when no rule triggers.
 - Discussion prompts use neutral, non-punitive wording and do not use warning styling or accusatory language.
@@ -329,6 +333,10 @@ Record each test with one of these statuses:
 - A daily outreach record can be created.
 - The same daily outreach record can be updated without creating a duplicate.
 - Companies contacted equals the sum of the submitted country company counts and is not entered separately.
+- Weekly targets saves and reloads all six current metrics, including Requests sent, in the documented order.
+- My Week shows progress for the same six metrics and does not show Total outreach activities.
+- My Week counts Requests sent only for current `Request sent` outcomes and ignores legacy outcomes.
+- Weekly targets and My Week use two columns on desktop and a vertical layout on mobile.
 - The current week is visible immediately after opening the dashboard.
 - Activity, progress, engagement, and sentiment are displayed separately.
 - Countries and common blockers are visible.
