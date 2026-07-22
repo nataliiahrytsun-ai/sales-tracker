@@ -270,12 +270,11 @@ class MoodSummary:
 
 @dataclass(frozen=True)
 class DashboardComment:
-    """One non-empty comment from an existing activity note field."""
+    """One non-empty comment from a Daily Outreach note field."""
 
     date: date
     employee: str
     source_type: str
-    outcome: str | None
     comment: str
 
 
@@ -720,27 +719,13 @@ def _user_names(session: Session, user_ids: set[int]) -> dict[int, str]:
 def _dashboard_comments(
     session: Session,
     outreach: list[DailyOutreach],
-    meetings: list[PipelineMeeting],
 ) -> tuple[DashboardComment, ...]:
-    """Build comments only from the two real optional note fields."""
+    """Build comments only from non-empty Daily Outreach notes."""
     user_names = _user_names(
         session,
-        {record.user_id for record in outreach}
-        | {record.user_id for record in meetings},
+        {record.user_id for record in outreach},
     )
     comments: list[DashboardComment] = []
-    for meeting in meetings:
-        note = (meeting.note or "").strip()
-        if note:
-            comments.append(
-                DashboardComment(
-                    date=_local_meeting_date(meeting),
-                    employee=user_names.get(meeting.user_id, "Unknown user"),
-                    source_type="Meeting",
-                    outcome=meeting.outcome.value,
-                    comment=note,
-                ),
-            )
     for record in outreach:
         note = (record.note or "").strip()
         if note:
@@ -749,7 +734,6 @@ def _dashboard_comments(
                     date=record.activity_date,
                     employee=user_names.get(record.user_id, "Unknown user"),
                     source_type="Daily Outreach",
-                    outcome=None,
                     comment=note,
                 ),
             )
@@ -774,7 +758,6 @@ def group_dashboard_comments(
     key_functions = {
         "employee": lambda item: item.employee,
         "date": lambda item: item.date.isoformat(),
-        "source": lambda item: item.source_type,
     }
     key_function = key_functions[grouping]
     grouped: dict[str, list[DashboardComment]] = {}
@@ -1245,7 +1228,7 @@ def _outreach_conversion_summary(
         ),
         (
             "meeting_booking",
-            "Outreach meeting booking rate",
+            "Meeting booking rate",
             sum(record.meetings_booked or 0 for record in outreach),
             companies_contacted,
         ),
@@ -1420,7 +1403,7 @@ def get_dashboard_summary(
         blockers=blockers,
         discussion_prompts=discussion_prompts,
         mood_summary=mood_summary,
-        comments=_dashboard_comments(session, outreach, meetings),
+        comments=_dashboard_comments(session, outreach),
         has_activity=bool(outreach or meetings),
         has_selected_users=(
             user_filter is None

@@ -9,9 +9,9 @@
         <a href="#dashboard-overview" aria-current="location">Targets</a>
         <a href="#dashboard-activity">Activity trend</a>
         <a href="#dashboard-conversions">Conversions</a>
-        <a href="#dashboard-discussion">Discussion</a>
         <a href="#dashboard-mood">Mood</a>
         <a href="#dashboard-countries-blockers">Countries &amp; blockers</a>
+        <a href="#dashboard-discussion">Discussion</a>
         <a href="#comments-overview">Comments</a>
       </nav>
     </div>
@@ -306,109 +306,76 @@
         {% endif %}
       </section>
 
-      <section
-        id="dashboard-conversions"
-        class="dashboard-analysis-card dashboard-conversion-card"
-        aria-labelledby="pipeline-conversion-heading"
-        data-pipeline-conversions
-        data-total-meetings="{{ summary.pipeline_conversions.total_meetings }}"
-      >
-        <div class="report-section-heading">
-          <h2 id="pipeline-conversion-heading" class="dashboard-section-heading">Pipeline conversion metrics</h2>
-        </div>
-        <dl class="dashboard-mini-metric-grid dashboard-mini-metric-grid-pipeline">
-          {% for metric in summary.pipeline_conversions.metrics %}
-            <div
-              class="dashboard-mini-metric"
-              data-pipeline-rate="{{ metric.key }}"
-              data-numerator="{{ metric.numerator }}"
-              data-denominator="{{ metric.denominator }}"
-              data-percentage="{{ metric.percentage if metric.percentage is not none else 'none' }}"
-            >
-              <dt>{{ metric.label }}</dt>
-              <dd class="dashboard-mini-metric-result">
-                <span class="visually-hidden">Result: </span>{{ metric.numerator }} of {{ metric.denominator }}
-              </dd>
-              <dd class="dashboard-mini-metric-rate">
-                <span class="visually-hidden">Rate: </span>{{ metric.percentage_text }}
-              </dd>
-              <dd
-                class="dashboard-comparison dashboard-comparison-{{ metric.comparison.state }}"
-                aria-label="{{ metric.comparison.accessible_label }}"
-              ><span aria-hidden="true">{{ metric.comparison.text }}</span></dd>
-            </div>
-          {% endfor %}
-        </dl>
-      </section>
-
-      <section
-        class="dashboard-analysis-card dashboard-conversion-card"
-        aria-labelledby="outreach-conversion-heading"
-        data-outreach-conversions
-        data-outreach-record-count="{{ summary.outreach_conversions.record_count }}"
-      >
-        <div class="report-section-heading">
-          <h2 id="outreach-conversion-heading" class="dashboard-section-heading">Outreach conversion rates</h2>
-        </div>
-        <dl class="dashboard-mini-metric-grid dashboard-mini-metric-grid-outreach">
-          {% for metric in summary.outreach_conversions.metrics %}
-            <div
-              class="dashboard-mini-metric"
-              data-outreach-rate="{{ metric.key }}"
-              data-numerator="{{ metric.numerator }}"
-              data-denominator="{{ metric.denominator }}"
-              data-percentage="{{ metric.percentage if metric.percentage is not none else 'none' }}"
-            >
-              <dt>{{ metric.label }}</dt>
-              <dd class="dashboard-mini-metric-result">
-                <span class="visually-hidden">Result: </span>{{ metric.numerator }} of {{ metric.denominator }}
-              </dd>
-              <dd class="dashboard-mini-metric-rate">
-                <span class="visually-hidden">Rate: </span>{{ metric.percentage_text }}
-              </dd>
-              <dd
-                class="dashboard-comparison dashboard-comparison-{{ metric.comparison.state }}"
-                aria-label="{{ metric.comparison.accessible_label }}"
-              ><span aria-hidden="true">{{ metric.comparison.text }}</span></dd>
-            </div>
-          {% endfor %}
-        </dl>
-      </section>
-
-      <section
-        id="dashboard-discussion"
-        class="dashboard-analysis-card dashboard-discussion-prompts-card"
-        aria-labelledby="discussion-prompts-heading"
-        data-discussion-prompts
-      >
-        <div class="report-section-heading dashboard-discussion-prompts-heading">
-          <h2 id="discussion-prompts-heading" class="dashboard-section-heading">
-            {% if summary.discussion_prompts %}<span class="dashboard-discussion-prompts-icon" aria-hidden="true">💬</span>{% endif %}Discussion prompts
-          </h2>
-          {% if summary.discussion_prompts %}
-            {% set prompt_count = summary.discussion_prompts | length %}
-            <p class="report-section-note dashboard-discussion-prompts-count" data-discussion-topic-count>
-              {{ prompt_count }} topic{% if prompt_count != 1 %}s{% endif %}
-            </p>
-          {% endif %}
-        </div>
-        {% if summary.discussion_prompts %}
-          <div class="dashboard-discussion-prompt-list dashboard-discussion-prompt-list--count-{{ prompt_count }}">
-            {% for prompt in summary.discussion_prompts %}
-              <article
-                class="dashboard-discussion-prompt"
-                data-discussion-prompt="{{ prompt.key }}"
-                data-priority="{{ prompt.priority }}"
-              >
-                <h3>{{ prompt.title }}</h3>
-                <p>{{ prompt.message }}</p>
-              </article>
-            {% endfor %}
+      <div class="dashboard-conversion-sections">
+        <section
+          id="dashboard-conversions"
+          class="dashboard-analysis-card dashboard-conversion-card"
+          aria-labelledby="pipeline-conversion-heading"
+          data-pipeline-conversions
+          data-total-meetings="{{ summary.pipeline_conversions.total_meetings }}"
+        >
+          <div class="report-section-heading">
+            <h2 id="pipeline-conversion-heading" class="dashboard-section-heading">Pipeline conversion metrics</h2>
           </div>
-        {% else %}
-          <p class="dashboard-card-note dashboard-discussion-prompts-empty">No discussion prompts for the selected period.</p>
-        {% endif %}
-      </section>
+          <dl class="dashboard-mini-metric-grid dashboard-mini-metric-grid-pipeline">
+            {% for metric in summary.pipeline_conversions.metrics %}
+              <div
+                class="dashboard-mini-metric"
+                data-pipeline-rate="{{ metric.key }}"
+                data-numerator="{{ metric.numerator }}"
+                data-denominator="{{ metric.denominator }}"
+                data-percentage="{{ metric.percentage if metric.percentage is not none else 'none' }}"
+              >
+                <dt>{{ metric.label }}</dt>
+                <dd class="dashboard-mini-metric-result">
+                  <span class="visually-hidden">Result: </span>{{ metric.numerator }} of {{ metric.denominator }}
+                </dd>
+                <dd class="dashboard-mini-metric-rate">
+                  <span class="visually-hidden">Rate: </span>{{ metric.percentage_text }}
+                </dd>
+                <dd
+                  class="dashboard-comparison dashboard-comparison-{{ metric.comparison.state }}"
+                  aria-label="{{ metric.comparison.accessible_label }}"
+                ><span aria-hidden="true">{{ metric.comparison.text }}</span></dd>
+              </div>
+            {% endfor %}
+          </dl>
+        </section>
+
+        <section
+          class="dashboard-analysis-card dashboard-conversion-card"
+          aria-labelledby="outreach-conversion-heading"
+          data-outreach-conversions
+          data-outreach-record-count="{{ summary.outreach_conversions.record_count }}"
+        >
+          <div class="report-section-heading">
+            <h2 id="outreach-conversion-heading" class="dashboard-section-heading">Outreach conversion rates</h2>
+          </div>
+          <dl class="dashboard-mini-metric-grid dashboard-mini-metric-grid-outreach">
+            {% for metric in summary.outreach_conversions.metrics %}
+              <div
+                class="dashboard-mini-metric"
+                data-outreach-rate="{{ metric.key }}"
+                data-numerator="{{ metric.numerator }}"
+                data-denominator="{{ metric.denominator }}"
+                data-percentage="{{ metric.percentage if metric.percentage is not none else 'none' }}"
+              >
+                <dt>{{ metric.label }}</dt>
+                <dd class="dashboard-mini-metric-result">
+                  <span class="visually-hidden">Result: </span>{{ metric.numerator }} of {{ metric.denominator }}
+                </dd>
+                <dd class="dashboard-mini-metric-rate">
+                  <span class="visually-hidden">Rate: </span>{{ metric.percentage_text }}
+                </dd>
+                <dd
+                  class="dashboard-comparison dashboard-comparison-{{ metric.comparison.state }}"
+                  aria-label="{{ metric.comparison.accessible_label }}"
+                ><span aria-hidden="true">{{ metric.comparison.text }}</span></dd>
+              </div>
+            {% endfor %}
+          </dl>
+        </section>
+      </div>
 
       <article
         id="dashboard-mood"
@@ -650,6 +617,41 @@
       </section>
 
       <section
+        id="dashboard-discussion"
+        class="dashboard-analysis-card dashboard-discussion-prompts-card"
+        aria-labelledby="discussion-prompts-heading"
+        data-discussion-prompts
+      >
+        <div class="report-section-heading dashboard-discussion-prompts-heading">
+          <h2 id="discussion-prompts-heading" class="dashboard-section-heading">
+            {% if summary.discussion_prompts %}<span class="dashboard-discussion-prompts-icon" aria-hidden="true">💬</span>{% endif %}Discussion prompts
+          </h2>
+          {% if summary.discussion_prompts %}
+            {% set prompt_count = summary.discussion_prompts | length %}
+            <p class="report-section-note dashboard-discussion-prompts-count" data-discussion-topic-count>
+              {{ prompt_count }} topic{% if prompt_count != 1 %}s{% endif %}
+            </p>
+          {% endif %}
+        </div>
+        {% if summary.discussion_prompts %}
+          <div class="dashboard-discussion-prompt-list dashboard-discussion-prompt-list--count-{{ prompt_count }}">
+            {% for prompt in summary.discussion_prompts %}
+              <article
+                class="dashboard-discussion-prompt"
+                data-discussion-prompt="{{ prompt.key }}"
+                data-priority="{{ prompt.priority }}"
+              >
+                <h3>{{ prompt.title }}</h3>
+                <p>{{ prompt.message }}</p>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="dashboard-card-note dashboard-discussion-prompts-empty">No discussion prompts for the selected period.</p>
+        {% endif %}
+      </section>
+
+      <section
         id="comments-overview"
         class="dashboard-analysis-card dashboard-comments"
         aria-labelledby="comments-overview-heading"
@@ -660,7 +662,7 @@
             <div class="dashboard-comment-grouping">
               <label for="dashboard-comment-group">Group by</label>
               <select id="dashboard-comment-group" data-comment-group-select>
-                {% for value, label in [('employee', 'Employee'), ('date', 'Date'), ('source', 'Source')] %}
+                {% for value, label in [('employee', 'Employee'), ('date', 'Date')] %}
                   <option value="{{ comment_group_urls[value] }}"{% if comment_grouping == value %} selected{% endif %}>{{ label }}</option>
                 {% endfor %}
               </select>
@@ -673,30 +675,24 @@
               <colgroup>
                 <col class="dashboard-comments-column-date">
                 <col class="dashboard-comments-column-employee">
-                <col class="dashboard-comments-column-source">
-                <col class="dashboard-comments-column-outcome">
                 <col class="dashboard-comments-column-comment">
               </colgroup>
               <thead>
                 <tr>
                   <th scope="col">Date</th>
                   <th scope="col">Employee</th>
-                  <th scope="col">Source</th>
-                  <th scope="col">Outcome</th>
                   <th scope="col">Comment</th>
                 </tr>
               </thead>
               {% for group in comment_groups %}
                 <tbody>
                   <tr class="dashboard-comments-group-row">
-                    <th colspan="5" scope="rowgroup">{% if comment_grouping == 'employee' %}Employee{% elif comment_grouping == 'date' %}Date{% else %}Source{% endif %}: {{ group.label }}</th>
+                    <th colspan="3" scope="rowgroup">{% if comment_grouping == 'employee' %}Employee{% else %}Date{% endif %}: {{ group.label }}</th>
                   </tr>
                   {% for item in group.comments %}
                     <tr data-comment-source="{{ item.source_type | lower | replace(' ', '-') }}">
                       <td data-label="Date">{{ item.date.isoformat() }}</td>
                       <td data-label="Employee">{{ item.employee }}</td>
-                      <td data-label="Source">{{ item.source_type }}</td>
-                      <td data-label="Outcome">{{ item.outcome or '—' }}</td>
                       <td data-label="Comment">{{ item.comment }}</td>
                     </tr>
                   {% endfor %}

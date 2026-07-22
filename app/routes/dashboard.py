@@ -85,7 +85,7 @@ def dashboard_page(
     )
     comment_grouping = (
         comment_group
-        if comment_group in {"employee", "date", "source"}
+        if comment_group in {"employee", "date"}
         else "employee"
     )
     comment_groups = (
@@ -116,7 +116,7 @@ def dashboard_page(
                 f"{urlencode([*comment_params, ('comment_group', grouping)])}"
                 "#comments-overview"
             )
-            for grouping in ("employee", "date", "source")
+            for grouping in ("employee", "date")
         }
     export_urls: dict[str, str] = {}
     if selected_period is not None and selected_users is not None:

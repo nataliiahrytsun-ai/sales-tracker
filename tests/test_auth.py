@@ -303,7 +303,15 @@ def test_desktop_and_mobile_navigation_have_accessible_states() -> None:
     mobile_nav = css_rule(mobile_css, ".mobile-main-nav,\n.mobile-account-controls")
     summary = css_rule(mobile_css, ".mobile-navigation summary")
     summary_focus = css_rule(mobile_css, ".mobile-navigation summary:focus-visible")
+    nav_links = css_rule(
+        mobile_css,
+        ".main-nav-link,\n.account-link,\n.header-home-link",
+    )
     active = css_rule(mobile_css, ".main-nav-link-active,\n.header-home-link-active")
+    active_main_nav = css_rule(
+        mobile_css,
+        ".main-nav-link.main-nav-link-active",
+    )
     focus = css_rule(mobile_css, ".main-nav-link:focus-visible,\n.account-link:focus-visible,\n.header-home-link:focus-visible")
     keyboard_focus = css_rule(mobile_css, ":focus-visible")
 
@@ -329,8 +337,11 @@ def test_desktop_and_mobile_navigation_have_accessible_states() -> None:
         mobile_css,
         ".mobile-navigation[open]",
     )
+    assert "font-weight: 500" in nav_links
     assert "background: #edf2ff" in active
-    assert "text-decoration: underline" in active
+    assert "font-weight: 600" in active
+    assert "text-decoration: none" in active
+    assert "padding: 0.4rem 0.6rem" in active_main_nav
     assert "background: #dfe7ff" in focus
     assert "color: #12337f" in focus
     assert "outline: 0.2rem solid var(--focus)" in keyboard_focus

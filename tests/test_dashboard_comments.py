@@ -176,7 +176,7 @@ def comments_section(response: httpx.Response) -> str:
     return response.text[start:end]
 
 
-def test_comments_default_invalid_fallback_sources_and_safe_rendering(
+def test_comments_only_include_non_empty_outreach_notes(
     comments_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
     application, _, _, _ = comments_application
@@ -188,46 +188,50 @@ def test_comments_default_invalid_fallback_sources_and_safe_rendering(
         section = comments_section(response)
         assert section.count("data-comment-group-select") == 1
         assert section.count("<select") == 1
-        assert section.count("<option") == 3
+        assert section.count("<option") == 2
         assert section.count(" selected") == 1
         assert section.count("<table") == 1
         assert section.count("<thead>") == 1
-        assert section.count('scope="col"') == 5
-        assert section.count('colspan="5" scope="rowgroup"') == 2
+        assert section.count('scope="col"') == 3
+        assert section.count('colspan="3" scope="rowgroup"') == 2
         assert ">Employee: Anna Employee</th>" in section
         assert ">Employee: Ben Employee</th>" in section
         assert "dashboard-comments-table-wrap" in section
         assert 'id="comments-overview"' in section
-        for label in ("Employee", "Date", "Source"):
+        for label in ("Employee", "Date"):
             assert grouping_url(response, label).fragment == "comments-overview"
-        assert "Meeting" in response.text
-        assert "Daily Outreach" in response.text
-        assert "Request sent" in response.text
-        assert "&lt;script&gt;alert(&#39;comment&#39;)&lt;/script&gt;" in response.text
+        assert ">Source</th>" not in section
+        assert 'data-label="Source"' not in section
+        assert "Daily Outreach" not in section
+        assert "Meeting" not in section
+        assert "Request sent" not in section
+        assert "Outcome" not in section
+        assert "&lt;script&gt;alert(&#39;comment&#39;)&lt;/script&gt;" not in section
         assert "<script>alert('comment')</script>" not in response.text
-        assert response.text.count("data-comment-source=") == 3
+        assert response.text.count("data-comment-source=") == 2
         assert "Target history" not in response.text
         assert "ISO KW" not in response.text
         assert 'data-metric="total_activities"' not in response.text
         assert response.text.count('data-metric="companies_contacted"') == 1
 
 
-def test_comments_group_by_date_and_source(
+def test_comments_group_by_employee_and_date_without_source_option(
     comments_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
     application, _, _, _ = comments_application
     by_date = get_dashboard(application, "/dashboard?comment_group=date")
     by_date_section = comments_section(by_date)
-    assert by_date_section.index(">Date: 2026-07-15</th>") < by_date_section.index(
-        ">Date: 2026-07-14</th>",
+    assert by_date_section.index(">Date: 2026-07-14</th>") < by_date_section.index(
+        ">Date: 2026-07-13</th>",
     )
-    assert by_date.text.count("data-comment-source=") == 3
+    assert by_date.text.count("data-comment-source=") == 2
     assert 'comment_group=date#comments-overview"' in by_date.text
-    by_source = get_dashboard(application, "/dashboard?comment_group=source")
-    assert ">Source: Meeting</th>" in by_source.text
-    assert ">Source: Daily Outreach</th>" in by_source.text
-    assert by_source.text.count("data-comment-source=") == 3
-    assert 'comment_group=source#comments-overview"' in by_source.text
+    invalid_source = get_dashboard(application, "/dashboard?comment_group=source")
+    invalid_source_section = comments_section(invalid_source)
+    assert ">Employee: Anna Employee</th>" in invalid_source_section
+    assert ">Employee: Ben Employee</th>" in invalid_source_section
+    assert ">Source:" not in invalid_source_section
+    assert "comment_group=source" not in invalid_source_section
 
 
 def test_comments_table_has_fixed_columns_and_stacked_mobile_layout() -> None:
@@ -236,8 +240,8 @@ def test_comments_table_has_fixed_columns_and_stacked_mobile_layout() -> None:
 
     assert "dashboard-comments-column-date" in template
     assert "dashboard-comments-column-employee" in template
-    assert "dashboard-comments-column-source" in template
-    assert "dashboard-comments-column-outcome" in template
+    assert "dashboard-comments-column-source" not in template
+    assert "dashboard-comments-column-outcome" not in template
     assert "dashboard-comments-column-comment" in template
     wrapper_css = css.split(
         ".dashboard-comments-table-wrap {",
@@ -247,8 +251,8 @@ def test_comments_table_has_fixed_columns_and_stacked_mobile_layout() -> None:
     assert "overscroll-behavior-inline: contain" in wrapper_css
     assert 'data-label="Date"' in template
     assert 'data-label="Employee"' in template
-    assert 'data-label="Source"' in template
-    assert 'data-label="Outcome"' in template
+    assert 'data-label="Source"' not in template
+    assert 'data-label="Outcome"' not in template
     assert 'data-label="Comment"' in template
     table_css = css.split(".dashboard-comments-table {", 1)[1].split("}", 1)[0]
     assert "min-width: 46rem" in table_css
@@ -256,9 +260,7 @@ def test_comments_table_has_fixed_columns_and_stacked_mobile_layout() -> None:
     for selector, width in (
         (".dashboard-comments-column-date", "12%"),
         (".dashboard-comments-column-employee", "18%"),
-        (".dashboard-comments-column-source", "14%"),
-        (".dashboard-comments-column-outcome", "18%"),
-        (".dashboard-comments-column-comment", "38%"),
+        (".dashboard-comments-column-comment", "70%"),
     ):
         rule = css.split(f"{selector} {{", 1)[1].split("}", 1)[0]
         assert f"width: {width}" in rule
@@ -334,15 +336,16 @@ def test_grouping_links_preserve_period_dates_and_repeated_user_ids(
         "/dashboard?period=custom&from=2026-07-13&to=2026-07-15"
         f"&user_scope=selected&user_id={first_id}&user_id={second_id}",
     )
-    assert grouping_query(custom, "Source") == {
-        "period": ["custom"],
-        "from": ["2026-07-13"],
-        "to": ["2026-07-15"],
-        "user_scope": ["selected"],
-        "user_id": [str(first_id), str(second_id)],
-        "comment_group": ["source"],
-    }
-    assert grouping_url(custom, "Source").fragment == "comments-overview"
+    for label, grouping in (("Employee", "employee"), ("Date", "date")):
+        assert grouping_query(custom, label) == {
+            "period": ["custom"],
+            "from": ["2026-07-13"],
+            "to": ["2026-07-15"],
+            "user_scope": ["selected"],
+            "user_id": [str(first_id), str(second_id)],
+            "comment_group": [grouping],
+        }
+        assert grouping_url(custom, label).fragment == "comments-overview"
 
 
 def test_comment_period_user_filters_empty_state_and_reset(

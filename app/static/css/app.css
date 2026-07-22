@@ -199,7 +199,7 @@ a {
   padding: 0.45rem 0.65rem;
   border-radius: 0.5rem;
   color: var(--primary);
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.2;
   font-size: 0.9rem;
   white-space: nowrap;
@@ -213,9 +213,12 @@ a {
 .header-home-link-active {
   background: #edf2ff;
   color: #183d9b;
-  font-weight: 800;
-  text-decoration: underline;
-  text-decoration-thickness: 0.15rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.main-nav-link.main-nav-link-active {
+  padding: 0.4rem 0.6rem;
 }
 
 .main-nav-link:focus-visible,
@@ -2036,16 +2039,8 @@ textarea {
   width: 18%;
 }
 
-.dashboard-comments-column-source {
-  width: 14%;
-}
-
-.dashboard-comments-column-outcome {
-  width: 18%;
-}
-
 .dashboard-comments-column-comment {
-  width: 38%;
+  width: 70%;
 }
 
 .dashboard-data-table th,
@@ -2090,6 +2085,23 @@ textarea {
   margin-top: 0.75rem;
   padding: 0.85rem;
   border-color: color-mix(in srgb, var(--border) 72%, var(--muted));
+}
+
+.dashboard-conversion-sections {
+  display: grid;
+  min-width: 0;
+  margin-block: 0.75rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0.75rem;
+}
+
+.dashboard-conversion-sections > .dashboard-conversion-card {
+  width: 100%;
+  max-width: 100%;
+  margin-top: 0;
+  align-self: stretch;
+  box-sizing: border-box;
 }
 
 .dashboard-mini-metric-grid {
@@ -3850,23 +3862,46 @@ textarea {
   gap: 0.6rem;
 }
 
+@media (min-width: 75rem) {
+  .dashboard-conversion-sections {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  }
+}
+
 .dashboard-comments-group-row th {
   padding-block: 0.35rem;
 }
 
+.dashboard-topbar > .dashboard-navigation-row {
+  margin-block: 1.4rem 0.85rem;
+}
+
 @media (max-width: 47.999rem) {
+  .dashboard-topbar > .dashboard-navigation-row {
+    margin-block: 1.25rem 0.65rem;
+  }
+
   .dashboard-section-navigation-shell {
-    overflow-x: auto;
+    max-width: 100%;
+    overflow-x: hidden;
     overflow-y: hidden;
-    overscroll-behavior-inline: contain;
+  }
+
+  .dashboard-section-navigation-inner {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .dashboard-section-navigation {
     display: flex;
     width: 100%;
+    max-width: 100%;
     flex-wrap: nowrap;
     gap: 0.1rem;
-    overflow-x: visible;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
     scrollbar-width: thin;
     white-space: nowrap;
   }

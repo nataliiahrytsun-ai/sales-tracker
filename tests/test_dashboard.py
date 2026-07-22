@@ -777,9 +777,9 @@ def test_discussion_prompts_render_in_fixed_location_with_neutral_empty_state(
     assert "data-discussion-topic-count" not in section
     assert "dashboard-discussion-prompts-icon" not in section
     assert "dashboard-discussion-prompt-list" not in section
-    assert template.index("outreach-conversion-heading") < template.index(
+    assert template.index('id="dashboard-countries-blockers"') < template.index(
         "discussion-prompts-heading",
-    ) < template.index("mood-summary-heading")
+    ) < template.index("comments-overview-heading")
 
     prompt_css = css.split(
         ".dashboard-discussion-prompts-card {",
@@ -1381,6 +1381,7 @@ def test_conversion_sections_share_compact_responsive_mini_metrics(
     assert "dashboard-conversion-grid" not in template
     assert "dashboard-mini-metric-grid-pipeline" in template
     assert "dashboard-mini-metric-grid-outreach" in template
+    assert '<div class="dashboard-conversion-sections">' in template
     assert "dashboard-conversion-table-wrap" not in template
     assert "dashboard-conversion-table" not in template
     assert "dashboard-conversion-column-" not in template
@@ -1390,6 +1391,12 @@ def test_conversion_sections_share_compact_responsive_mini_metrics(
     assert ".dashboard-conversion-table-wrap" not in css
     assert ".dashboard-conversion-table" not in css
     assert ".dashboard-conversion-column-" not in css
+    conversion_sections_css = css.split(
+        ".dashboard-conversion-sections {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "grid-template-columns: minmax(0, 1fr)" in conversion_sections_css
+    assert "align-items: stretch" in conversion_sections_css
     shared_heading_css = css.split(
         ".dashboard-section-heading {",
         1,
@@ -1410,6 +1417,12 @@ def test_conversion_sections_share_compact_responsive_mini_metrics(
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in desktop_css
     assert ".dashboard-mini-metric-grid-outreach" in desktop_css
     assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in desktop_css
+    wide_desktop_css = css.split("@media (min-width: 75rem)", 1)[1]
+    assert ".dashboard-conversion-sections" in wide_desktop_css
+    assert (
+        "grid-template-columns: minmax(0, 2fr) minmax(0, 3fr)"
+        in wide_desktop_css
+    )
 
 
 def test_current_week_aggregates_all_users_without_private_details(
@@ -1474,7 +1487,7 @@ def test_requests_sent_counts_only_current_request_sent_outcome(
     assert 'data-actual="3"' in metric_card(response, "requests_sent")
 
 
-@pytest.mark.parametrize("grouping", ("employee", "date", "source"))
+@pytest.mark.parametrize("grouping", ("employee", "date"))
 def test_comment_grouping_preserves_records_and_marks_active_control(
     dashboard_application: tuple[FastAPI, Engine, int, int],
     grouping: str,
@@ -1485,7 +1498,7 @@ def test_comment_grouping_preserves_records_and_marks_active_control(
     assert response.status_code == 200
     assert response.text.count("Private outreach note") == 1
     assert response.text.count("Foreign private note") == 1
-    assert response.text.count("Do not expose meeting note") == 3
+    assert "Do not expose meeting note" not in response.text
     active_option = re.search(
         rf'<option value="[^"]*comment_group={grouping}'
         rf'#comments-overview" selected>',
@@ -1493,11 +1506,13 @@ def test_comment_grouping_preserves_records_and_marks_active_control(
     )
     assert active_option is not None
 
-    outreach_row_start = response.text.index(
-        'data-comment-source="daily-outreach"',
-    )
-    outreach_row_end = response.text.index("</tr>", outreach_row_start)
-    assert ">—</td>" in response.text[outreach_row_start:outreach_row_end]
+    assert response.text.count('data-comment-source="daily-outreach"') == 2
+    assert 'data-comment-source="meeting"' not in response.text
+    comments = response.text.split('id="comments-overview"', 1)[1]
+    assert "Request sent" not in comments
+    assert 'data-label="Outcome"' not in comments
+    assert 'data-label="Source"' not in comments
+    assert "Daily Outreach" not in comments
 
 
 def test_current_week_company_targets_are_summed_and_progress_is_safe(
@@ -1534,10 +1549,10 @@ def test_dashboard_uses_clarified_meeting_metric_labels(
 
     assert "Meetings booked from outreach" in booked_card
     assert "Pipeline meetings held" in held_card
-    assert "Outreach meeting booking rate" in booking_rate
+    assert "Meeting booking rate" in booking_rate
     assert re.search(r">\s*Meetings booked\s*<", booked_card) is None
     assert re.search(r">\s*Meetings held\s*<", held_card) is None
-    assert re.search(r">\s*Meeting booking rate\s*<", booking_rate) is None
+    assert "Outreach meeting booking rate" not in booking_rate
 
 
 def test_selected_user_filters_actuals_meetings_and_target(
@@ -1898,7 +1913,7 @@ def test_user_filter_navigation_preserves_applied_period_query_parameters(
     )
     assert reset_href is not None
     assert "#" not in reset_href.group(1)
-    for grouping in ("employee", "date", "source"):
+    for grouping in ("employee", "date"):
         assert re.search(
             rf'<option value="[^"]*period=custom[^"]*user_scope=selected'
             rf'[^"]*from=2026-07-13[^"]*to=2026-07-14'
@@ -1949,6 +1964,7 @@ def test_analysis_grid_preserves_values_empty_states_and_responsive_markup(
         template.index('id="outreach-conversion-heading"'),
         template.index('id="mood-summary-heading"'),
         template.index('id="dashboard-countries-blockers"'),
+        template.index('id="discussion-prompts-heading"'),
         template.index('id="comments-overview-heading"'),
     ]
     assert section_positions == sorted(section_positions)
@@ -1990,7 +2006,7 @@ def test_analysis_grid_preserves_values_empty_states_and_responsive_markup(
     blockers_section = response.text.split(
         'class="dashboard-analysis-section dashboard-blockers-section dashboard-blockers-panel"',
         1,
-    )[1].split('id="comments-overview"', 1)[0]
+    )[1].split('id="dashboard-discussion"', 1)[0]
     rendered_blockers = re.findall(r'data-blocker="([^"]+)"', blockers_section)
     assert rendered_blockers == ["No response"]
     assert 'data-blocker-count="0"' not in blockers_section
@@ -2044,7 +2060,7 @@ def test_blockers_render_only_positive_counts_descending_with_stable_ties(
     blockers_section = response.text.split(
         'class="dashboard-analysis-section dashboard-blockers-section dashboard-blockers-panel"',
         1,
-    )[1].split('id="comments-overview"', 1)[0]
+    )[1].split('id="dashboard-discussion"', 1)[0]
     rendered_blockers = re.findall(r'data-blocker="([^"]+)"', blockers_section)
     assert rendered_blockers == [
         "Competitor",
@@ -2072,7 +2088,7 @@ def test_blockers_render_only_positive_counts_descending_with_stable_ties(
     empty_blockers = empty.text.split(
         'class="dashboard-analysis-section dashboard-blockers-section dashboard-blockers-panel"',
         1,
-    )[1].split('id="comments-overview"', 1)[0]
+    )[1].split('id="dashboard-discussion"', 1)[0]
     assert 'data-blocker-count="0"' not in empty_blockers
 
     css = Path("app/static/css/app.css").read_text(encoding="utf-8")
@@ -2801,9 +2817,9 @@ def test_dashboard_secondary_navigation_links_stable_sections(
         "Targets": "#dashboard-overview",
         "Activity trend": "#dashboard-activity",
         "Conversions": "#dashboard-conversions",
-        "Discussion": "#dashboard-discussion",
         "Mood": "#dashboard-mood",
         "Countries &amp; blockers": "#dashboard-countries-blockers",
+        "Discussion": "#dashboard-discussion",
         "Comments": "#comments-overview",
     }
 
@@ -2814,6 +2830,13 @@ def test_dashboard_secondary_navigation_links_stable_sections(
         assert f'href="{href}"' in navigation
         assert f">{label}</a>" in navigation
         assert f'id="{href.removeprefix("#")}"' in response.text
+    assert [
+        navigation.index(f'href="{href}"')
+        for href in expected_links.values()
+    ] == sorted(
+        navigation.index(f'href="{href}"')
+        for href in expected_links.values()
+    )
     assert (
         'href="#dashboard-overview" aria-current="location">Targets</a>'
         in navigation
@@ -2877,13 +2900,16 @@ def test_dashboard_secondary_navigation_links_stable_sections(
     )[1].split("}", 1)[0]
     assert "display: flex" in mobile_navigation_css
     assert "flex-wrap: nowrap" in mobile_navigation_css
-    assert "overflow-x: visible" in mobile_navigation_css
+    assert "max-width: 100%" in mobile_navigation_css
+    assert "overflow-x: auto" in mobile_navigation_css
+    assert "overscroll-behavior-inline: contain" in mobile_navigation_css
     assert "white-space: nowrap" in mobile_navigation_css
     mobile_shell_css = mobile_css.split(
         ".dashboard-section-navigation-shell {",
         1,
     )[1].split("}", 1)[0]
-    assert "overflow-x: auto" in mobile_shell_css
+    assert "max-width: 100%" in mobile_shell_css
+    assert "overflow-x: hidden" in mobile_shell_css
 
 
 def test_dashboard_secondary_navigation_scroll_spy_contract() -> None:
@@ -3574,7 +3600,7 @@ def test_country_blocker_shares_sorting_and_view_all_markup(
     shared_section = response.text.split(
         'id="dashboard-countries-blockers"',
         1,
-    )[1].split('id="comments-overview"', 1)[0]
+    )[1].split('id="dashboard-discussion"', 1)[0]
     countries = shared_section.split(
         'class="dashboard-analysis-section dashboard-countries-section dashboard-countries-panel"',
         1,
@@ -3696,7 +3722,9 @@ def test_redesigned_analysis_layout_and_view_all_script_contract() -> None:
 
     assert template.index("mood-summary-heading") < template.index(
         'id="dashboard-countries-blockers"',
-    ) < template.index("comments-overview-heading")
+    ) < template.index("discussion-prompts-heading") < template.index(
+        "comments-overview-heading",
+    )
     assert template.count("dashboard-mood-summary-card") == 1
     assert template.count("dashboard-countries-blockers-section") == 1
     assert "dashboard-countries-section dashboard-countries-panel" in template
