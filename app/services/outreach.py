@@ -26,7 +26,6 @@ class CountryFormValue:
 class OutreachFormValues:
     """Submitted strings retained for safe form re-rendering."""
 
-    total_activities: str = ""
     country_rows: tuple[CountryFormValue, ...] = ()
     replies: str = ""
     positive_replies: str = ""
@@ -40,7 +39,6 @@ class OutreachFormValues:
 class ValidatedOutreachValues:
     """Typed values ready for the existing outreach models."""
 
-    total_activities: int
     country_counts: tuple[tuple[str, int], ...]
     replies: int
     positive_replies: int
@@ -115,13 +113,6 @@ def validate_outreach_form(
 ) -> tuple[ValidatedOutreachValues | None, dict[str, str]]:
     """Validate the exact required and optional outreach plan fields."""
     errors: dict[str, str] = {}
-    total_activities = _parse_counter(
-        values.total_activities,
-        field="total_activities",
-        label="total outreach activities",
-        required=True,
-        errors=errors,
-    )
     country_counts: list[tuple[str, int]] = []
     seen_country_codes: set[str] = set()
     for index, row in enumerate(values.country_rows):
@@ -190,13 +181,11 @@ def validate_outreach_form(
     if errors:
         return None, errors
 
-    assert total_activities is not None
     assert replies is not None
     assert positive_replies is not None
     assert meetings_booked is not None
     return (
         ValidatedOutreachValues(
-            total_activities=total_activities,
             country_counts=tuple(country_counts),
             replies=replies,
             positive_replies=positive_replies,
@@ -271,7 +260,6 @@ def form_values_from_record(
     )
 
     return OutreachFormValues(
-        total_activities=str(record.total_activities),
         country_rows=country_rows,
         replies="" if record.replies is None else str(record.replies),
         positive_replies=(
@@ -303,11 +291,11 @@ def upsert_daily_outreach(
         record = DailyOutreach(
             user_id=user_id,
             activity_date=activity_date,
-            total_activities=values.total_activities,
+            total_activities=values.country_total,
             unique_companies=values.country_total,
         )
 
-    record.total_activities = values.total_activities
+    record.total_activities = values.country_total
     record.unique_companies = values.country_total
     record.replies = values.replies
     record.positive_replies = values.positive_replies

@@ -129,7 +129,6 @@ def save_today_outreach(
     current_user: Annotated[User, Depends(get_current_user)],
     session: Annotated[Session, Depends(get_session)],
     activity_date: Annotated[date, Depends(current_local_date)],
-    total_activities: Annotated[str, Form()] = "",
     country_codes: Annotated[list[str] | None, Form()] = None,
     country_counts: Annotated[list[str] | None, Form()] = None,
     replies: Annotated[str, Form()] = "",
@@ -141,7 +140,6 @@ def save_today_outreach(
 ) -> Response:
     """Validate and upsert today's record for the authenticated user."""
     values = OutreachFormValues(
-        total_activities=total_activities,
         country_rows=country_rows_from_submission(
             country_codes or [],
             country_counts or [],
@@ -308,7 +306,6 @@ def save_dated_outreach(
     today: Annotated[date, Depends(current_local_date)],
     from_date: Annotated[str | None, Query(alias="from")] = None,
     to_date: Annotated[str | None, Query(alias="to")] = None,
-    total_activities: Annotated[str, Form()] = "",
     country_codes: Annotated[list[str] | None, Form()] = None,
     country_counts: Annotated[list[str] | None, Form()] = None,
     replies: Annotated[str, Form()] = "",
@@ -321,7 +318,6 @@ def save_dated_outreach(
     """Validate and upsert an owned outreach summary for any past date."""
     require_past_outreach_date(activity_date, today)
     values = OutreachFormValues(
-        total_activities=total_activities,
         country_rows=country_rows_from_submission(
             country_codes or [],
             country_counts or [],

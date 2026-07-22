@@ -141,7 +141,6 @@ def test_authenticated_user_can_open_today_outreach_form(
         assert 'action="http://testserver/outreach/today"' in response.text
         assert TEST_DATE.isoformat() in response.text
         for field in (
-            "total_activities",
             "replies",
             "positive_replies",
             "meetings_booked",
@@ -150,23 +149,24 @@ def test_authenticated_user_can_open_today_outreach_form(
             "note",
         ):
             assert f'name="{field}"' in response.text
+        assert 'name="total_activities"' not in response.text
         assert 'name="unique_companies"' not in response.text
-        assert '<output class="country-summary-value" data-countries-selected>0' in (
-            response.text
-        )
         assert (
-            '<output class="country-summary-value" data-companies-contacted>0'
+            '<output class="country-summary-value" '
+            'data-total-outreach-activities>0'
             in response.text
         )
-        assert "Countries selected" in response.text
-        assert "Total Companies" in response.text
-        assert "Enter the number of companies contacted in each country." in (
+        assert "Countries selected" not in response.text
+        assert "Total Companies" not in response.text
+        assert "Add countries and enter all result counts for this date." not in (
             response.text
         )
-        assert "The total is calculated automatically." in response.text
+        assert "The total is calculated automatically." not in response.text
+        assert "Sentiment and context may be left empty." not in response.text
+        assert "Calculated from countries" in response.text
+        assert "Country breakdown" in response.text
         assert "Count each company only once per day." not in response.text
-        assert 'aria-describedby="positive_replies_error"' in response.text
-        assert 'id="positive_replies_error"></p>' in response.text
+        assert 'aria-describedby="positive_replies_error"' not in response.text
         assert 'data-country-row data-country-code=' not in response.text
         for code, country in (
             ("DE", "Germany"),
@@ -177,7 +177,10 @@ def test_authenticated_user_can_open_today_outreach_form(
             assert f'data-country-code="{code}"' in response.text
             assert country in response.text
         assert 'data-country-search' in response.text
+        assert 'data-country-select' in response.text
+        assert '<option value="">Select country</option>' in response.text
         assert 'data-country-add' in response.text
+        assert "Add country" in response.text
         assert 'data-country-rows' in response.text
         assert 'data-country-summary' in response.text
         assert response.text.index('data-country-rows') < response.text.index(
@@ -188,6 +191,59 @@ def test_authenticated_user_can_open_today_outreach_form(
                 rf'name="{field}"[^>]*\brequired\b',
                 response.text,
             )
+        required_start = response.text.index(
+            'class="field-section required-fields"',
+        )
+        optional_start = response.text.index(
+            'class="field-section optional-fields"',
+        )
+        required_section = response.text[required_start:optional_start]
+        optional_section = response.text[optional_start:]
+        for label in (
+            "Companies contacted today",
+            "Country",
+            "Companies count",
+            "Replies received",
+            "Positive replies",
+            "Meetings booked",
+        ):
+            assert label in required_section
+        assert "Total outreach activities" not in required_section
+        for label in ("User mood", "Main blocker", "Note"):
+            assert label not in required_section
+            assert label in optional_section
+        assert "Replies received" not in optional_section
+        assert required_section.index("Companies contacted today") < (
+            required_section.index("Replies received")
+        )
+        assert required_section.index("Meetings booked") < (
+            required_section.index('data-country-rows')
+        )
+        assert required_section.index("Country breakdown") < (
+            required_section.index('data-country-rows')
+        )
+        assert required_section.index('data-country-rows') < (
+            required_section.index('data-country-add-row')
+        )
+        for label in (
+            "Replies received",
+            "Positive replies",
+            "Meetings booked",
+        ):
+            assert (
+                f'{label}<span class="required-marker" '
+                'aria-hidden="true">*</span>'
+            ) in required_section
+        assert '<label for="country_search">Country</label>' in required_section
+        assert (
+            '<label for="country_add_count">Companies count</label>'
+            in required_section
+        )
+        assert "Country <span" not in required_section
+        assert "Companies count <span" not in required_section
+        assert "Companies contacted today <span" not in required_section
+        assert required_section.count("Optional") == 1
+        assert optional_section.count("Optional") == 1
         assert '/static/js/outreach_countries.js' in response.text
         assert 'name="user_id"' not in response.text
         assert 'name="activity_date"' not in response.text
@@ -295,10 +351,7 @@ def test_successful_create_persists_today_for_authenticated_user(
         assert 'class="button' not in links
         assert "page-context-nav" not in panel
         assert "Edit today's outreach" not in panel
-        assert re.search(
-            r'name="total_activities"[^>]*value="40"',
-            confirmation.text,
-        )
+        assert 'data-total-outreach-activities>12' in confirmation.text
         assert 'aria-describedby="outreach-saved-entry"' in confirmation.text
         assert confirmation.text.count(
             '<nav class="page-context-nav" aria-label="Outreach page actions">',
@@ -313,7 +366,7 @@ def test_successful_create_persists_today_for_authenticated_user(
         assert record.user_id == first_user_id
         assert record.user_id != second_user_id
         assert record.activity_date == TEST_DATE
-        assert record.total_activities == 40
+        assert record.total_activities == 12
         assert record.unique_companies == 12
         assert record.replies == 8
         assert record.positive_replies == 5
@@ -354,7 +407,7 @@ def test_repeat_post_updates_same_daily_record_and_country_rows(
             second = await client.post(
                 "/outreach/today",
                 data=valid_outreach_data(
-                    total_activities="55",
+                    total_activities="9999",
                     country_codes=["BR", "FR"],
                     country_counts=["7", "3"],
                     replies="0",
@@ -369,7 +422,8 @@ def test_repeat_post_updates_same_daily_record_and_country_rows(
 
         assert second.status_code == 303
         assert reopened.status_code == 200
-        assert re.search(r'name="total_activities"[^>]*value="55"', reopened.text)
+        assert 'name="total_activities"' not in reopened.text
+        assert 'data-total-outreach-activities>10' in reopened.text
         assert "Updated safely" in reopened.text
         assert 'name="country_codes" value="BR"' in reopened.text
         assert 'name="country_codes" value="FR"' in reopened.text
@@ -389,7 +443,7 @@ def test_repeat_post_updates_same_daily_record_and_country_rows(
         ).all()
         assert len(records) == 1
         record = records[0]
-        assert record.total_activities == 55
+        assert record.total_activities == 10
         assert record.unique_companies == 10
         assert record.replies == 0
         assert record.positive_replies == 0
@@ -473,7 +527,7 @@ def test_invalid_counters_and_selectors_preserve_safe_values(
             response = await client.post(
                 "/outreach/today",
                 data={
-                    "total_activities": "",
+                    "total_activities": "not-trusted",
                     "unique_companies": "-1",
                     "country_codes": ["BR", "FR"],
                     "country_counts": ["-3", "1.5"],
@@ -487,7 +541,7 @@ def test_invalid_counters_and_selectors_preserve_safe_values(
             )
 
         assert response.status_code == 400
-        assert "Enter total outreach activities." in response.text
+        assert "Enter total outreach activities." not in response.text
         assert "Companies contacted in Brazil cannot be negative." in response.text
         assert "Enter a whole number for companies contacted in France." in (
             response.text
@@ -546,7 +600,7 @@ def test_required_result_counters_reject_missing_values(
         assert session.exec(select(DailyOutreach)).all() == []
 
 
-def test_server_calculates_unique_companies_and_ignores_forged_value(
+def test_server_calculates_totals_and_ignores_forged_values(
     outreach_application: tuple[FastAPI, Engine, int, int],
 ) -> None:
     """The server derives the total instead of trusting the browser."""
@@ -562,6 +616,7 @@ def test_server_calculates_unique_companies_and_ignores_forged_value(
             response = await client.post(
                 "/outreach/today",
                 data=valid_outreach_data(
+                    total_activities="700",
                     unique_companies="500",
                     country_codes=["BR", "FR"],
                     country_counts=["2", "1"],
@@ -572,19 +627,17 @@ def test_server_calculates_unique_companies_and_ignores_forged_value(
         assert response.status_code == 303
         assert "Today's outreach was saved successfully." in confirmation.text
         assert "Country total does not match unique companies." not in confirmation.text
-        assert '<output class="country-summary-value" data-countries-selected>2' in (
-            confirmation.text
-        )
-        assert '<output class="country-summary-value" data-companies-contacted>3' in (
-            confirmation.text
-        )
+        assert 'data-total-outreach-activities>3' in confirmation.text
 
     asyncio.run(scenario())
 
     with Session(engine) as session:
         records = session.exec(select(DailyOutreach)).all()
         assert len(records) == 1
+    assert records[0].total_activities == 3
     assert records[0].unique_companies == 3
+    assert records[0].replies == 8
+    assert records[0].total_activities != records[0].replies
 
 
 @pytest.mark.parametrize(
@@ -766,6 +819,8 @@ def test_zero_country_count_is_valid(
                 data=valid_outreach_data(
                     country_codes=["BR"],
                     country_counts=["0"],
+                    replies="4",
+                    positive_replies="2",
                 ),
             )
 
@@ -774,7 +829,10 @@ def test_zero_country_count_is_valid(
     with Session(engine) as session:
         record = session.exec(select(DailyOutreach)).one()
         country = session.exec(select(OutreachCountry)).one()
+        assert record.total_activities == 0
         assert record.unique_companies == 0
+        assert record.replies == 4
+        assert record.positive_replies == 2
         assert country.companies_contacted == 0
 
 
@@ -805,6 +863,7 @@ def test_empty_country_breakdown_is_allowed(
     with Session(engine) as session:
         records = session.exec(select(DailyOutreach)).all()
         assert len(records) == 1
+        assert records[0].total_activities == 0
         assert records[0].unique_companies == 0
         assert session.exec(select(OutreachCountry)).all() == []
 
@@ -892,46 +951,150 @@ def test_outreach_form_has_responsive_dynamic_country_controls() -> None:
     assert "flex-wrap: wrap" in mobile_css
     assert "overflow-wrap: anywhere" in mobile_css
     assert re.search(
-        r"\.country-summary-card\s*\{[^}]*display:\s*flex;"
-        r"[^}]*align-items:\s*center;[^}]*justify-content:\s*space-between;",
+        r"\.outreach-form \.country-row\s*\{[^}]*"
+        r"grid-template-columns:\s*minmax\(0,\s*1fr\) auto;"
+        r"[^}]*align-items:\s*center;",
         mobile_css,
     )
-    assert re.search(r"\.reply-errors\s*\{[^}]*min-height:\s*3rem", mobile_css)
     assert re.search(
-        r"\.counter-grid\s*\{[^}]*grid-template-columns:\s*"
-        r"repeat\(2,\s*minmax\(0,\s*1fr\)\)",
-        desktop_css,
+        r"\.outreach-form \.country-row-name\s*\{[^}]*"
+        r"overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;"
+        r"[^}]*white-space:\s*nowrap;",
+        mobile_css,
+    )
+    assert re.search(
+        r"\.outreach-form \.country-count-controls\s*\{[^}]*"
+        r"flex-wrap:\s*nowrap;",
+        mobile_css,
+    )
+    assert re.search(
+        r"\.outreach-total-display\s*\{[^}]*display:\s*flex;"
+        r"[^}]*min-height:\s*2\.75rem;[^}]*align-items:\s*center;"
+        r"[^}]*justify-content:\s*space-between;",
+        mobile_css,
     )
     assert re.search(
         r"\.country-add-row\s*\{[^}]*grid-template-columns:\s*"
         r"minmax\(0,\s*1fr\)",
         desktop_css,
     )
+    assert re.search(
+        r"\.outreach-form \.outreach-result-fields\s*\{[^}]*"
+        r"grid-template-columns:\s*minmax\(0,\s*1\.15fr\)\s*"
+        r"repeat\(3,\s*minmax\(0,\s*1fr\)\)",
+        desktop_css,
+    )
+    assert re.search(
+        r"\.outreach-form \.outreach-result-fields > \.field-group\s*"
+        r"\{[^}]*grid-template-rows:\s*2\.5rem auto auto;",
+        desktop_css,
+    )
+    assert re.search(
+        r"\.outreach-form \.outreach-result-fields > \.field-group > input,\s*"
+        r"\.outreach-form \.outreach-total-display\s*\{[^}]*"
+        r"height:\s*2\.75rem;[^}]*min-height:\s*2\.75rem;",
+        desktop_css,
+    )
+    assert re.search(
+        r"\.outreach-form \.required-fields,\s*"
+        r"\.outreach-form \.optional-fields\s*\{[^}]*gap:\s*0\.65rem;"
+        r"[^}]*padding:\s*0\.75rem;",
+        mobile_css,
+    )
     assert 'list="country_options"' in template
+    assert 'id="country_select" data-country-select' in template
     assert 'name="country_codes"' in template
     assert 'name="country_counts"' in template
-    assert 'class="reply-fields"' in template
-    assert 'class="reply-errors" aria-live="polite"' in template
-    assert 'aria-describedby="positive_replies_error"' in template
+    assert 'class="outreach-result-fields"' in template
     for attribute in (
         "data-country-add",
-        "data-country-increase",
-        "data-country-decrease",
         "data-country-remove",
-        "data-countries-selected",
-        "data-companies-contacted",
+        "data-country-select",
+        "data-total-outreach-activities",
     ):
         assert attribute in template
         assert attribute in javascript
     assert "This country is already added" in javascript
     assert "window.setTimeout" in javascript
-    assert "Math.max(0, current - 1)" in javascript
+    assert 'rows.addEventListener("input", updateTotal)' in javascript
+    assert javascript.count("updateTotal();") >= 3
+    assert 'window.matchMedia("(max-width: 47.999rem)")' in javascript
+    assert "mobileOption.disabled = disabled" in javascript
+    assert re.search(
+        r"\.outreach-form \.country-search-field-desktop\s*\{[^}]*"
+        r"display:\s*none;",
+        mobile_css,
+    )
+    assert re.search(
+        r"\.outreach-form \.country-search-field-mobile\s*\{[^}]*"
+        r"display:\s*none;",
+        desktop_css,
+    )
+    assert re.search(
+        r"\.outreach-form \.country-search-field-desktop\s*\{[^}]*"
+        r"display:\s*grid;",
+        desktop_css,
+    )
+    assert "data-country-increase" not in template
+    assert "data-country-decrease" not in template
+    assert "data-countries-selected" not in template
+    assert "data-companies-contacted" not in template
     assert 'name="unique_companies"' not in template
+    assert 'name="total_activities"' not in template
+    assert template.count('class="field-section required-fields"') == 1
+    assert template.count('class="field-section optional-fields"') == 1
+    assert "Companies contacted today" in template
+    assert "Calculated from countries" in template
+    assert "Country breakdown" in template
+    assert "Total outreach activities" not in template
+    assert template.index('class="outreach-result-fields"') < template.index(
+        "Companies contacted today",
+    )
+    assert template.index("Companies contacted today") < template.index(
+        "Replies received",
+    )
+    assert template.index("Country breakdown") < template.index(
+        'data-country-rows',
+    )
     assert template.index('data-country-rows') < template.index(
         'data-country-add-row',
     )
-    assert "Enter the number of companies contacted in each country." in template
-    assert "The total is calculated automatically." in template
+    assert re.search(
+        r'class="field-group outreach-total-field"[^>]*>.*?'
+        r'Companies contacted today.*?Calculated from countries.*?</div>',
+        template,
+        re.DOTALL,
+    )
+    assert '<label for="country_search">Country</label>' in template
+    assert '<label for="country_add_count">Companies count</label>' in template
+    assert "Country <span" not in template
+    assert "Companies count <span" not in template
+    assert re.search(
+        r"\.outreach-form \.country-breakdown-heading\s*\{[^}]*"
+        r"display:\s*flex;",
+        mobile_css,
+    )
+    assert re.search(
+        r"\.outreach-form \.country-rows \+ "
+        r"\.country-add-row\s*\{[^}]*margin-top:\s*-0\.35rem;",
+        mobile_css,
+    )
+    assert re.search(
+        r"\.outreach-form-card\s*\{[^}]*max-width:\s*58rem;",
+        mobile_css,
+    )
+    assert re.search(
+        r"\.outreach-form \.required-marker\s*\{[^}]*"
+        r"margin-left:\s*0\.25rem;",
+        mobile_css,
+    )
+    assert "Add countries and enter all result counts for this date." not in template
+    assert "The total is calculated automatically." not in template
+    assert "Sentiment and context may be left empty." not in template
+    assert template.count('class="optional"') == 1
+    assert 'rows="3"' in template
+    assert "Countries selected" not in template
+    assert "Total Companies" not in template
     assert "Count each company only once per day." not in template
     assert "Country total" not in template
     assert "Country total does not match unique companies." not in template

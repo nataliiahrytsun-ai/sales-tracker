@@ -688,7 +688,10 @@ def test_outreach_edit_by_date_updates_without_duplicate(
             )
             updated = await client.post(
                 f"/outreach/{activity_date.isoformat()}",
-                data=outreach_data(total_activities="27"),
+                data=outreach_data(
+                    total_activities="999",
+                    country_counts=["8", "5"],
+                ),
             )
             return form, created, updated
 
@@ -706,7 +709,8 @@ def test_outreach_edit_by_date_updates_without_duplicate(
             ),
         ).all()
         assert len(records) == 1
-        assert records[0].total_activities == 27
+        assert records[0].total_activities == 13
+        assert records[0].unique_companies == 13
         assert records[0].id is not None
         countries = session.exec(
             select(OutreachCountry).where(
@@ -716,7 +720,7 @@ def test_outreach_edit_by_date_updates_without_duplicate(
         assert {
             country.country_code: country.companies_contacted
             for country in countries
-        } == {"BR": 6, "FR": 4}
+        } == {"BR": 8, "FR": 5}
 
 
 def test_outreach_validation_future_dates_and_ownership(
@@ -753,7 +757,11 @@ def test_outreach_validation_future_dates_and_ownership(
             private_form = await client.get(f"/outreach/{activity_date.isoformat()}")
             invalid = await client.post(
                 f"/outreach/{activity_date.isoformat()}",
-                data=outreach_data(total_activities="invalid", note="Keep safely"),
+                data=outreach_data(
+                    total_activities="invalid",
+                    country_counts=["invalid", "4"],
+                    note="Keep safely",
+                ),
             )
             future_get = await client.get(
                 f"/outreach/{(TEST_DATE + timedelta(days=1)).isoformat()}",
@@ -782,7 +790,9 @@ def test_outreach_validation_future_dates_and_ownership(
     assert private_form.status_code == 200
     assert 'value="88"' not in private_form.text
     assert invalid.status_code == 400
-    assert "Enter a whole number for total outreach activities." in invalid.text
+    assert "Enter a whole number for companies contacted in Brazil." in (
+        invalid.text
+    )
     assert "Keep safely" in invalid.text
     assert future_get.status_code == 400
     assert future_post.status_code == 400

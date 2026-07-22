@@ -2,23 +2,31 @@
 
 (() => {
   const rows = document.querySelector("[data-country-rows]");
-  const search = document.querySelector("[data-country-search]");
+  const desktopSearch = document.querySelector("[data-country-search]");
+  const mobileSelect = document.querySelector("[data-country-select]");
   const addCount = document.querySelector("[data-country-add-count]");
   const addButton = document.querySelector("[data-country-add]");
   const message = document.querySelector("[data-country-message]");
   const summary = document.querySelector("[data-country-summary]");
-  const countriesSelected = document.querySelector("[data-countries-selected]");
-  const companiesContacted = document.querySelector("[data-companies-contacted]");
+  const totalActivities = document.querySelector(
+    "[data-total-outreach-activities]",
+  );
   const datalist = document.querySelector("#country_options");
 
   if (
-    !rows || !search || !addCount || !addButton || !message ||
-    !summary || !countriesSelected || !companiesContacted || !datalist
+    !rows || !desktopSearch || !mobileSelect || !addCount || !addButton || !message ||
+    !summary || !totalActivities || !datalist
   ) {
     return;
   }
 
   const countries = new Map();
+  const mobileOptions = new Map();
+  for (const option of mobileSelect.options) {
+    if (option.dataset.countryCode) {
+      mobileOptions.set(option.dataset.countryCode, option);
+    }
+  }
   for (const option of datalist.options) {
     countries.set(option.value.trim().toLocaleLowerCase(), {
       code: option.dataset.countryCode,
@@ -28,6 +36,10 @@
   }
 
   const isWholeNumber = (value) => /^\d+$/.test(value.trim());
+  const mobileViewport = window.matchMedia("(max-width: 47.999rem)");
+  const activeCountryControl = () => (
+    mobileViewport.matches ? mobileSelect : desktopSearch
+  );
 
   const findRow = (code) => (
     rows.querySelector(`[data-country-row][data-country-code="${code}"]`)
@@ -37,6 +49,10 @@
     for (const country of countries.values()) {
       if (country.code === code) {
         country.option.disabled = disabled;
+        const mobileOption = mobileOptions.get(code);
+        if (mobileOption) {
+          mobileOption.disabled = disabled;
+        }
         return;
       }
     }
@@ -46,7 +62,7 @@
     message.textContent = text;
   };
 
-  const updateSummary = () => {
+  const updateTotal = () => {
     let total = 0;
     for (const input of rows.querySelectorAll("[data-country-count]")) {
       if (isWholeNumber(input.value)) {
@@ -54,10 +70,7 @@
       }
     }
 
-    countriesSelected.textContent = String(
-      rows.querySelectorAll("[data-country-row]").length,
-    );
-    companiesContacted.textContent = String(total);
+    totalActivities.textContent = String(total);
   };
 
   const makeButton = (label, ariaLabel, dataAttribute, className) => {
@@ -82,12 +95,6 @@
 
     const controls = document.createElement("div");
     controls.className = "country-count-controls";
-    const decrease = makeButton(
-      "−",
-      `Decrease companies contacted in ${country.name}`,
-      "data-country-decrease",
-      "button button-secondary country-step-button",
-    );
     const hiddenCode = document.createElement("input");
     hiddenCode.type = "hidden";
     hiddenCode.name = "country_codes";
@@ -105,12 +112,6 @@
       "aria-label",
       `Companies contacted in ${country.name}`,
     );
-    const increase = makeButton(
-      "+",
-      `Increase companies contacted in ${country.name}`,
-      "data-country-increase",
-      "button button-secondary country-step-button",
-    );
     const remove = makeButton(
       "Remove",
       `Remove ${country.name} from country breakdown`,
@@ -118,12 +119,13 @@
       "button button-secondary country-remove-button",
     );
 
-    controls.append(decrease, hiddenCode, countInput, increase, remove);
+    controls.append(hiddenCode, countInput, remove);
     row.append(name, controls);
     return row;
   };
 
   const addCountry = () => {
+    const search = activeCountryControl();
     const country = countries.get(search.value.trim().toLocaleLowerCase());
     if (!country) {
       showMessage("Select a country from the available list.");
@@ -151,15 +153,16 @@
 
     rows.append(createRow(country, Number.parseInt(addCount.value, 10)));
     setOptionDisabled(country.code, true);
-    search.value = "";
+    desktopSearch.value = "";
+    mobileSelect.value = "";
     addCount.value = "0";
     showMessage("");
-    updateSummary();
+    updateTotal();
     search.focus();
   };
 
   addButton.addEventListener("click", addCountry);
-  for (const input of [search, addCount]) {
+  for (const input of [desktopSearch, addCount]) {
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -169,31 +172,20 @@
   }
 
   rows.addEventListener("click", (event) => {
-    const button = event.target.closest("button");
+    const button = event.target.closest("[data-country-remove]");
     const row = event.target.closest("[data-country-row]");
     if (!button || !row) {
       return;
     }
-    const input = row.querySelector("[data-country-count]");
-    const current = isWholeNumber(input.value)
-      ? Number.parseInt(input.value, 10)
-      : 0;
-
-    if (button.hasAttribute("data-country-increase")) {
-      input.value = String(current + 1);
-    } else if (button.hasAttribute("data-country-decrease")) {
-      input.value = String(Math.max(0, current - 1));
-    } else if (button.hasAttribute("data-country-remove")) {
-      setOptionDisabled(row.dataset.countryCode, false);
-      row.remove();
-      showMessage("");
-    }
-    updateSummary();
+    setOptionDisabled(row.dataset.countryCode, false);
+    row.remove();
+    showMessage("");
+    updateTotal();
   });
 
-  rows.addEventListener("input", updateSummary);
+  rows.addEventListener("input", updateTotal);
   for (const row of rows.querySelectorAll("[data-country-row]")) {
     setOptionDisabled(row.dataset.countryCode, true);
   }
-  updateSummary();
+  updateTotal();
 })();

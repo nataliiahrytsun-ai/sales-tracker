@@ -2412,6 +2412,10 @@ textarea {
   background: var(--surface);
 }
 
+.outreach-form-card {
+  max-width: 58rem;
+}
+
 .meeting-form {
   display: grid;
   width: 100%;
@@ -2692,6 +2696,106 @@ textarea {
 .reply-error {
   min-width: 0;
   margin: 0;
+}
+
+.outreach-form {
+  gap: 0.85rem;
+}
+
+.outreach-form .required-fields,
+.outreach-form .optional-fields {
+  gap: 0.65rem;
+  padding: 0.75rem;
+}
+
+.outreach-form .field-group {
+  gap: 0.3rem;
+}
+
+.outreach-form .required-marker {
+  margin-left: 0.25rem;
+}
+
+.outreach-form .country-search-field-desktop {
+  display: none;
+}
+
+.outreach-form .country-add-row,
+.outreach-form .country-rows,
+.outreach-result-fields {
+  gap: 0.65rem;
+}
+
+.outreach-form .country-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.outreach-form .country-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outreach-form .country-count-controls {
+  flex-wrap: nowrap;
+}
+
+.outreach-form .country-row-error {
+  grid-column: 1 / -1;
+}
+
+.outreach-form .country-inline-message {
+  min-height: 0;
+  margin-block: 0;
+}
+
+.outreach-form .country-breakdown-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.outreach-form .country-breakdown-heading h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.outreach-form .country-rows + .country-add-row {
+  margin-top: -0.35rem;
+}
+
+.outreach-result-fields {
+  display: grid;
+  min-width: 0;
+}
+
+.outreach-total-display {
+  display: flex;
+  min-width: 0;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.outreach-total-display .country-summary-help {
+  font-size: 0.72rem;
+  line-height: 1.15;
+  text-align: right;
+}
+
+.outreach-form #note {
+  min-height: 5.5rem;
+}
+
+.outreach-form > .button-full {
+  min-height: 2.5rem;
+  padding-block: 0.45rem;
 }
 
 .optional {
@@ -3213,6 +3317,14 @@ textarea {
 }
 
 @media (min-width: 48rem) {
+  .outreach-form .country-search-field-mobile {
+    display: none;
+  }
+
+  .outreach-form .country-search-field-desktop {
+    display: grid;
+  }
+
   .field-section-heading {
     grid-template-columns: minmax(0, 1fr) minmax(0, 18rem);
     column-gap: 1.5rem;
@@ -3421,6 +3533,32 @@ textarea {
 
   .country-add-row {
     grid-template-columns: minmax(0, 1fr) minmax(8rem, 0.35fr) auto;
+  }
+
+  .outreach-form .outreach-result-fields {
+    grid-template-columns:
+      minmax(0, 1.15fr)
+      repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .outreach-form .outreach-result-fields > .field-group {
+    grid-template-rows: 2.5rem auto auto;
+    align-content: start;
+  }
+
+  .outreach-form .outreach-result-fields > .field-group > label,
+  .outreach-form .outreach-result-fields > .field-group > .field-label {
+    display: flex;
+    min-height: 2.5rem;
+    align-items: flex-end;
+    line-height: 1.2;
+  }
+
+  .outreach-form .outreach-result-fields > .field-group > input,
+  .outreach-form .outreach-total-display {
+    height: 2.75rem;
+    min-height: 2.75rem;
   }
 
   .country-summary-grid,

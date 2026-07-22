@@ -3,7 +3,7 @@
 {% block title %}{% if dated %}Edit daily outreach{% else %}Update today's outreach{% endif %} - Sales Tracker{% endblock %}
 
 {% block content %}
-  <section class="form-card" aria-labelledby="outreach-heading">
+  <section class="form-card outreach-form-card" aria-labelledby="outreach-heading">
     <div class="section-heading">
       <p class="eyebrow">Outbound activity</p>
       <h1 id="outreach-heading">{% if dated %}Edit daily outreach{% else %}Update today's outreach{% endif %}</h1>
@@ -60,60 +60,48 @@
         <div class="field-section-heading">
           <div>
             <p class="section-kicker">Required</p>
-            <h2 id="outreach-required-heading">Activity totals</h2>
+            <h2 id="outreach-required-heading">Outreach activity</h2>
           </div>
-          <p>Enter non-negative whole-number totals for this date.</p>
         </div>
 
-        <div class="counter-grid counter-grid-single">
+        <div class="outreach-result-fields">
+          <div class="field-group outreach-total-field" aria-live="polite" data-country-summary>
+            <span class="field-label">Companies contacted today</span>
+            <div class="outreach-total-display">
+              <output class="country-summary-value" data-total-outreach-activities>{{ country_total }}</output>
+              <span class="country-summary-help">Calculated from countries</span>
+            </div>
+          </div>
+
           <div class="field-group">
-            <label for="total_activities">Total outreach activities</label>
-            <input
-              id="total_activities"
-              name="total_activities"
-              type="number"
-              min="0"
-              step="1"
-              value="{{ values.total_activities }}"
-              required
-            >
-            {% if errors.total_activities %}
-              <p class="field-error">{{ errors.total_activities }}</p>
-            {% endif %}
+            <label for="replies">Replies received<span class="required-marker" aria-hidden="true">*</span></label>
+            <input id="replies" name="replies" type="number" min="0" step="1" value="{{ values.replies }}" required {% if errors.replies %}aria-describedby="replies_error"{% endif %}>
+            {% if errors.replies %}<p class="field-error reply-error" id="replies_error">{{ errors.replies }}</p>{% endif %}
           </div>
-        </div>
-      </section>
 
-      <section class="field-section required-fields" aria-labelledby="country-breakdown-heading">
-        <div class="field-section-heading">
-          <div>
-            <p class="section-kicker">Optional</p>
-            <h2 id="country-breakdown-heading">Country breakdown</h2>
+          <div class="field-group">
+            <label for="positive_replies">Positive replies<span class="required-marker" aria-hidden="true">*</span></label>
+            <input id="positive_replies" name="positive_replies" type="number" min="0" step="1" value="{{ values.positive_replies }}" required {% if errors.positive_replies %}aria-describedby="positive_replies_error"{% endif %}>
+            {% if errors.positive_replies %}<p class="field-error reply-error" id="positive_replies_error">{{ errors.positive_replies }}</p>{% endif %}
           </div>
-          <p>Add only the countries contacted on this date.</p>
+
+          <div class="field-group">
+            <label for="meetings_booked">Meetings booked<span class="required-marker" aria-hidden="true">*</span></label>
+            <input id="meetings_booked" name="meetings_booked" type="number" min="0" step="1" value="{{ values.meetings_booked }}" required>
+            {% if errors.meetings_booked %}<p class="field-error">{{ errors.meetings_booked }}</p>{% endif %}
+          </div>
         </div>
 
-        <div class="country-summary-grid" aria-live="polite" data-country-summary>
-          <div class="country-summary-card">
-            <span class="country-summary-label">Countries selected</span>
-            <output class="country-summary-value" data-countries-selected>{{ country_rows|length }}</output>
-          </div>
-          <div class="country-summary-card">
-            <span class="country-summary-label">Total Companies</span>
-            <output class="country-summary-value" data-companies-contacted>{{ country_total }}</output>
-          </div>
+        <div class="country-breakdown-heading">
+          <h3>Country breakdown</h3>
+          <span class="optional">Optional</span>
         </div>
-        <p class="country-summary-help">
-          Enter the number of companies contacted in each country.<br>
-          The total is calculated automatically.
-        </p>
 
         <div class="country-rows" data-country-rows>
           {% for row in country_rows %}
             <div class="country-row" data-country-row data-country-code="{{ row.code }}">
               <span class="country-row-name">{{ row.name }}</span>
               <div class="country-count-controls">
-                <button class="button button-secondary country-step-button" type="button" aria-label="Decrease companies contacted in {{ row.name }}" data-country-decrease>&minus;</button>
                 <input type="hidden" name="country_codes" value="{{ row.code }}">
                 <input
                   class="country-count-input"
@@ -126,7 +114,6 @@
                   data-country-count
                   required
                 >
-                <button class="button button-secondary country-step-button" type="button" aria-label="Increase companies contacted in {{ row.name }}" data-country-increase>+</button>
                 <button class="button button-secondary country-remove-button" type="button" aria-label="Remove {{ row.name }} from country breakdown" data-country-remove>Remove</button>
               </div>
               {% if row.error %}<p class="field-error country-row-error">{{ row.error }}</p>{% endif %}
@@ -135,7 +122,16 @@
         </div>
 
         <div class="country-add-row" data-country-add-row>
-          <div class="field-group country-search-field">
+          <div class="field-group country-search-field country-search-field-mobile">
+            <label for="country_select">Country</label>
+            <select id="country_select" data-country-select>
+              <option value="">Select country</option>
+              {% for code, label in country_options %}
+                <option value="{{ label }}" data-country-code="{{ code }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field-group country-search-field country-search-field-desktop">
             <label for="country_search">Country</label>
             <input
               id="country_search"
@@ -155,12 +151,11 @@
             <label for="country_add_count">Companies count</label>
             <input id="country_add_count" type="number" min="0" step="1" value="0" data-country-add-count>
           </div>
-          <button class="button button-secondary country-add-button" type="button" data-country-add>Add</button>
+          <button class="button button-secondary country-add-button" type="button" data-country-add>Add country</button>
         </div>
         <p class="field-error country-inline-message" role="status" data-country-message>
           {% if errors.countries %}{{ errors.countries }}{% endif %}
         </p>
-
       </section>
 
       <section
@@ -169,37 +164,13 @@
       >
         <div class="field-section-heading field-section-heading-full">
           <div>
-            <p class="section-kicker">Required results</p>
-            <h2 id="outreach-optional-heading">Results and context</h2>
-          </div>
-          <p>Enter all result counts. Sentiment and context may be left empty.</p>
-        </div>
-
-        <div class="reply-fields">
-          <div class="field-group">
-            <label for="replies">Replies received</label>
-            <input id="replies" name="replies" type="number" min="0" step="1" value="{{ values.replies }}" required {% if errors.replies %}aria-describedby="replies_error"{% endif %}>
-          </div>
-
-          <div class="field-group">
-            <label for="positive_replies">Positive replies</label>
-            <input id="positive_replies" name="positive_replies" type="number" min="0" step="1" value="{{ values.positive_replies }}" aria-describedby="positive_replies_error" required>
-          </div>
-
-          <div class="reply-errors" aria-live="polite">
-            <p class="field-error reply-error" id="replies_error">{% if errors.replies %}{{ errors.replies }}{% endif %}</p>
-            <p class="field-error reply-error" id="positive_replies_error">{% if errors.positive_replies %}{{ errors.positive_replies }}{% endif %}</p>
+            <p class="section-kicker">Optional</p>
+            <h2 id="outreach-optional-heading">Context</h2>
           </div>
         </div>
 
         <div class="field-group">
-          <label for="meetings_booked">Meetings booked</label>
-          <input id="meetings_booked" name="meetings_booked" type="number" min="0" step="1" value="{{ values.meetings_booked }}" required>
-          {% if errors.meetings_booked %}<p class="field-error">{{ errors.meetings_booked }}</p>{% endif %}
-        </div>
-
-        <div class="field-group">
-          <label for="user_mood">User mood <span class="optional">Optional</span></label>
+          <label for="user_mood">User mood</label>
           <select id="user_mood" name="user_mood">
             <option value="">Not provided</option>
             {% for option in mood_options %}
@@ -210,7 +181,7 @@
         </div>
 
         <div class="field-group">
-          <label for="blocker_tag">Main blocker <span class="optional">Optional</span></label>
+          <label for="blocker_tag">Main blocker</label>
           <select id="blocker_tag" name="blocker_tag">
             <option value="">No blocker</option>
             {% for value, label in blocker_options %}
@@ -221,8 +192,8 @@
         </div>
 
         <div class="field-group field-group-full">
-          <label for="note">Note <span class="optional">Optional</span></label>
-          <textarea id="note" name="note" rows="4">{{ values.note }}</textarea>
+          <label for="note">Note</label>
+          <textarea id="note" name="note" rows="3">{{ values.note }}</textarea>
         </div>
       </section>
 
