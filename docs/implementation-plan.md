@@ -850,6 +850,36 @@ It does not itself block direct pushes. A required status check or GitHub
 Ruleset must be configured separately in repository settings when the
 `quality-gate` result is to become mandatory.
 
+### Release and rollback baseline
+
+Every release uses one exact commit whose CI `quality-gate` has passed. Before
+changing the running version, operations records the current commit, confirms
+persistent SQLite storage, creates and verifies a pre-release backup, records
+its path, and confirms that no restore is in progress.
+
+The application is stopped before production schema changes. The selected
+commit and dependencies are installed, reviewed production environment
+variables are loaded, and `alembic upgrade head` runs before the application
+is started or receives user traffic. The running version must then pass the
+exact `/health` and `/ready` contracts plus manual login and authenticated-page
+checks. A live process with failed readiness is not a successful release.
+SQLite remains limited to one application process and one worker.
+
+Rollback is never automatic and does not use automatic `alembic downgrade`.
+Without a schema change, returning to the previous verified commit is allowed
+only when the database schema is known to be compatible. After a schema
+change, the safe baseline is to stop the application, restore and verify the
+pre-release backup, return to the previous commit, restart, and repeat
+health/readiness/manual checks. Restoring that backup discards data written
+after its creation and therefore requires an explicit operational decision.
+
+`python -m app.release_check --base-url "<application-origin>"` verifies an
+already running version using only unauthenticated `GET /health` and
+`GET /ready`. It requires their exact successful JSON responses, applies a
+bounded timeout, sends no cookies or credentials, and follows no redirects.
+The full provider-agnostic procedure is maintained in
+`docs/release-runbook.md`; hosting-specific deployment remains undecided.
+
 ### Production configuration baseline
 
 The application supports only the `development`, `test`, and `production`

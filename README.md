@@ -314,3 +314,20 @@ committed and pushed. The workflow alone does not prevent direct pushes.
 Configure a required status check or GitHub Ruleset separately in repository
 settings if `quality-gate` must be mandatory. Any future deployment should
 depend on a successful CI result.
+
+## Release verification
+
+The provider-agnostic release and rollback procedure is documented in
+[`docs/release-runbook.md`](docs/release-runbook.md). No production hosting
+provider or domain has been selected.
+
+After starting a new version, verify its public liveness and readiness
+contracts with:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.release_check --base-url "http://127.0.0.1:8000"
+```
+
+The command checks an already running application. It requires exact successful
+responses from `/health` and `/ready`, sends no authentication or cookies,
+does not follow redirects, and exits nonzero when the release is not ready.
