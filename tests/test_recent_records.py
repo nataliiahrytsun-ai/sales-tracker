@@ -196,10 +196,13 @@ def test_recent_routes_require_authentication(
                 ("GET", "/outreach/recent"),
                 ("GET", f"/outreach/{TEST_DATE.isoformat()}"),
                 ("POST", f"/outreach/{TEST_DATE.isoformat()}"),
-            ):
-                response = await client.request(method, path)
-                assert response.status_code == 303
-                assert response.headers["location"] == "/login"
+                ):
+                    response = await client.request(method, path)
+                    if method == "POST":
+                        assert response.status_code == 403
+                    else:
+                        assert response.status_code == 303
+                        assert response.headers["location"] == "/login"
 
     asyncio.run(scenario())
 
@@ -538,9 +541,9 @@ def test_meeting_delete_is_post_only_and_confirms(
     recent, rejected, deleted, confirmation = asyncio.run(scenario())
     assert recent.status_code == 200
     assert (
-        "onsubmit=\"return window.confirm('Are you sure you want to delete "
-        "this meeting?')\""
+        'data-confirm-message="Are you sure you want to delete this meeting?"'
     ) in recent.text
+    assert "onsubmit=" not in recent.text
     assert rejected.status_code == 405
     assert deleted.status_code == 303
     assert confirmation.status_code == 200

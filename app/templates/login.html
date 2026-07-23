@@ -15,6 +15,7 @@
     {% endif %}
 
     <form class="form-stack" method="post" action="{{ url_for('login') }}">
+      <input type="hidden" name="csrf_token" value="{{ request.scope.get('session', {}).get('csrf_token', '') }}">
       <div class="field-group">
         <label for="email">Email</label>
         <input

@@ -53,6 +53,7 @@
       action="{% if dated %}{{ url_for('save_dated_outreach', activity_date=activity_date.isoformat()) }}{% if recent_range_query %}?{{ recent_range_query }}{% endif %}{% else %}{{ url_for('save_today_outreach') }}{% endif %}"
       {% if saved and not dated %}aria-describedby="outreach-saved-entry"{% endif %}
     >
+      <input type="hidden" name="csrf_token" value="{{ request.scope.get('session', {}).get('csrf_token', '') }}">
       <section
         class="field-section required-fields"
         aria-labelledby="outreach-required-heading"

@@ -52,6 +52,7 @@
               <span class="user-name">{{ current_user.name }}</span>
               <a class="account-link" href="{{ url_for('change_password_page') }}">Change password</a>
               <form class="header-logout" method="post" action="{{ url_for('logout') }}">
+                <input type="hidden" name="csrf_token" value="{{ request.scope.get('session', {}).get('csrf_token', '') }}">
                 <button class="button button-secondary" type="submit">Logout</button>
               </form>
             </div>
@@ -93,6 +94,7 @@
                   <span class="user-name">{{ current_user.name }}</span>
                   <a class="account-link" href="{{ url_for('change_password_page') }}">Change password</a>
                   <form class="header-logout" method="post" action="{{ url_for('logout') }}">
+                    <input type="hidden" name="csrf_token" value="{{ request.scope.get('session', {}).get('csrf_token', '') }}">
                     <button class="button button-secondary" type="submit">Logout</button>
                   </form>
                 </div>
@@ -107,6 +109,7 @@
                 >Change password</a>
                 <span class="user-name">{{ current_user.name }}</span>
                 <form class="header-logout" method="post" action="{{ url_for('logout') }}">
+                  <input type="hidden" name="csrf_token" value="{{ request.scope.get('session', {}).get('csrf_token', '') }}">
                   <button class="button button-secondary" type="submit">Logout</button>
                 </form>
             </nav>
@@ -120,5 +123,6 @@
       {% block content %}{% endblock %}
     </main>
     <script src="{{ url_for('static', path='/js/sticky_navigation.js') }}" defer></script>
+    <script src="{{ url_for('static', path='/js/form_confirmation.js') }}" defer></script>
   </body>
 </html>

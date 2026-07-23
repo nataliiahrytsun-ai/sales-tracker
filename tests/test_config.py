@@ -7,8 +7,16 @@ import pytest
 
 from app.config import (
     ALLOWED_ENVIRONMENTS,
+    ALLOWED_HOSTS_ENV_VAR,
     DATABASE_URL_ENV_VAR,
+    DEFAULT_ALLOWED_HOSTS,
+    DEFAULT_LOGIN_RATE_LIMIT_BLOCK_SECONDS,
+    DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+    DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
     ENVIRONMENT_ENV_VAR,
+    LOGIN_RATE_LIMIT_BLOCK_ENV_VAR,
+    LOGIN_RATE_LIMIT_MAX_ATTEMPTS_ENV_VAR,
+    LOGIN_RATE_LIMIT_WINDOW_ENV_VAR,
     SESSION_COOKIE_SECURE_ENV_VAR,
     SESSION_MAX_AGE_ENV_VAR,
     SESSION_SECRET_ENV_VAR,
@@ -19,11 +27,15 @@ from app.main import create_app
 
 PRODUCTION_SECRET = "production-session-secret-with-at-least-32-characters"
 CONFIG_ENVIRONMENT_VARIABLES = (
+    ALLOWED_HOSTS_ENV_VAR,
     DATABASE_URL_ENV_VAR,
     ENVIRONMENT_ENV_VAR,
     SESSION_COOKIE_SECURE_ENV_VAR,
     SESSION_MAX_AGE_ENV_VAR,
     SESSION_SECRET_ENV_VAR,
+    LOGIN_RATE_LIMIT_BLOCK_ENV_VAR,
+    LOGIN_RATE_LIMIT_MAX_ATTEMPTS_ENV_VAR,
+    LOGIN_RATE_LIMIT_WINDOW_ENV_VAR,
 )
 
 
@@ -49,6 +61,7 @@ def configure_production(
     monkeypatch.setenv(ENVIRONMENT_ENV_VAR, "production")
     monkeypatch.setenv(SESSION_SECRET_ENV_VAR, PRODUCTION_SECRET)
     monkeypatch.setenv(SESSION_COOKIE_SECURE_ENV_VAR, "true")
+    monkeypatch.setenv(ALLOWED_HOSTS_ENV_VAR, "sales.example.test")
     monkeypatch.setenv(
         DATABASE_URL_ENV_VAR,
         production_database_url(database_path),
@@ -74,6 +87,10 @@ def test_allowed_environment_values_are_normalized(
     """Only documented profiles are accepted, with safe normalization."""
     monkeypatch.setenv(ENVIRONMENT_ENV_VAR, raw_value)
     if expected == "production":
+        monkeypatch.setenv(
+            ALLOWED_HOSTS_ENV_VAR,
+            "sales.example.test",
+        )
         monkeypatch.setenv(SESSION_SECRET_ENV_VAR, PRODUCTION_SECRET)
         monkeypatch.setenv(SESSION_COOKIE_SECURE_ENV_VAR, "true")
         monkeypatch.setenv(
@@ -121,6 +138,19 @@ def test_test_profile_keeps_local_compatibility(
     assert settings.environment == "test"
     assert settings.session_cookie_secure is False
     assert len(settings.session_secret) >= 32
+    assert settings.allowed_hosts == DEFAULT_ALLOWED_HOSTS
+    assert (
+        settings.login_rate_limit_max_attempts
+        == DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS
+    )
+    assert (
+        settings.login_rate_limit_window_seconds
+        == DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS
+    )
+    assert (
+        settings.login_rate_limit_block_seconds
+        == DEFAULT_LOGIN_RATE_LIMIT_BLOCK_SECONDS
+    )
 
 
 def test_production_requires_session_secret(
@@ -239,4 +269,86 @@ def test_application_starts_with_valid_production_configuration(
     assert isinstance(application, FastAPI)
     assert settings.environment == "production"
     assert settings.session_cookie_secure is True
+    assert settings.allowed_hosts == ("sales.example.test",)
     assert application.debug is False
+
+
+def test_production_requires_allowed_hosts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Production startup requires an explicit non-empty host allowlist."""
+    configure_production(monkeypatch, tmp_path / "production.db")
+    monkeypatch.delenv(ALLOWED_HOSTS_ENV_VAR)
+
+    with pytest.raises(RuntimeError, match=ALLOWED_HOSTS_ENV_VAR):
+        load_settings()
+
+
+@pytest.mark.parametrize(
+    "invalid_hosts",
+    [
+        "",
+        "https://sales.example.test",
+        "sales.example.test/path",
+        "sales.example.test?query=yes",
+        "sales.example.test:443",
+    ],
+)
+def test_invalid_allowed_hosts_are_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    invalid_hosts: str,
+) -> None:
+    """Allowed-host entries contain hostnames only."""
+    monkeypatch.setenv(ALLOWED_HOSTS_ENV_VAR, invalid_hosts)
+
+    with pytest.raises(RuntimeError, match=ALLOWED_HOSTS_ENV_VAR):
+        load_settings()
+
+
+def test_production_rejects_unrestricted_host_wildcard(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Production cannot disable host validation with a global wildcard."""
+    configure_production(monkeypatch, tmp_path / "production.db")
+    monkeypatch.setenv(ALLOWED_HOSTS_ENV_VAR, "*")
+
+    with pytest.raises(RuntimeError, match=ALLOWED_HOSTS_ENV_VAR):
+        load_settings()
+
+
+def test_allowed_hosts_are_trimmed_normalized_and_deduplicated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exact and leading-wildcard hosts use a stable normalized tuple."""
+    monkeypatch.setenv(
+        ALLOWED_HOSTS_ENV_VAR,
+        " Localhost, *.Example.Test,localhost ",
+    )
+
+    assert load_settings().allowed_hosts == (
+        "localhost",
+        "*.example.test",
+    )
+
+
+@pytest.mark.parametrize(
+    "environment_variable",
+    [
+        LOGIN_RATE_LIMIT_MAX_ATTEMPTS_ENV_VAR,
+        LOGIN_RATE_LIMIT_WINDOW_ENV_VAR,
+        LOGIN_RATE_LIMIT_BLOCK_ENV_VAR,
+    ],
+)
+@pytest.mark.parametrize("invalid_value", ["", "0", "-1", "not-a-number"])
+def test_invalid_login_rate_limit_values_are_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    environment_variable: str,
+    invalid_value: str,
+) -> None:
+    """Every login throttling parameter must be a positive integer."""
+    monkeypatch.setenv(environment_variable, invalid_value)
+
+    with pytest.raises(RuntimeError, match=environment_variable):
+        load_settings()

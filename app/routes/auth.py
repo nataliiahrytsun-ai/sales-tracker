@@ -17,12 +17,30 @@ from app.auth import (
 )
 from app.database import get_session
 from app.models import User
+from app.security import LoginRateLimiter, reset_session
 from app.services.passwords import hash_password, validate_password_change
 
 router = APIRouter(tags=["authentication"])
 templates = Jinja2Templates(
     directory=Path(__file__).resolve().parents[1] / "templates",
 )
+LOGIN_RATE_LIMIT_MESSAGE = "Too many login attempts. Please try again later."
+
+
+def rate_limited_login_response(
+    request: Request,
+    *,
+    email: str,
+    retry_after: int,
+) -> Response:
+    """Render a neutral throttling response without account disclosure."""
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={"error": LOGIN_RATE_LIMIT_MESSAGE, "email": email},
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        headers={"Retry-After": str(retry_after)},
+    )
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -57,8 +75,25 @@ def login(
     session: Annotated[Session, Depends(get_session)],
 ) -> Response:
     """Authenticate a user and start a signed cookie session."""
+    limiter: LoginRateLimiter = request.app.state.login_rate_limiter
+    limiter_key = limiter.key(request, email)
+    retry_after = limiter.retry_after(limiter_key)
+    if retry_after is not None:
+        return rate_limited_login_response(
+            request,
+            email=email,
+            retry_after=retry_after,
+        )
+
     user = authenticate_user(session, email, password)
     if user is None:
+        retry_after = limiter.record_failure(limiter_key)
+        if retry_after is not None:
+            return rate_limited_login_response(
+                request,
+                email=email,
+                retry_after=retry_after,
+            )
         return templates.TemplateResponse(
             request=request,
             name="login.html",
@@ -69,6 +104,7 @@ def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
+    limiter.clear(limiter_key)
     set_authenticated_session(request, user)
     destination = "/change-password" if user.must_change_password else "/"
     return RedirectResponse(
@@ -144,5 +180,5 @@ def logout(
     _current_user: Annotated[User, Depends(get_current_user)],
 ) -> RedirectResponse:
     """End the authenticated session."""
-    request.session.clear()
+    reset_session(request)
     return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)

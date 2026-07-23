@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models import User
+from app.security import reset_session
 from app.services.passwords import hash_password, verify_password
 
 DUMMY_PASSWORD_HASH = hash_password("unused-authentication-timing-value")
@@ -17,7 +18,7 @@ SESSION_AUTH_VERSION_KEY = "auth_version"
 def set_authenticated_session(request: Request, user: User) -> None:
     """Replace session state with the user's current authentication version."""
     assert user.id is not None
-    request.session.clear()
+    reset_session(request)
     request.session[SESSION_USER_ID_KEY] = user.id
     request.session[SESSION_AUTH_VERSION_KEY] = user.auth_version
 
@@ -47,7 +48,7 @@ def get_optional_current_user(
     user_id = request.session.get(SESSION_USER_ID_KEY)
     auth_version = request.session.get(SESSION_AUTH_VERSION_KEY)
     if not isinstance(user_id, int) or not isinstance(auth_version, int):
-        request.session.clear()
+        reset_session(request)
         return None
 
     user = session.get(User, user_id)
@@ -56,7 +57,7 @@ def get_optional_current_user(
         or not user.active
         or user.auth_version != auth_version
     ):
-        request.session.clear()
+        reset_session(request)
         return None
     return user
 

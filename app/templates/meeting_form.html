@@ -33,6 +33,7 @@
         </div>
         <div class="confirmation-actions">
           <form class="confirmation-undo" method="post" action="{{ url_for('undo_meeting', meeting_id=saved_meeting_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ request.scope.get('session', {}).get('csrf_token', '') }}">
             <button class="button button-danger" type="submit">Undo</button>
           </form>
         </div>
@@ -71,6 +72,7 @@
       action="{% if editing %}{{ url_for('update_meeting', meeting_id=meeting_id) }}{% if recent_range_query %}?{{ recent_range_query }}{% endif %}{% else %}{{ url_for('create_meeting') }}{% endif %}"
       {% if saved_meeting_id %}aria-describedby="meeting-next-entry"{% endif %}
     >
+      <input type="hidden" name="csrf_token" value="{{ request.scope.get('session', {}).get('csrf_token', '') }}">
       <section class="field-section required-fields" aria-labelledby="required-fields-heading">
         <div class="field-section-heading">
           <div>

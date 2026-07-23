@@ -54,6 +54,7 @@ $env:SALES_TRACKER_ENVIRONMENT = "production"
 $env:SALES_TRACKER_SESSION_SECRET = "<secret-from-the-deployment-secret-store>"
 $env:SALES_TRACKER_SESSION_COOKIE_SECURE = "true"
 $env:SALES_TRACKER_DATABASE_URL = "sqlite:///C:/<persistent-directory>/sales_tracker.db"
+$env:SALES_TRACKER_ALLOWED_HOSTS = "<production-hostname>"
 ```
 
 Session cookies have an explicit finite lifetime of 1,209,600 seconds (14 days)
@@ -74,6 +75,56 @@ are disabled, the database URL is absent or relative, or the database parent
 directory is missing or inaccessible. Errors identify the affected environment
 variable without printing the session secret. Do not place a real secret in
 source code or a committed configuration file.
+
+## Browser security
+
+Every HTML form that changes application state, including login and logout,
+contains a cryptographically strong synchronizer token. The token is stored in
+the signed session, verified on every `POST`, `PUT`, `PATCH`, and `DELETE`
+browser request, and rotated whenever the session is cleared or recreated.
+Missing, empty, cross-session, and invalid tokens return HTTP 403. The public
+`GET /health` endpoint does not require a token.
+
+Failed login attempts are limited by the direct client address reported by
+`request.client.host` together with the trimmed, case-normalized login
+identifier. Configure the pilot policy with positive whole numbers:
+
+```powershell
+$env:SALES_TRACKER_LOGIN_RATE_LIMIT_MAX_ATTEMPTS = "5"
+$env:SALES_TRACKER_LOGIN_RATE_LIMIT_WINDOW_SECONDS = "300"
+$env:SALES_TRACKER_LOGIN_RATE_LIMIT_BLOCK_SECONDS = "900"
+```
+
+These are the current defaults: five failed attempts in a five-minute window,
+followed by a 15-minute block after the allowance is exceeded. Successful login
+clears the matching failed-attempt bucket. The limiter stores no passwords and
+uses in-memory state for the current one-process, one-worker pilot profile.
+State resets on application restart. A future multi-worker or multi-instance
+deployment will require a shared limiter store and an agreed final policy.
+`X-Forwarded-For` is not trusted; proxy-derived client addresses must wait for
+an explicit trusted-proxy configuration.
+
+Trusted Host validation uses a comma-separated
+`SALES_TRACKER_ALLOWED_HOSTS` list. Whitespace is trimmed and names are
+normalized to lowercase. Exact hostnames and a leading subdomain wildcard such
+as `*.example.test` are supported; schemes, ports, paths, and queries are not.
+Production requires a non-empty list and rejects the unrestricted `*`.
+Development and test default to `localhost`, `127.0.0.1`, and `testserver`.
+The real production domain will be selected later.
+
+Responses include:
+
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `X-Frame-Options: DENY`
+- `Content-Security-Policy`, including `frame-ancestors 'none'`
+- a restrictive `Permissions-Policy`
+
+The CSP permits only local scripts, styles, fonts, and connections. Inline
+scripts are prohibited. Inline styles remain allowed because current Dashboard
+and My Week progress visualizations set calculated style values, and `data:`
+images remain allowed for the local CSS select-arrow asset. HSTS and HTTPS
+redirect are intentionally not enabled until HTTPS termination is confirmed.
 
 ## Login
 
@@ -100,14 +151,14 @@ changed after the next login.
 
 ### Known session limitation
 
-Sessions use stateless signed cookies. Logout instructs the browser to delete
-its cookie, but the server cannot revoke a copy captured before logout. Such a
-copied cookie remains usable until its configured `Max-Age` expires, unless the
-user is deleted, made inactive, or has their password changed or reset. Password
-changes increment the user's authentication version and revoke older sessions;
-ordinary logout does not. Full logout replay revocation would require a
-server-side session store or revocation mechanism and is not part of the current
-architecture.
+Sessions use stateless signed cookies. Logout clears authentication state and
+rotates the CSRF token, but the server cannot revoke a cookie copy captured
+before logout. Such a copied cookie remains usable until its configured
+`Max-Age` expires, unless the user is deleted, made inactive, or has their
+password changed or reset. Password changes increment the user's authentication
+version and revoke older sessions; ordinary logout does not. Full logout replay
+revocation would require a server-side session store or revocation mechanism
+and is not part of the current architecture.
 
 ## Database and migrations
 

@@ -34,10 +34,27 @@ other sizes were not recorded.
 
 ## Additional Known Limitation (Not a Milestone 1 Gate)
 
-`POST /logout` expires the browser's session cookie and subsequent requests from
-that browser are redirected to `/login`. A cookie copied before logout remains
-cryptographically valid until its configured `Max-Age` expires. This limitation
-is documented and covered by a strict `xfail` integration test. Password changes
-and resets do revoke older cookies through `auth_version`; ordinary logout does
-not increment that version. Full logout replay revocation is not required by the
-Milestone 1 login/logout acceptance criteria.
+`POST /logout` clears authentication state, rotates the CSRF token, and causes
+subsequent requests from that browser to redirect to `/login`. A cookie copied
+before logout remains cryptographically valid until its configured `Max-Age`
+expires. This limitation is documented and covered by a strict `xfail`
+integration test. Password changes and resets do revoke older cookies through
+`auth_version`; ordinary logout does not increment that version. Full logout
+replay revocation is not required by the Milestone 1 login/logout acceptance
+criteria.
+
+## Milestone 3 Browser Security Follow-up
+
+The following browser checks remain required when the pilot domain and HTTPS
+termination are available. They intentionally do not select a hosting provider
+or domain.
+
+| Manual check | Status | Expected evidence |
+| --- | --- | --- |
+| Every login, password, logout, Meeting, Outreach, and Weekly targets POST contains a hidden CSRF token | Pending | Browser developer tools show `csrf_token` in each submitted form. |
+| A form validation error can be corrected and resubmitted | Pending | The rerendered form retains a working session-bound CSRF token. |
+| Repeated failed login shows the neutral throttling message | Pending | The attempt exceeding the configured allowance returns 429 and `Retry-After`; no account-existence detail is shown. |
+| Production Host allowlist accepts the selected pilot domain and rejects another Host | Pending | The configured host loads normally and an unknown Host returns 400. |
+| Dashboard, charts, forms, confirmation, and mobile navigation work under CSP | Pending | Browser console has no CSP violations for required local resources or interactions. |
+| Baseline security headers are present on 200, 403, 404, and Host 400 responses | Pending | Developer tools show CSP, frame denial, nosniff, referrer policy, and permissions policy. |
+| HSTS remains absent until HTTPS termination is confirmed | Pending | No `Strict-Transport-Security` header is emitted before the HTTPS decision. |

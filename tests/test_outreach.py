@@ -286,8 +286,11 @@ def test_anonymous_today_outreach_redirects_to_login(
         ) as client:
             response = await client.request(method, "/outreach/today")
 
-        assert response.status_code == 303
-        assert response.headers["location"] == "/login"
+        if method == "POST":
+            assert response.status_code == 403
+        else:
+            assert response.status_code == 303
+            assert response.headers["location"] == "/login"
 
     asyncio.run(scenario())
 

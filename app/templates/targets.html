@@ -42,6 +42,7 @@
       data-target-week-form
       data-week-url="{{ url_for('targets_page') }}"
     >
+      <input type="hidden" name="csrf_token" value="{{ request.scope.get('session', {}).get('csrf_token', '') }}">
       <div class="targets-week-selector">
         <div class="field-group">
           <span id="target-week-label" class="field-label">Calendar week</span>

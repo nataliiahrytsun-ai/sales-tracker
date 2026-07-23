@@ -554,9 +554,12 @@ def test_session_cookie_contains_only_required_authentication_state(
             ).one()
 
         assert payload == {
+            "csrf_token": payload["csrf_token"],
             "user_id": user.id,
             "auth_version": user.auth_version,
         }
+        assert isinstance(payload["csrf_token"], str)
+        assert payload["csrf_token"]
         assert "password" not in payload
         assert "password_hash" not in payload
         assert "email" not in payload
@@ -580,8 +583,11 @@ def test_change_password_requires_authentication(
         ) as client:
             response = await client.request(method, "/change-password")
 
-        assert response.status_code == 303
-        assert response.headers["location"] == "/login"
+        if method == "POST":
+            assert response.status_code == 403
+        else:
+            assert response.status_code == 303
+            assert response.headers["location"] == "/login"
 
     asyncio.run(scenario())
 
@@ -950,8 +956,11 @@ def test_logout_clears_session(
         assert response.status_code == 303
         assert response.headers["location"] == "/login"
         clear_cookie = response.headers["set-cookie"].lower()
-        assert f"{SESSION_COOKIE_NAME}=null" in clear_cookie
-        assert "expires=thu, 01 jan 1970 00:00:00 gmt" in clear_cookie
+        assert f"{SESSION_COOKIE_NAME}=" in clear_cookie
+        anonymous_payload = decode_session(
+            response.cookies[SESSION_COOKIE_NAME],
+        )
+        assert set(anonymous_payload) == {"csrf_token"}
         assert client.cookies.get(SESSION_COOKIE_NAME) != old_cookie
         assert private_response.status_code == 303
         assert private_response.headers["location"] == "/login"
@@ -1018,9 +1027,8 @@ def test_session_with_missing_user_is_rejected(
 
         assert response.status_code == 303
         assert response.headers["location"] == "/login"
-        assert f"{SESSION_COOKIE_NAME}=null" in response.headers[
-            "set-cookie"
-        ].lower()
+        payload = decode_session(response.cookies[SESSION_COOKIE_NAME])
+        assert set(payload) == {"csrf_token"}
 
     asyncio.run(scenario())
 
@@ -1060,9 +1068,8 @@ def test_existing_session_rejects_deleted_or_deactivated_user(
 
         assert response.status_code == 303
         assert response.headers["location"] == "/login"
-        assert f"{SESSION_COOKIE_NAME}=null" in response.headers[
-            "set-cookie"
-        ].lower()
+        payload = decode_session(response.cookies[SESSION_COOKIE_NAME])
+        assert set(payload) == {"csrf_token"}
 
     asyncio.run(scenario())
 

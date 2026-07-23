@@ -800,6 +800,38 @@ affected environment variable and does not expose secret values. The persistent
 database path, hosting provider, domain, HTTPS termination, and proxy settings
 remain deployment decisions and are not fixed by this baseline.
 
+### Browser request security baseline
+
+All browser forms that change state use a cryptographically strong synchronizer
+token stored in the signed session. Every `POST`, `PUT`, `PATCH`, and `DELETE`
+browser request validates that token with a timing-safe comparison before route
+logic runs, including anonymous login and authenticated logout. Session clearing
+rotates the token. Invalid or absent tokens return a generic HTTP 403, while
+read-only endpoints such as `GET /health` remain unaffected.
+
+Failed logins use an in-memory pilot limiter keyed by the direct peer address
+from `request.client.host` and the trimmed, case-normalized login identifier.
+Only failures count; success clears the matching bucket. Attempt allowance,
+counting window, and block duration are positive-integer environment settings.
+The implementation assumes one process and one worker, resets on restart, and
+must move to a shared store before multi-worker or multi-instance deployment.
+Forwarded client-IP headers are not trusted until proxy configuration is
+explicitly agreed.
+
+Production requires an explicit comma-separated
+`SALES_TRACKER_ALLOWED_HOSTS` list. Exact hostnames and leading wildcard
+subdomains are supported. Schemes, ports, paths, queries, empty lists, and the
+unrestricted production `*` are rejected. The actual production domain remains
+undecided.
+
+All HTTP responses receive `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, a
+restrictive `Permissions-Policy`, and a Content Security Policy that denies
+framing and permits the application's local resources. Inline scripts are not
+allowed. Current calculated progress styles and the local CSS `data:` image
+remain narrowly permitted. HSTS and HTTPS redirect remain disabled until the
+real HTTPS termination design is confirmed.
+
 ## 16. MVP Acceptance Criteria
 
 The MVP is complete when:

@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import os
+import re
 import secrets
 
 from sqlalchemy.engine import make_url
@@ -10,12 +11,30 @@ from sqlalchemy.exc import ArgumentError
 
 DEFAULT_DATABASE_URL = "sqlite:///./sales_tracker.db"
 DEFAULT_SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60
+DEFAULT_ALLOWED_HOSTS = ("localhost", "127.0.0.1", "testserver")
+DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 5
+DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS = 300
+DEFAULT_LOGIN_RATE_LIMIT_BLOCK_SECONDS = 900
 DATABASE_URL_ENV_VAR = "SALES_TRACKER_DATABASE_URL"
 ENVIRONMENT_ENV_VAR = "SALES_TRACKER_ENVIRONMENT"
 SESSION_SECRET_ENV_VAR = "SALES_TRACKER_SESSION_SECRET"
 SESSION_COOKIE_SECURE_ENV_VAR = "SALES_TRACKER_SESSION_COOKIE_SECURE"
 SESSION_MAX_AGE_ENV_VAR = "SALES_TRACKER_SESSION_MAX_AGE_SECONDS"
+ALLOWED_HOSTS_ENV_VAR = "SALES_TRACKER_ALLOWED_HOSTS"
+LOGIN_RATE_LIMIT_MAX_ATTEMPTS_ENV_VAR = (
+    "SALES_TRACKER_LOGIN_RATE_LIMIT_MAX_ATTEMPTS"
+)
+LOGIN_RATE_LIMIT_WINDOW_ENV_VAR = (
+    "SALES_TRACKER_LOGIN_RATE_LIMIT_WINDOW_SECONDS"
+)
+LOGIN_RATE_LIMIT_BLOCK_ENV_VAR = (
+    "SALES_TRACKER_LOGIN_RATE_LIMIT_BLOCK_SECONDS"
+)
 ALLOWED_ENVIRONMENTS = frozenset({"development", "test", "production"})
+HOSTNAME_PATTERN = re.compile(
+    r"^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*"
+    r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+)
 
 
 @dataclass(frozen=True)
@@ -27,6 +46,16 @@ class Settings:
     session_secret: str
     session_cookie_secure: bool
     session_max_age_seconds: int = DEFAULT_SESSION_MAX_AGE_SECONDS
+    allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS
+    login_rate_limit_max_attempts: int = (
+        DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS
+    )
+    login_rate_limit_window_seconds: int = (
+        DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS
+    )
+    login_rate_limit_block_seconds: int = (
+        DEFAULT_LOGIN_RATE_LIMIT_BLOCK_SECONDS
+    )
 
 
 def parse_boolean_environment(name: str, default: bool) -> bool:
@@ -71,6 +100,37 @@ def parse_environment() -> str:
             f"{ENVIRONMENT_ENV_VAR} must be one of: {allowed_values}",
         )
     return environment
+
+
+def parse_allowed_hosts(environment: str) -> tuple[str, ...]:
+    """Parse and validate exact hosts and leading wildcard subdomains."""
+    raw_value = os.getenv(ALLOWED_HOSTS_ENV_VAR)
+    if raw_value is None:
+        if environment == "production":
+            raise RuntimeError(
+                f"{ALLOWED_HOSTS_ENV_VAR} is required in production",
+            )
+        return DEFAULT_ALLOWED_HOSTS
+
+    allowed_hosts = tuple(
+        host.strip().lower()
+        for host in raw_value.split(",")
+        if host.strip()
+    )
+    if not allowed_hosts:
+        raise RuntimeError(
+            f"{ALLOWED_HOSTS_ENV_VAR} must contain at least one hostname",
+        )
+    if environment == "production" and "*" in allowed_hosts:
+        raise RuntimeError(
+            f"{ALLOWED_HOSTS_ENV_VAR} must not contain * in production",
+        )
+    for host in allowed_hosts:
+        if host != "*" and not HOSTNAME_PATTERN.fullmatch(host):
+            raise RuntimeError(
+                f"{ALLOWED_HOSTS_ENV_VAR} contains an invalid hostname",
+            )
+    return tuple(dict.fromkeys(allowed_hosts))
 
 
 def sqlite_database_path(database_url: str) -> str:
@@ -145,6 +205,18 @@ def load_settings() -> Settings:
         SESSION_MAX_AGE_ENV_VAR,
         DEFAULT_SESSION_MAX_AGE_SECONDS,
     )
+    login_rate_limit_max_attempts = parse_positive_integer_environment(
+        LOGIN_RATE_LIMIT_MAX_ATTEMPTS_ENV_VAR,
+        DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+    )
+    login_rate_limit_window_seconds = parse_positive_integer_environment(
+        LOGIN_RATE_LIMIT_WINDOW_ENV_VAR,
+        DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    login_rate_limit_block_seconds = parse_positive_integer_environment(
+        LOGIN_RATE_LIMIT_BLOCK_ENV_VAR,
+        DEFAULT_LOGIN_RATE_LIMIT_BLOCK_SECONDS,
+    )
     database_url = os.getenv(DATABASE_URL_ENV_VAR, DEFAULT_DATABASE_URL)
 
     if environment == "production":
@@ -162,6 +234,7 @@ def load_settings() -> Settings:
                 f"{DATABASE_URL_ENV_VAR} is required in production",
             )
         validate_production_database(database_url)
+    allowed_hosts = parse_allowed_hosts(environment)
 
     return Settings(
         database_url=database_url,
@@ -169,6 +242,10 @@ def load_settings() -> Settings:
         session_secret=configured_secret or secrets.token_urlsafe(48),
         session_cookie_secure=secure_cookie,
         session_max_age_seconds=session_max_age_seconds,
+        allowed_hosts=allowed_hosts,
+        login_rate_limit_max_attempts=login_rate_limit_max_attempts,
+        login_rate_limit_window_seconds=login_rate_limit_window_seconds,
+        login_rate_limit_block_seconds=login_rate_limit_block_seconds,
     )
 
 
