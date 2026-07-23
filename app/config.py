@@ -15,8 +15,14 @@ DEFAULT_ALLOWED_HOSTS = ("localhost", "127.0.0.1", "testserver")
 DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 5
 DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS = 300
 DEFAULT_LOGIN_RATE_LIMIT_BLOCK_SECONDS = 900
+DEFAULT_LOG_LEVELS = {
+    "development": "INFO",
+    "test": "WARNING",
+    "production": "INFO",
+}
 DATABASE_URL_ENV_VAR = "SALES_TRACKER_DATABASE_URL"
 ENVIRONMENT_ENV_VAR = "SALES_TRACKER_ENVIRONMENT"
+LOG_LEVEL_ENV_VAR = "SALES_TRACKER_LOG_LEVEL"
 SESSION_SECRET_ENV_VAR = "SALES_TRACKER_SESSION_SECRET"
 SESSION_COOKIE_SECURE_ENV_VAR = "SALES_TRACKER_SESSION_COOKIE_SECURE"
 SESSION_MAX_AGE_ENV_VAR = "SALES_TRACKER_SESSION_MAX_AGE_SECONDS"
@@ -31,6 +37,9 @@ LOGIN_RATE_LIMIT_BLOCK_ENV_VAR = (
     "SALES_TRACKER_LOGIN_RATE_LIMIT_BLOCK_SECONDS"
 )
 ALLOWED_ENVIRONMENTS = frozenset({"development", "test", "production"})
+ALLOWED_LOG_LEVELS = frozenset(
+    {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"},
+)
 HOSTNAME_PATTERN = re.compile(
     r"^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*"
     r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
@@ -56,6 +65,7 @@ class Settings:
     login_rate_limit_block_seconds: int = (
         DEFAULT_LOGIN_RATE_LIMIT_BLOCK_SECONDS
     )
+    log_level: str = "WARNING"
 
 
 def parse_boolean_environment(name: str, default: bool) -> bool:
@@ -100,6 +110,21 @@ def parse_environment() -> str:
             f"{ENVIRONMENT_ENV_VAR} must be one of: {allowed_values}",
         )
     return environment
+
+
+def parse_log_level(environment: str) -> str:
+    """Return a normalized supported application logging level."""
+    raw_value = os.getenv(LOG_LEVEL_ENV_VAR)
+    if raw_value is None:
+        return DEFAULT_LOG_LEVELS[environment]
+
+    log_level = raw_value.strip().upper()
+    if log_level not in ALLOWED_LOG_LEVELS:
+        allowed_values = ", ".join(sorted(ALLOWED_LOG_LEVELS))
+        raise RuntimeError(
+            f"{LOG_LEVEL_ENV_VAR} must be one of: {allowed_values}",
+        )
+    return log_level
 
 
 def parse_allowed_hosts(environment: str) -> tuple[str, ...]:
@@ -196,6 +221,7 @@ def validate_production_database(database_url: str) -> None:
 def load_settings() -> Settings:
     """Load application settings from environment variables."""
     environment = parse_environment()
+    log_level = parse_log_level(environment)
     configured_secret = os.getenv(SESSION_SECRET_ENV_VAR)
     secure_cookie = parse_boolean_environment(
         SESSION_COOKIE_SECURE_ENV_VAR,
@@ -246,6 +272,7 @@ def load_settings() -> Settings:
         login_rate_limit_max_attempts=login_rate_limit_max_attempts,
         login_rate_limit_window_seconds=login_rate_limit_window_seconds,
         login_rate_limit_block_seconds=login_rate_limit_block_seconds,
+        log_level=log_level,
     )
 
 

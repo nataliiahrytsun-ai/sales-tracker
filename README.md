@@ -28,7 +28,22 @@ python -m pip install -e ".[dev]"
 python -m uvicorn app.main:app --reload
 ```
 
-The health-check is available at `http://127.0.0.1:8000/health`.
+The liveness check is available at `http://127.0.0.1:8000/health`, and the
+readiness check is available at `http://127.0.0.1:8000/ready`.
+
+`GET /health` confirms only that the application process is responsive. It is
+public, does not access the database, and returns HTTP 200 with
+`{"status":"ok"}` even when the application is not ready.
+
+`GET /ready` is also public and requires neither authentication nor CSRF. It
+opens the configured SQLite database read-only with a short timeout, executes
+a simple read query, requires exactly one readable `alembic_version`, and
+compares it with the single current project migration head. It returns HTTP
+200 with `{"status":"ready"}` on success or HTTP 503 with
+`{"status":"not_ready"}` on any failure. The 503 response intentionally omits
+database paths, SQL, revisions, tracebacks, and other internal details.
+Deployment health supervision should use `/ready` when deciding whether to
+send user traffic; `/health` is only a process liveness signal.
 
 ## Environment and session configuration
 
@@ -75,6 +90,26 @@ are disabled, the database URL is absent or relative, or the database parent
 directory is missing or inaccessible. Errors identify the affected environment
 variable without printing the session secret. Do not place a real secret in
 source code or a committed configuration file.
+
+## Application logging
+
+`SALES_TRACKER_LOG_LEVEL` accepts `DEBUG`, `INFO`, `WARNING`, `ERROR`, or
+`CRITICAL`; surrounding whitespace is ignored and values are normalized to
+uppercase. Development and production default to `INFO`. Test defaults to
+`WARNING` so automated output remains quiet. An explicitly empty or unknown
+value stops startup with a configuration error.
+
+Application events use Python's standard logging and are written to the
+process console alongside Uvicorn output; no local log files are created.
+Startup records only compact operational fields such as the environment,
+configured level, SQLite use, Secure-cookie state, and allowed-host count.
+Readiness failures record only a safe category such as `database unavailable`,
+`schema revision unavailable`, or `schema revision mismatch`.
+
+Session secrets, CSRF tokens, cookies, passwords, database URLs and paths,
+forms, email/login identifiers, company names, notes, and other user data must
+not be logged. A monitoring provider, log aggregation, and log retention will
+be selected later.
 
 ## Browser security
 

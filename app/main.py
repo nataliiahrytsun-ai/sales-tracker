@@ -1,5 +1,7 @@
 """FastAPI application entry point."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI
@@ -8,6 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.config import Settings, settings
+from app.logging_config import configure_application_logging
 from app.routes.auth import router as auth_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.exports import router as exports_router
@@ -22,15 +25,38 @@ from app.security import (
     SecurityHeadersMiddleware,
     enforce_csrf,
 )
+from app.services.readiness import ReadinessChecker
 
 
 def create_app(application_settings: Settings | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
     selected_settings = application_settings or settings
+    logger = configure_application_logging(selected_settings.log_level)
+
+    @asynccontextmanager
+    async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
+        logger.info(
+            "Sales Tracker started environment=%s log_level=%s "
+            "database=sqlite secure_cookie=%s allowed_hosts=%d",
+            selected_settings.environment,
+            selected_settings.log_level,
+            selected_settings.session_cookie_secure,
+            len(selected_settings.allowed_hosts),
+        )
+        try:
+            yield
+        finally:
+            logger.info("Sales Tracker stopped")
+
     application = FastAPI(
         title="Sales Tracker",
         debug=False,
         dependencies=[Depends(enforce_csrf)],
+        lifespan=lifespan,
+    )
+    application.state.settings = selected_settings
+    application.state.readiness_checker = ReadinessChecker(
+        selected_settings.database_url,
     )
     application.state.login_rate_limiter = LoginRateLimiter(
         max_attempts=selected_settings.login_rate_limit_max_attempts,

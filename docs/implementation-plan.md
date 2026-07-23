@@ -802,6 +802,35 @@ Backup frequency, retention, off-host storage, recovery point objective (RPO),
 and production scheduling remain deployment decisions. A backup on the same
 disk does not protect against complete disk loss.
 
+### Liveness, readiness, and logging baseline
+
+`GET /health` is a public liveness check. It confirms that the application
+process can respond, performs no database work, and returns HTTP 200 with the
+existing safe response independently of database state.
+
+`GET /ready` is a public readiness check intended for the future hosting or
+process supervisor. It opens the centrally configured SQLite database
+read-only with a bounded timeout, performs a minimal read query, requires
+exactly one readable `alembic_version`, and compares that revision with the
+single current Alembic head in the project. It never creates a missing
+database, changes data, creates tables, or runs migrations. Success returns
+HTTP 200 with `{"status":"ready"}`. Failure returns only HTTP 503 with
+`{"status":"not_ready"}`; internal paths, SQL, revisions, tracebacks, and
+configuration details are not included in the public response.
+
+Application logging uses Python's standard logging and the process
+stdout/stderr used by Uvicorn. `SALES_TRACKER_LOG_LEVEL` supports `DEBUG`,
+`INFO`, `WARNING`, `ERROR`, and `CRITICAL`. Development and production default
+to `INFO`; test defaults to `WARNING`. Startup logs contain only compact
+non-secret operational fields. Readiness failure logs contain a safe category:
+database unavailable, schema revision unavailable, schema revision mismatch,
+or an internal readiness error.
+
+Logs must never contain session secrets, CSRF tokens, cookies, passwords,
+database URLs or absolute paths, form bodies, email/login identifiers, company
+names, notes, or other user data. External monitoring, log aggregation, and
+retention remain future deployment decisions.
+
 ### Production configuration baseline
 
 The application supports only the `development`, `test`, and `production`

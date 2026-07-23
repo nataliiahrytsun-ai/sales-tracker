@@ -8,15 +8,18 @@ import pytest
 from app.config import (
     ALLOWED_ENVIRONMENTS,
     ALLOWED_HOSTS_ENV_VAR,
+    ALLOWED_LOG_LEVELS,
     DATABASE_URL_ENV_VAR,
     DEFAULT_ALLOWED_HOSTS,
     DEFAULT_LOGIN_RATE_LIMIT_BLOCK_SECONDS,
     DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
     DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    DEFAULT_LOG_LEVELS,
     ENVIRONMENT_ENV_VAR,
     LOGIN_RATE_LIMIT_BLOCK_ENV_VAR,
     LOGIN_RATE_LIMIT_MAX_ATTEMPTS_ENV_VAR,
     LOGIN_RATE_LIMIT_WINDOW_ENV_VAR,
+    LOG_LEVEL_ENV_VAR,
     SESSION_COOKIE_SECURE_ENV_VAR,
     SESSION_MAX_AGE_ENV_VAR,
     SESSION_SECRET_ENV_VAR,
@@ -36,6 +39,7 @@ CONFIG_ENVIRONMENT_VARIABLES = (
     LOGIN_RATE_LIMIT_BLOCK_ENV_VAR,
     LOGIN_RATE_LIMIT_MAX_ATTEMPTS_ENV_VAR,
     LOGIN_RATE_LIMIT_WINDOW_ENV_VAR,
+    LOG_LEVEL_ENV_VAR,
 )
 
 
@@ -151,6 +155,70 @@ def test_test_profile_keeps_local_compatibility(
         settings.login_rate_limit_block_seconds
         == DEFAULT_LOGIN_RATE_LIMIT_BLOCK_SECONDS
     )
+    assert settings.log_level == "WARNING"
+
+
+@pytest.mark.parametrize(
+    ("raw_value", "expected"),
+    [
+        ("DEBUG", "DEBUG"),
+        ("info", "INFO"),
+        (" Warning ", "WARNING"),
+        ("error", "ERROR"),
+        ("  critical  ", "CRITICAL"),
+    ],
+)
+def test_allowed_log_levels_are_normalized(
+    monkeypatch: pytest.MonkeyPatch,
+    raw_value: str,
+    expected: str,
+) -> None:
+    """Only standard configured levels are accepted."""
+    monkeypatch.setenv(LOG_LEVEL_ENV_VAR, raw_value)
+
+    assert ALLOWED_LOG_LEVELS == {
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL",
+    }
+    assert load_settings().log_level == expected
+
+
+@pytest.mark.parametrize("raw_value", ["", "TRACE", "verbose", "20"])
+def test_invalid_log_level_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    raw_value: str,
+) -> None:
+    """An unknown level stops configuration with the variable name."""
+    monkeypatch.setenv(LOG_LEVEL_ENV_VAR, raw_value)
+
+    with pytest.raises(RuntimeError, match=LOG_LEVEL_ENV_VAR):
+        load_settings()
+
+
+@pytest.mark.parametrize(
+    ("environment", "expected"),
+    [
+        ("development", "INFO"),
+        ("test", "WARNING"),
+        ("production", "INFO"),
+    ],
+)
+def test_log_level_defaults_by_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    environment: str,
+    expected: str,
+) -> None:
+    """Production/development are informative while tests stay quiet."""
+    monkeypatch.setenv(ENVIRONMENT_ENV_VAR, environment)
+    if environment == "production":
+        configure_production(monkeypatch, tmp_path / "production.db")
+
+    assert load_settings().log_level == expected
+    assert DEFAULT_LOG_LEVELS[environment] == expected
 
 
 def test_production_requires_session_secret(
