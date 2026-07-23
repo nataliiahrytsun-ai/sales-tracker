@@ -200,6 +200,56 @@ python -m alembic current
 python -m alembic heads
 ```
 
+## SQLite backup and local restore
+
+The operational commands use Python's SQLite backup API, so a backup includes
+committed data that is still in the source database's WAL. They do not copy
+`.db-wal` or `.db-shm` files. The backup destination and restore target parent
+directories must already exist and be writable; the commands never create
+those directories silently.
+
+Create a timestamped UTC backup from the centrally configured
+`SALES_TRACKER_DATABASE_URL`:
+
+```powershell
+New-Item -ItemType Directory -Path "<existing-backup-directory>"
+python -m app.backup backup --destination-dir "<existing-backup-directory>"
+```
+
+For a deliberate alternate SQLite source, pass its existing database URL:
+
+```powershell
+python -m app.backup backup --destination-dir "<existing-backup-directory>" --database-url "sqlite:///C:/<existing-directory>/<source>.db"
+```
+
+Every backup is first written to a temporary file, checked with
+`PRAGMA integrity_check`, and required to contain a readable
+`alembic_version`. It is published under a name such as
+`sales_tracker_backup_20260723T140506123456Z.db` only after verification and
+never overwrites an existing backup. Verify an artifact again without changing
+it:
+
+```powershell
+python -m app.backup verify "<existing-backup-directory>\sales_tracker_backup_<UTC-timestamp>.db"
+```
+
+Restore into a separate file in an existing directory:
+
+```powershell
+New-Item -ItemType Directory -Path "<existing-restore-directory>"
+python -m app.backup restore "<backup-file>.db" "<existing-restore-directory>\restored.db"
+```
+
+Restore verifies the source and the temporary restored database before an
+atomic publish. It refuses to overwrite an existing target unless `--replace`
+is explicitly supplied, does not modify the backup, and does not run Alembic.
+Stop the application before using `--replace` on a working production
+database, and resolve any WAL/SHM sidecars first.
+
+A backup stored on the same disk does not protect against loss of that disk.
+Backup frequency, retention, off-host storage, recovery point objective (RPO),
+and production scheduling remain to be agreed before deployment.
+
 ## Run tests
 
 ```powershell

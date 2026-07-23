@@ -7,3 +7,8 @@ __pycache__/
 *.db
 *.db-shm
 *.db-wal
+/backups/
+/restores/
+sales_tracker_backup_*.db
+*.backup.tmp
+*.restore.tmp

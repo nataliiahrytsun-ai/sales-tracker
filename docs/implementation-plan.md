@@ -560,7 +560,7 @@ These thresholds may be reviewed after the pilot based on how frequently the pro
 - SQLite
 - Foreign key enforcement enabled
 - Write-Ahead Logging enabled
-- Daily backup
+- Verified backup and restore procedure; frequency and retention to be agreed
 
 ### Frontend
 
@@ -779,6 +779,28 @@ Because the application records employee sentiment:
 - Use HTTPS and secure password hashing
 - Back up the SQLite database
 - Define a data-retention policy
+
+### SQLite backup and local restore baseline
+
+Operational backup uses the SQLite backup API rather than copying an active
+database file. This produces a consistent snapshot of committed data,
+including transactions still represented in WAL, without separately copying
+WAL or SHM files. The tool writes to a temporary file in an existing
+destination directory, requires `PRAGMA integrity_check` to return `ok`, reads
+the `alembic_version`, and only then atomically publishes a UTC-timestamped
+backup without overwriting an existing file.
+
+Verification is read-only and requires a readable SQLite database, successful
+integrity check, and a readable Alembic revision. Restore verifies the source,
+copies it through the SQLite API to a temporary file in an existing writable
+target directory, verifies the result, and atomically publishes it. Existing
+targets are preserved unless replacement is explicitly requested. Restore
+does not run Alembic or modify its source backup. The application must be
+stopped before replacing a working production database.
+
+Backup frequency, retention, off-host storage, recovery point objective (RPO),
+and production scheduling remain deployment decisions. A backup on the same
+disk does not protect against complete disk loss.
 
 ### Production configuration baseline
 
