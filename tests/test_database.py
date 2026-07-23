@@ -39,7 +39,10 @@ def test_database_url_can_be_overridden(
 
 def test_non_sqlite_database_url_is_rejected() -> None:
     """The configured database backend remains SQLite-only."""
-    with pytest.raises(ValueError, match="requires a SQLite database URL"):
+    with pytest.raises(
+        ValueError,
+        match="SALES_TRACKER_DATABASE_URL.*SQLite",
+    ):
         create_db_engine("postgresql://localhost/sales_vibes")
 
 

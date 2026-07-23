@@ -30,7 +30,7 @@ python -m uvicorn app.main:app --reload
 
 The health-check is available at `http://127.0.0.1:8000/health`.
 
-## Session configuration
+## Environment and session configuration
 
 Development generates an in-memory session secret when none is configured. Set
 a stable secret to keep sessions valid across application restarts:
@@ -39,12 +39,21 @@ a stable secret to keep sessions valid across application restarts:
 $env:SALES_TRACKER_SESSION_SECRET = python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Production requires both a secret of at least 32 characters and secure cookies:
+`SALES_TRACKER_ENVIRONMENT` accepts only `development`, `test`, or
+`production`. Its value is trimmed and matched case-insensitively. When the
+variable is omitted, the application uses `development` for local
+compatibility. An explicitly empty, misspelled, or unknown value stops startup
+with a configuration error.
+
+Production requires an explicit session secret of at least 32 characters and
+an explicit absolute SQLite database URL whose parent directory already exists
+and is writable. The following values are placeholders only:
 
 ```powershell
 $env:SALES_TRACKER_ENVIRONMENT = "production"
-$env:SALES_TRACKER_SESSION_SECRET = python -c "import secrets; print(secrets.token_urlsafe(48))"
+$env:SALES_TRACKER_SESSION_SECRET = "<secret-from-the-deployment-secret-store>"
 $env:SALES_TRACKER_SESSION_COOKIE_SECURE = "true"
+$env:SALES_TRACKER_DATABASE_URL = "sqlite:///C:/<persistent-directory>/sales_tracker.db"
 ```
 
 Session cookies have an explicit finite lifetime of 1,209,600 seconds (14 days)
@@ -55,9 +64,16 @@ is required:
 $env:SALES_TRACKER_SESSION_MAX_AGE_SECONDS = "28800"
 ```
 
-The application refuses to start in production if the secret is missing or the
-secure-cookie setting is disabled. Do not place the real secret in source code
-or a committed configuration file.
+`SALES_TRACKER_SESSION_COOKIE_SECURE` defaults to `true` in production and
+cannot be set to `false` there. Cookies remain HttpOnly with `SameSite=Lax`.
+`SALES_TRACKER_SESSION_MAX_AGE_SECONDS` is optional, but must be a positive
+integer when set. Its final production value remains a deployment decision.
+
+Production startup fails if the secret is missing or too short, Secure cookies
+are disabled, the database URL is absent or relative, or the database parent
+directory is missing or inaccessible. Errors identify the affected environment
+variable without printing the session secret. Do not place a real secret in
+source code or a committed configuration file.
 
 ## Login
 
@@ -95,13 +111,20 @@ architecture.
 
 ## Database and migrations
 
-The application uses `sqlite:///./sales_tracker.db` by default. Override the
-connection when needed by setting `SALES_TRACKER_DATABASE_URL` before running the
-application or Alembic. The URL must use SQLite:
+Development and test use `sqlite:///./sales_tracker.db` by default. Override the
+connection when needed by setting `SALES_TRACKER_DATABASE_URL` before running
+the application or Alembic. The URL must use SQLite:
 
 ```powershell
 $env:SALES_TRACKER_DATABASE_URL = "sqlite:///./sales_tracker.db"
 ```
+
+In production, `SALES_TRACKER_DATABASE_URL` is mandatory and its SQLite file
+path must be absolute so it never depends on the process working directory.
+Both Windows drive paths and POSIX root paths are recognized. The application
+does not create a missing production parent directory; provision persistent
+storage before startup. The concrete production path, hosting provider, domain,
+HTTPS termination, and proxy settings will be selected later.
 
 Create or update the database to the latest migration:
 

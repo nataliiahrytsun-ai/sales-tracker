@@ -7,13 +7,15 @@ from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, create_engine
 
-from app.config import settings
+from app.config import DATABASE_URL_ENV_VAR, settings
 
 
 def create_db_engine(database_url: str) -> Engine:
     """Create an engine with the required SQLite connection settings."""
     if not database_url.startswith("sqlite"):
-        raise ValueError("Sales Tracker requires a SQLite database URL")
+        raise ValueError(
+            f"{DATABASE_URL_ENV_VAR} must use a SQLite database URL",
+        )
 
     connect_args: dict[str, Any] = {"check_same_thread": False}
     db_engine = create_engine(database_url, connect_args=connect_args)

@@ -780,6 +780,26 @@ Because the application records employee sentiment:
 - Back up the SQLite database
 - Define a data-retention policy
 
+### Production configuration baseline
+
+The application supports only the `development`, `test`, and `production`
+values for `SALES_TRACKER_ENVIRONMENT`. Omitting the variable retains the
+documented development default; explicitly empty or unknown values must stop
+startup instead of enabling development behavior.
+
+Production requires `SALES_TRACKER_SESSION_SECRET` with at least 32 characters
+and an explicit `SALES_TRACKER_DATABASE_URL` containing an absolute SQLite file
+path. The production database parent directory must already exist and be
+writable; the application must not create it automatically. Production session
+cookies must be Secure and remain HttpOnly with `SameSite=Lax`. The session TTL
+remains configurable through `SALES_TRACKER_SESSION_MAX_AGE_SECONDS` as a
+positive integer, with the current default of 1,209,600 seconds (14 days).
+
+Unsafe production configuration must stop startup with an error that names the
+affected environment variable and does not expose secret values. The persistent
+database path, hosting provider, domain, HTTPS termination, and proxy settings
+remain deployment decisions and are not fixed by this baseline.
+
 ## 16. MVP Acceptance Criteria
 
 The MVP is complete when:

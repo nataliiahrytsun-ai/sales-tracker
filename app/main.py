@@ -21,7 +21,7 @@ from app.routes.targets import router as targets_router
 def create_app(application_settings: Settings | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
     selected_settings = application_settings or settings
-    application = FastAPI(title="Sales Tracker")
+    application = FastAPI(title="Sales Tracker", debug=False)
     application.mount(
         "/static",
         StaticFiles(directory=Path(__file__).resolve().parent / "static"),
