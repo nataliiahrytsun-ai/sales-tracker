@@ -296,3 +296,21 @@ python -m pytest
 ```powershell
 python -m compileall -q app tests
 ```
+
+## Continuous integration
+
+GitHub Actions runs the `CI` workflow after every push to `main`, for pull
+requests targeting `main`, and when started manually with `workflow_dispatch`.
+Its single `quality-gate` job uses Python 3.12 and performs dependency
+installation, `pip check`, Python compilation, the Alembic head check, and the
+complete pytest suite.
+
+CI uses the `test` profile and keeps its SQLite database and pytest temporary
+files under GitHub's `$RUNNER_TEMP`; it does not use the repository database
+path or production secrets. The workflow performs no deployment.
+
+The first real GitHub Actions run remains blocked until this workflow is
+committed and pushed. The workflow alone does not prevent direct pushes.
+Configure a required status check or GitHub Ruleset separately in repository
+settings if `quality-gate` must be mandatory. Any future deployment should
+depend on a successful CI result.

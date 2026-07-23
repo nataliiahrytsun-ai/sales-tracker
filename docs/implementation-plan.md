@@ -831,6 +831,25 @@ database URLs or absolute paths, form bodies, email/login identifiers, company
 names, notes, or other user data. External monitoring, log aggregation, and
 retention remain future deployment decisions.
 
+### Continuous integration quality gate
+
+GitHub Actions runs the `CI` workflow for pushes to `main`, pull requests
+targeting `main`, and manual `workflow_dispatch` requests. Its single
+`quality-gate` job uses Python 3.12, installs the project with development
+dependencies, checks installed dependencies, compiles application, test, and
+migration Python sources, checks the Alembic head, and runs the full pytest
+suite.
+
+The CI test profile stores its SQLite database and pytest temporary files only
+under GitHub's runner temporary directory. It uses no production configuration
+or secrets and performs no deployment. The full test suite must pass before a
+future deployment is allowed to proceed.
+
+The workflow becomes observable in GitHub Actions only after commit and push.
+It does not itself block direct pushes. A required status check or GitHub
+Ruleset must be configured separately in repository settings when the
+`quality-gate` result is to become mandatory.
+
 ### Production configuration baseline
 
 The application supports only the `development`, `test`, and `production`
