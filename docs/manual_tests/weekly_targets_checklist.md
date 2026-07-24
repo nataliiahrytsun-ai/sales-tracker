@@ -2,8 +2,8 @@
 
 Record each test as **Pass**, **Fail**, or **Blocked**.
 
-The browser runtime was intentionally not started. Authentication, validation,
-ownership, persistence, and responsive structure are covered by automated tests.
+Final local browser gate recorded on 2026-07-24 with local temporary SQLite.
+Authentication, ownership, and persistence remain covered by automated tests.
 
 | Test | Status | Evidence / next action |
 | --- | --- | --- |
@@ -23,8 +23,8 @@ ownership, persistence, and responsive structure are covered by automated tests.
 | Back to Home works | Pass | The template contains the shared Home link. |
 | Current week period aligns beside Weekly targets on desktop/tablet | Pass | Shared report-heading structural coverage verifies the compact title/period row. |
 | Header, navigation, and form use the shared report spacing | Pass | Shared report-navigation spacing is covered structurally; confirm visual rhythm manually. |
-| Desktop and tablet layout is compact and readable | Blocked | Verify the two-column form and action alignment in a stable user-controlled browser. |
-| Mobile layout has no horizontal scrolling | Blocked | Verify the one-column form around 375–376 px in a stable user-controlled browser. |
+| Desktop and tablet layout is compact and readable | Pass | 2026-07-24, local temporary SQLite: 1440 x 900 and 768 x 1024 rendered the six targets in the documented order and a two-column grid without clipping or horizontal overflow. |
+| Mobile layout has no horizontal scrolling | Pass | 2026-07-24, local temporary SQLite, 375 x 667: the form became one column with no clipping or horizontal overflow; native negative-value validation was clear, correction saved, and all six values reloaded. |
 
 ## Automated Test Record
 
@@ -37,5 +37,4 @@ ownership, persistence, and responsive structure are covered by automated tests.
 
 ## Unresolved Manual Checks
 
-Desktop, tablet, and mobile visual verification remain **Blocked** because the
-browser runtime was intentionally not used. Repeat these checks manually.
+No local browser checks remain blocked in this checklist.

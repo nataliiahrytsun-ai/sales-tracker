@@ -6,9 +6,8 @@ Executed on 2026-07-14. Record each test as **Pass**, **Fail**, or
 Browser retest recorded on 2026-07-16 in Chrome. Viewports: desktop (size not
 recorded), tablet 768 x 1024, and mobile 375 x 667 and 375 x 812.
 
-Available non-browser checks used a local Uvicorn server, a clean migrated
-SQLite database, and a real HTTP client. The built-in browser runtime was not
-started because prior visual checks repeatedly closed Codex.
+Final local browser gate recorded on 2026-07-24 with local temporary SQLite.
+The current session used 1440 x 900 and 375 x 667 for the country-row workflow.
 
 | Test | Status | Evidence |
 | --- | --- | --- |
@@ -51,8 +50,8 @@ started because prior visual checks repeatedly closed Codex.
 | Server-derived companies contacted | Pass | Focused tests verify the saved value equals the country sum, including add/change/remove and an empty breakdown. |
 | Forged legacy company-total value | Pass | A submitted legacy `unique_companies` value is ignored by the server. |
 | No separate aggregate input or mismatch warning | Pass | Companies contacted is derived from the country breakdown, so the totals cannot diverge. |
-| Required outreach results | Not run | Verify Replies received, Positive replies, and Meetings booked reject empty values and accept zero; covered by automated tests. |
-| Added row placement and completeness | Not run | Verify added Country + Companies count rows render above Add country and incomplete rows cannot be saved; covered by automated tests. |
+| Required outreach results | Pass | 2026-07-24, local temporary SQLite, 375 x 667: all three required counters accepted `0`; empty, negative, and decimal values were rejected with native validation; `positive_replies > replies` returned a clear HTTP 400 error; correction saved successfully. |
+| Added row placement and completeness | Pass | 2026-07-24, local temporary SQLite, 1440 x 900 and 375 x 667: Germany and Brazil rows rendered above Add country, counts updated Companies contacted, duplicate Germany remained one row with clear feedback, removal updated the total, and the saved Germany value reloaded correctly without horizontal overflow. |
 | Replies relationship validation | Pass | Focused tests cover positive replies below, equal to, above, and present without replies received. Invalid submissions are not saved. |
 | Forged ownership and date fields | Pass | Submitted `user_id` and `activity_date` values were ignored; ownership and date came from the authenticated session and application-local date. |
 | Clean-database migrations | Pass | Revisions `20260714_0001` through `20260715_0004` create the product tables and both required outreach uniqueness constraints. |

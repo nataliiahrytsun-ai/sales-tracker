@@ -5,6 +5,9 @@ Record each test as **Pass**, **Fail**, or **Blocked**.
 Browser retest recorded on 2026-07-16 in Chrome. Viewport: mobile 375 x 812;
 other sizes were not recorded.
 
+Final local browser gate recorded on 2026-07-24 with local temporary SQLite.
+Responsive checks used 1440 x 900, 768 x 1024, and 375 x 667.
+
 | Test | Status | Evidence |
 | --- | --- | --- |
 | Login succeeds with a valid active user | Pass | Real Uvicorn server returned `303` to `/`, then authenticated `/` returned `200`. |
@@ -45,16 +48,16 @@ criteria.
 
 ## Milestone 3 Browser Security Follow-up
 
-The following browser checks remain required when the pilot domain and HTTPS
-termination are available. They intentionally do not select a hosting provider
-or domain.
+Local checks below were executed against one loopback Uvicorn worker and a
+current-head temporary SQLite database. Deployment-only checks remain blocked
+until the pilot domain and HTTPS termination are available.
 
 | Manual check | Status | Expected evidence |
 | --- | --- | --- |
-| Every login, password, logout, Meeting, Outreach, and Weekly targets POST contains a hidden CSRF token | Pending | Browser developer tools show `csrf_token` in each submitted form. |
-| A form validation error can be corrected and resubmitted | Pending | The rerendered form retains a working session-bound CSRF token. |
-| Repeated failed login shows the neutral throttling message | Pending | The attempt exceeding the configured allowance returns 429 and `Retry-After`; no account-existence detail is shown. |
-| Production Host allowlist accepts the selected pilot domain and rejects another Host | Pending | The configured host loads normally and an unknown Host returns 400. |
-| Dashboard, charts, forms, confirmation, and mobile navigation work under CSP | Pending | Browser console has no CSP violations for required local resources or interactions. |
-| Baseline security headers are present on 200, 403, 404, and Host 400 responses | Pending | Developer tools show CSP, frame denial, nosniff, referrer policy, and permissions policy. |
-| HSTS remains absent until HTTPS termination is confirmed | Pending | No `Strict-Transport-Security` header is emitted before the HTTPS decision. |
+| Every login, password, logout, Meeting, Outreach, and Weekly targets POST contains a hidden CSRF token | Pass | 2026-07-24, local temporary SQLite: hidden tokens were present for login, logout, change password, Meeting create/edit/delete/undo, Outreach save, and Weekly Targets save; normal submissions succeeded. Missing and invalid tokens returned generic HTTP 403 responses without internal details. |
+| A form validation error can be corrected and resubmitted | Pass | 2026-07-24, local temporary SQLite: Meeting and Outreach returned clear validation errors, retained a working hidden token, and saved successfully after correction. |
+| Repeated failed login shows the neutral throttling message | Pass | 2026-07-24, local temporary SQLite with isolated test rate-limit values: three failures returned neutral HTTP 401 responses, the next returned HTTP 429 with `Retry-After: 2`, and valid login succeeded after expiry. |
+| Production Host allowlist accepts the selected pilot domain and rejects another Host | Blocked | 2026-07-24: an unknown Host returned HTTP 400 locally, but the real pilot domain and production allowlist are not selected. |
+| Dashboard, charts, forms, confirmation, and mobile navigation work under CSP | Fail | 2026-07-24, local temporary SQLite, 375 x 667: pages, local scripts, charts, forms, and mobile navigation worked without CSP console errors or external CDN requests, but Meeting `Delete` submitted immediately without displaying the required confirmation dialog. Reproduce: create a Meeting, open Recent Meetings, click `Delete`; the record is deleted and the success message appears without a dialog. Fix in a separate focused task for `form_confirmation.js` integration. |
+| Baseline security headers are present on 200, 403, 404, and Host 400 responses | Pass | 2026-07-24, local temporary SQLite: all four response classes included nosniff, referrer policy, frame denial, CSP, and permissions policy headers. |
+| HSTS remains absent until HTTPS termination is confirmed | Blocked | 2026-07-24: HSTS was correctly absent on loopback HTTP; it cannot pass until the real HTTPS deployment is verified. |

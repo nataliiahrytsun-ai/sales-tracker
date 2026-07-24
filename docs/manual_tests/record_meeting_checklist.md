@@ -6,10 +6,7 @@ Executed on 2026-07-14. Record each test as **Pass**, **Fail**, or
 Browser retest recorded on 2026-07-16 in Chrome. Viewports: desktop (size not
 recorded) and mobile 375 x 812.
 
-The available non-browser checks used a local Uvicorn server, a migrated clean
-SQLite test database, and an HTTP client. The built-in browser runtime was not
-started again because repeated Codex closures made browser-based checks
-unreliable.
+Final local browser gate recorded on 2026-07-24 with local temporary SQLite.
 
 | Test | Status | Evidence |
 | --- | --- | --- |
@@ -17,8 +14,8 @@ unreliable.
 | Anonymous `GET /meetings/new` redirects to `/login` | Pass | Direct HTTP request returned 303 with `Location: /login`. |
 | Meeting form is usable on a desktop viewport | Pass | Chrome retest confirmed the desktop layout is usable. |
 | Meeting form is usable on a mobile-sized viewport | Pass | Chrome retest confirmed the layout is usable at 375 x 812. |
-| Save a meeting using only the three required selections | Pass | HTTP submission returned 303; the saved row contained the three selections and all optional fields remained `NULL`. |
-| Save all optional fields with the documented selector values | Pass | HTTP submission persisted mood, blocker, country, company, next-step date, and note with the submitted values. |
+| Save a meeting using Company plus the three required selections | Pass | 2026-07-24, local temporary SQLite, 1440 x 900: whitespace-only Company returned HTTP 400, correction with Company plus the three selections returned 303 and displayed the success confirmation. The former wording that Company was optional is superseded. |
+| Historical optional-field verification | Pass | Superseded / verified by current code and tests. The 2026-07-14 evidence covered a former form shape; current Meeting Company is required, while historical rows with missing Company remain readable. |
 | Search and select a country by English name | Pass | Chrome retest confirmed Brazil and Poland are found with the correct display names. |
 | Country search and selection | Pass | Chrome retest confirmed country search and selection. |
 | Selected country survives errors and editing | Pass | Chrome retest confirmed the selected country remains after a validation error and displays correctly when Edit is reopened. |
@@ -34,14 +31,19 @@ unreliable.
 
 | Check | Status | Evidence |
 | --- | --- | --- |
-| Apply all migrations to a clean test database | Pass | Alembic applied revisions `20260714_0001` through `20260714_0003`. No schema change was required for this task. |
+| Apply all migrations to a clean test database | Pass | 2026-07-24, local temporary SQLite: Alembic applied revisions `20260714_0001` through current head `20260721_0008`. The earlier `0003` result remains historical evidence. |
 | Start the application without the browser runtime | Pass | Local Uvicorn became reachable on loopback. |
 | Health-check endpoint | Pass | `GET /health` returned 200. |
 | Authenticated meeting form exposes the documented required options | Pass | HTTP response contained Low/Medium/High, Yes/No/Unclear, and all documented outcomes checked by the automated suite. |
 | Worldwide country validation | Pass | Automated tests cover Brazil, Poland, empty country as `NULL`, rejection of an unknown code, error re-rendering, and Edit meeting display. |
+| Current Meeting taxonomy | Pass | Superseded / verified by current code and tests on 2026-07-24: Company is required on create and edit; the five outcomes are Waiting for further information, No outcome, Request sent, Manual alignment (discussion), and Unclear; historical missing-Company and legacy-outcome rows open safely. |
 
 ## Automated Test Record
 
+- Current full-suite control, 2026-07-24: **364 passed, 1 xfailed** using
+  local temporary storage. The expected xfail is the documented stateless
+  signed-cookie replay limitation.
+- The results below are retained as historical verification records.
 - `python -m pytest --basetemp=C:\pytest-sales-tracker`: **90 passed, 1 xfailed**. The
   expected failure documents the known inability of stateless signed-cookie
   sessions to revoke a copied pre-logout cookie.

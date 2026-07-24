@@ -4,8 +4,8 @@ Record each test as **Pass**, **Fail**, or **Blocked**.
 
 Browser retest recorded on 2026-07-16 in Chrome.
 
-The built-in browser runtime was not started because it is unstable in this
-environment. HTTP and database behavior is covered by focused automated tests.
+Final local browser gate recorded on 2026-07-24 with local temporary SQLite.
+HTTP and database behavior is also covered by focused automated tests.
 
 | Test | Status | Evidence / next action |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ environment. HTTP and database behavior is covered by focused automated tests.
 | Edit a recent meeting and see confirmation | Pass | Focused integration coverage verifies persistence and the confirmation redirect. |
 | Edit meeting clearly identifies the selected record | Pass | The edit page shows the stored meeting timestamp and company, or explicitly states that the company was not provided. Focused integration coverage checks both cases. |
 | Invalid meeting edit preserves entered values | Pass | Focused integration coverage verifies the 400 response and retained safe value. |
-| Delete a recent meeting requires confirmation and uses POST | Pass | The rendered action calls a confirmation dialog before submit; focused integration coverage verifies the dialog markup, POST-only deletion, and success confirmation. |
+| Delete a recent meeting requires confirmation and uses POST | Fail | 2026-07-24, local temporary SQLite, 1440 x 900: after create and edit, clicking `Delete` immediately sent the POST and showed `Meeting deleted successfully`; no confirmation dialog appeared. Reproduce on `/meetings/recent` by clicking the only Meeting's `Delete`. Address in a separate focused task for the confirmation-script integration; POST and deletion otherwise worked. |
 | Foreign and missing meeting IDs return 404 | Pass | GET edit, POST update, and POST delete are covered for foreign and missing IDs. |
 | Anonymous users cannot call recent-record mutation routes directly | Pass | Focused integration coverage checks meeting update/delete and dated-outreach POST routes without a session. |
 | Default Outreach period is today plus the previous six calendar days | Pass | Focused integration coverage checks both seven-day boundaries, sorting, and ownership. |
@@ -47,4 +47,5 @@ environment. HTTP and database behavior is covered by focused automated tests.
 
 ## Unresolved Manual Checks
 
-No blocked manual checks remain in this checklist.
+No checks are blocked. One browser failure remains open: Meeting delete
+confirmation does not appear.

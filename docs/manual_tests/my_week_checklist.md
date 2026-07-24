@@ -2,8 +2,9 @@
 
 Record each test as **Pass**, **Fail**, or **Blocked**.
 
-The browser runtime was intentionally not started. Authentication, ownership,
-week boundaries, aggregation, and progress calculations are covered by tests.
+Final local browser gate recorded on 2026-07-24 with local temporary SQLite.
+Authentication, ownership, week boundaries, aggregation, and progress
+calculations remain covered by tests.
 
 | Test | Status | Evidence / next action |
 | --- | --- | --- |
@@ -28,8 +29,8 @@ week boundaries, aggregation, and progress calculations are covered by tests.
 | Back to Home and Set weekly targets work | Pass | Both destinations are present in rendered HTML. |
 | Current week period aligns beside My Week on desktop/tablet | Pass | Shared report-heading structural coverage verifies the title/period row and compact range. |
 | Navigation has consistent space below the heading and above metrics | Pass | Shared report-navigation spacing is covered structurally; confirm visual rhythm manually. |
-| Desktop/tablet card grid is readable | Blocked | Verify the two-column grid in a stable user-controlled browser. |
-| Mobile cards use one column without horizontal scrolling | Blocked | Verify around 375–376 px in a stable user-controlled browser. |
+| Desktop/tablet card grid is readable | Pass | 2026-07-24, local temporary SQLite: 1440 x 900 and 768 x 1024 rendered all six cards in a two-column grid with no clipping or horizontal overflow. |
+| Mobile cards use one column without horizontal scrolling | Pass | 2026-07-24, local temporary SQLite, 375 x 667: all six cards rendered in one column, text and values were not clipped, mobile navigation opened, and the empty state rendered without error. |
 
 ## Automated Test Record
 
@@ -41,5 +42,4 @@ week boundaries, aggregation, and progress calculations are covered by tests.
 
 ## Unresolved Manual Checks
 
-Desktop, tablet, and mobile visual verification remain **Blocked** because the
-browser runtime was intentionally not used. Repeat these checks manually.
+No local browser checks remain blocked in this checklist.
